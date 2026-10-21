@@ -599,11 +599,12 @@ const simple = {
 };
 
 // ------------------------------------------------------------------
-// 5. 金額主役: 白地に写真、その下に商品名、いちばん大きく価格（チラシの1コマの形）
-//    税抜で入れたときは、価格の下に税込の金額を必ず添える
+// 5. 金額主役: 写真の右下に金額キャッチ（黒いギザギザ＋価格＋税込）、写真の下に商品名
+//    税抜で入れたときは、価格の下に税込の金額を必ず添える（中身は price-design.js）
 // ------------------------------------------------------------------
 const PRICE_RED = '#e60012';
-const PRICE_ZONE = 500;   // 写真の下に取る、商品名と価格の場所（1080幅のとき）
+// 写真の下に取る、商品名の場所（1080幅のとき。縦長はひとことの分を足す）。写真の大きさは仮
+const NAME_ZONE = 230, NAME_ZONE_TALL = 300;
 
 /** 商品名（左寄せ・最大2行）と、その後ろに小さく〈単位〉。描いた下端の y を返す。 */
 function drawBoldName(ctx, d, left, maxW, top) {
@@ -637,7 +638,7 @@ const bold = {
   label: '金額主役',
   photoBox: (W, H) => {
     const u = W / 1080;
-    return { x: 40 * u, y: 120 * u, w: W - 80 * u, h: H - 120 * u - PRICE_ZONE * u };
+    return { x: 40 * u, y: 120 * u, w: W - 80 * u, h: H - 120 * u - (H / W > 1.2 ? NAME_ZONE_TALL : NAME_ZONE) * u };
   },
   draw(ctx, d) {
     const { W, H, u, pop } = d;
@@ -682,25 +683,24 @@ const bold = {
     }
 
     const left = 50 * u, maxW = W - 100 * u;
-    let y = drawBoldName(ctx, d, left, maxW, box.y + box.h + 14 * u);
+    const y = drawBoldName(ctx, d, left, maxW, box.y + box.h + 14 * u);
     if (H / W > 1.2 && pop.catch.trim()) {   // 縦長はひとことを1行
       const cl = layoutLines(pop.catch.replace(/\s*\n\s*/g, ' '), maxW, measurer(ctx, FONTS.round), { maxSize: 40 * u, minSize: 30 * u, maxLines: 1 });
       ctx.font = font(FONTS.round, cl.size);
       ctx.fillStyle = '#5a3a1a';
       ctx.fillText(cl.lines[0], left, y + cl.size * 1.1);
-      y += cl.size * 1.4;
     }
 
-    // いちばん下: 店名（左に小さく）。価格はその上の残り全部を使う（中身は price-design.js）
+    // 金額キャッチは写真の右下に乗せる（中身は price-design.js）
+    if (d.price) drawPrice(ctx, box, d.price, u);
+
+    // いちばん下: 店名（左に小さく）
     if (d.shopName) {
       ctx.font = font(FONTS.round, 28 * u);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#777';
       ctx.fillText(d.shopName, left, H - 40 * u);
     }
-    if (!d.price) return;
-    const top = y + 8 * u;
-    drawPrice(ctx, { x: left, y: top, w: maxW, h: H - (d.shopName ? 80 : 34) * u - top }, d.price, u);
   },
 };
 

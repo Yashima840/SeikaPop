@@ -26,10 +26,10 @@
 <body>
   <h1>価格デザイン試作キット</h1>
   <p class="lead">
-    青果店のポップ「金額主役」デザインの<b>価格部分だけ</b>を試すページです。下のスクリプトにある
+    青果店のポップ「金額主役」デザインの<b>写真に乗せる金額キャッチだけ</b>を試すページです。下のスクリプトにある
     「ここから〜ここまで」の印のあいだ（<code>PRICE_FONTS</code> と <code>drawPrice</code>）を書き換えて開き直すと、
     全サイズ×全パターンで描き直します。写真・商品名・店名はアプリの配置を真似た見本で、変えられません。
-    青い点線が描いてよい範囲で、はみ出すと赤字で知らせます。画像をクリックすると拡大します。
+    青い点線が描いてよい範囲（＝写真の枠。キャッチは右下に寄せる）で、はみ出すと赤字で知らせます。画像をクリックすると拡大します。
   </p>
   <div class="bar">
     <label><input type="checkbox" id="showArea" checked> 描いてよい範囲（青い点線）を表示</label>
@@ -45,7 +45,7 @@ const CASES = [
   { label: '税抜 298円（基本）', price: { main: '298', incl: '321.84' } },
   { label: '税抜 98円（短い）', price: { main: '98', incl: '105.84' } },
   { label: '税抜 1,980円', price: { main: '1,980', incl: '2,138.4' } },
-  { label: '税抜 1,980円・商品名が2行（価格の範囲が狭い）', price: { main: '1,980', incl: '2,138.4' }, twoLines: true },
+  { label: '税抜 1,980円・商品名が2行', price: { main: '1,980', incl: '2,138.4' }, twoLines: true },
   { label: '税抜 12,800円', price: { main: '12,800', incl: '13,824' } },
   { label: '税込で入力した 158円（税込額の併記なし。「税込」とだけ添える）', price: { main: '158', incl: '' } },
   { label: '入力できる最大 1,234,567円', price: { main: '1,234,567', incl: '1,333,332.36' } },
@@ -82,11 +82,11 @@ function drawCell(ctx, W, H, twoLines) {
   const bw = ctx.measureText('本日のおすすめ').width;
   ctx.fillStyle = '#e60012'; ctx.fillRect(40 * u, 32 * u, bw + 48 * u, 74 * u);
   ctx.fillStyle = '#fff'; ctx.fillText('本日のおすすめ', 64 * u, 69 * u + 54 * u * 0.36);
-  const box = { x: 40 * u, y: 120 * u, w: W - 80 * u, h: H - 620 * u };
+  const box = { x: 40 * u, y: 120 * u, w: W - 80 * u, h: H - 120 * u - (H / W > 1.2 ? 300 : 230) * u };
   const k = Math.max(box.w / PHOTO.width, box.h / PHOTO.height);
   const sw = box.w / k, sh = box.h / k;
   ctx.drawImage(PHOTO, (PHOTO.width - sw) / 2, (PHOTO.height - sh) / 2, sw, sh, box.x, box.y, box.w, box.h);
-  const left = 50 * u, maxW = W - 100 * u;
+  const left = 50 * u;
   let y = box.y + box.h + 14 * u;
   ctx.fillStyle = '#1a1a1a';
   if (twoLines) {
@@ -111,8 +111,7 @@ function drawCell(ctx, W, H, twoLines) {
   }
   ctx.font = F(28 * u, 'Zen Maru Gothic', 700); ctx.fillStyle = '#777';
   ctx.fillText(SHOP, left, H - 40 * u);
-  const top = y + 8 * u;
-  return { x: left, y: top, w: maxW, h: H - 80 * u - top };
+  return box;   // 金額キャッチは写真の枠の中に描く
 }
 
 // 価格だけを透明な画用紙に描いて、範囲の外に色が付いたかを数える
