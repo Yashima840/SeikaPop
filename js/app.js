@@ -1,0 +1,68 @@
+// 起動と画面の切り替え（#/ ・ #/edit/<id> ・ #/settings）
+
+import { installCrashHandlers, recordError } from './crash.js';
+import { toast } from './ui.js';
+import { showHome } from './views/home.js';
+import { showEditor } from './views/editor.js';
+import { showSettings } from './views/settings.js';
+
+const report = installCrashHandlers(msg => toast(msg, { error: true }));
+
+const root = document.getElementById('view');
+const titleEl = document.getElementById('title');
+const backBtn = document.getElementById('backBtn');
+let leaveCurrent = null;   // 今の画面を離れるときの後始末（書きかけの保存など）
+let routing = Promise.resolve();
+
+const app = {
+  go(hash) {
+    if (location.hash === hash) route(); else location.hash = hash;
+  },
+  refresh() { route(); },
+  setTitle(text, { back }) {
+    titleEl.textContent = text;
+    backBtn.hidden = !back;
+  },
+};
+
+function route() {
+  // 切り替えが重なっても順に走らせる（前の画面の保存が済んでから次を出す）
+  routing = routing.then(async () => {
+    try {
+      if (leaveCurrent) { const f = leaveCurrent; leaveCurrent = null; await f(); }
+    } catch (err) {
+      report('leave', err);
+    }
+    const hash = location.hash || '#/';
+    try {
+      window.scrollTo(0, 0);
+      const m = hash.match(/^#\/edit\/(.+)$/);
+      if (m) leaveCurrent = await showEditor(root, app, decodeURIComponent(m[1]));
+      else if (hash === '#/settings') leaveCurrent = await showSettings(root, app);
+      else leaveCurrent = await showHome(root, app);
+    } catch (err) {
+      report(`route ${hash}`, err);
+    }
+  });
+  return routing;
+}
+
+backBtn.addEventListener('click', () => app.go('#/'));
+document.getElementById('settingsBtn').addEventListener('click', () => app.go('#/settings'));
+window.addEventListener('hashchange', route);
+// スマホでアプリを裏へ回したまま閉じられても、書きかけが残るように
+// （画面は離れないので後始末は呼ばず、待っている保存だけを急がせる）
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    Promise.resolve(leaveCurrent?.flush?.()).catch(err => report('flush on hide', err));
+  }
+});
+
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register('./sw.js').catch(err => recordError('serviceWorker.register', err));
+}
+if (navigator.storage?.persist) {
+  navigator.storage.persist().catch(err => recordError('storage.persist', err));
+}
+
+route();

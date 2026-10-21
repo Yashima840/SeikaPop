@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>青果ポップ</title>
+  <meta name="theme-color" content="#2f7d43">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="青果ポップ">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Yusei+Magic&family=Zen+Maru+Gothic:wght@500;700&family=Zen+Old+Mincho:wght@700&display=swap">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <button id="backBtn" class="icon-btn" aria-label="戻る" hidden>‹</button>
+    <h1 id="title">青果ポップ</h1>
+    <button id="settingsBtn" class="icon-btn" aria-label="設定">⚙</button>
+  </header>
+  <main id="view"><p class="hint center">読み込み中…</p></main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="confirmDlg">
+    <form method="dialog">
+      <p class="msg"></p>
+      <div class="row end">
+        <button value="cancel">やめる</button>
+        <button value="ok" class="ok danger">OK</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

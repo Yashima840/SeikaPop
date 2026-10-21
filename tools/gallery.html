@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>テンプレート見本帳</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Yusei+Magic&family=Zen+Maru+Gothic:wght@500;700&family=Zen+Old+Mincho:wght@700&display=swap">
+  <style>
+    body { font-family: sans-serif; background: #ddd; margin: 12px; }
+    .wrap { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+    figure { margin: 0; background: #fff; padding: 6px; }
+    canvas { width: 300px; display: block; }
+    figcaption { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <!-- 開発用: 全テンプレート×全サイズを、長い名前・短い名前の2通りで並べて崩れを見る -->
+  <p>写真は画面内で描いた見本（本番では撮影した写真）。<a href="../index.html">アプリへ</a></p>
+  <div class="wrap" id="out"></div>
+  <script type="module">
+    import { createPop, SIZES } from '../js/model.js';
+    import { TEMPLATE_ORDER } from '../js/templates.js';
+    import { ensureFonts, renderPop } from '../js/render.js';
+
+    function samplePhoto() {
+      const cv = document.createElement('canvas');
+      cv.width = 1600; cv.height = 1200;
+      const c = cv.getContext('2d');
+      c.fillStyle = '#6b4a2b'; c.fillRect(0, 0, 1600, 1200);
+      for (let i = 0; i < 14; i++) {
+        const x = 200 + (i % 5) * 300, y = 250 + Math.floor(i / 5) * 330;
+        const g = c.createRadialGradient(x - 40, y - 50, 20, x, y, 170);
+        g.addColorStop(0, '#ff8a70'); g.addColorStop(1, '#c41d10');
+        c.fillStyle = g; c.beginPath(); c.arc(x, y, 160, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#2f7d2a'; c.beginPath(); c.ellipse(x, y - 150, 50, 18, 0, 0, Math.PI * 2); c.fill();
+      }
+      return cv;
+    }
+    const photo = samplePhoto();
+    const settings = { shopName: '青果の丸山 本店', taxRate: 8, taxRounding: 'decimal' };
+    const cases = [
+      { name: '完熟トマト', catch: '甘さ自慢！\nサラダにどうぞ', price: 298, unit: '1袋', origin: '熊本県産' },
+      { name: 'シャインマスカット（大粒・種なし）', catch: '香りが違います。贈り物にもおすすめの一房です', price: 1980, unit: '1房', origin: '山梨県産', badge: '数量限定' },
+      { name: 'ほうれん草', catch: '', price: null, unit: '', origin: '' },
+      { name: 'キャベツ', catch: '', price: 158, priceTax: 'incl', unit: '1玉', origin: '群馬県産' },
+    ];
+    const out = document.getElementById('out');
+    for (const c of cases) {
+      for (const t of TEMPLATE_ORDER) {
+        for (const s of Object.keys(SIZES)) {
+          const pop = { ...createPop(), ...c, template: t, size: s };
+          const cv = document.createElement('canvas');
+          await ensureFonts(pop, settings);
+          renderPop(cv, pop, photo, settings);
+          const fig = document.createElement('figure');
+          fig.append(cv, Object.assign(document.createElement('figcaption'), { textContent: `${t} / ${s} / ${c.name}` }));
+          out.append(fig);
+        }
+      }
+    }
+    document.title = '見本帳（描画済み）';
+  </script>
+</body>
+</html>

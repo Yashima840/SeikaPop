@@ -1,0 +1,56 @@
+// 税抜で入れた価格に、税込の金額を併記する計算
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  createPop, DEFAULT_TAX_RATE, formatTaxIncluded, parseTaxRateInput, popFromRegular, priceTexts,
+  regularFromPop, taxNote, taxRateOf,
+} from '../js/model.js';
+
+test('税込の金額は銭の整数で計算する（109×1.08 が 117.72000000000001 にならない）', () => {
+  // 参考にしたチラシと同じ数字
+  assert.equal(formatTaxIncluded(109, 8), '117.72');
+  assert.equal(formatTaxIncluded(79, 8), '85.32');
+  assert.equal(formatTaxIncluded(257, 8), '277.56');
+  assert.equal(formatTaxIncluded(99, 8), '106.92');
+  assert.equal(formatTaxIncluded(100, 8), '108');        // 割り切れたら小数を付けない
+  assert.equal(formatTaxIncluded(105, 10), '115.5');     // 末尾の0は付けない
+  assert.equal(formatTaxIncluded(1980, 8), '2,138.4');   // 桁区切りも付く
+});
+
+test('税込の端数は設定で切り捨て・四捨五入にできる', () => {
+  assert.equal(formatTaxIncluded(109, 8, 'floor'), '117');
+  assert.equal(formatTaxIncluded(109, 8, 'round'), '118');
+  assert.equal(formatTaxIncluded(106, 8, 'round'), '114');   // 114.48 → 114
+  assert.equal(formatTaxIncluded(1125, 8, 'round'), '1,215'); // ちょうど割り切れる
+});
+
+test('税率の欄は 0〜30 の整数だけ受け付ける（打ち間違いの 80% を出さない）', () => {
+  assert.deepEqual(parseTaxRateInput('8'), { ok: true, value: 8 });
+  assert.deepEqual(parseTaxRateInput('１０％'), { ok: true, value: 10 });
+  assert.deepEqual(parseTaxRateInput('0'), { ok: true, value: 0 });
+  for (const bad of ['', '80', '8.5', 'abc', '-8']) assert.equal(parseTaxRateInput(bad).ok, false, bad);
+  assert.equal(taxRateOf({}), DEFAULT_TAX_RATE);
+  assert.equal(taxRateOf({ taxRate: 'x' }), DEFAULT_TAX_RATE);
+  assert.equal(taxRateOf({ taxRate: 10 }), 10);
+});
+
+test('税抜で入れたポップは税込を併記し、税込で入れたポップは「税込」とだけ添える', () => {
+  const excl = { ...createPop(), price: 109, priceTax: 'excl' };
+  assert.deepEqual(priceTexts(excl, { taxRate: 8 }), { main: '109', incl: '117.72' });
+  assert.equal(taxNote(priceTexts(excl, { taxRate: 8 })), '税込 117.72円');
+  const incl = { ...excl, priceTax: 'incl' };
+  assert.deepEqual(priceTexts(incl, { taxRate: 8 }), { main: '109', incl: '' });
+  assert.equal(taxNote(priceTexts(incl, {})), '税込');
+  assert.equal(priceTexts({ ...excl, price: null }, {}), null);
+});
+
+test('0.1.0 で作ったポップ（priceTax が無い）は税込のまま読む（前の価格に税を足して出さない）', () => {
+  const old = { ...createPop(), price: 298 };
+  delete old.priceTax;
+  assert.equal(priceTexts(old, { taxRate: 8 }).incl, '');
+});
+
+test('税抜・税込の別はレギュラーに引き継ぐ', () => {
+  const reg = regularFromPop({ ...createPop(), name: 'a', price: 100, priceTax: 'incl' });
+  assert.equal(popFromRegular(reg).priceTax, 'incl');
+});
