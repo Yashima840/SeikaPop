@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>金額キャッチのデザイン（SeikaPop）</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Yusei+Magic&family=Zen+Maru+Gothic:wght@500;700&family=Zen+Old+Mincho:wght@700&display=swap">
+  <style>
+    :root { --line: #d6d2c6; --muted: #6b6a63; --accent: #2f7d43; --red: #c62828; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.5 system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; background: #ecebe6; color: #222; }
+    header { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      padding: 8px 14px; background: #24412d; color: #fff; }
+    header h1 { font-size: 16px; margin: 0 12px 0 0; }
+    header button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #fff4; background: #fff1; color: #fff; cursor: pointer; }
+    header button.primary { background: #f6c945; color: #222; border-color: #f6c945; font-weight: 700; }
+    header button:disabled { opacity: 0.45; cursor: default; }
+    #status { margin-left: auto; font-size: 13px; }
+    #status.dirty { color: #ffd76a; font-weight: 700; }
+    #status.err { color: #ff9c9c; font-weight: 700; }
+    main { display: grid; grid-template-columns: minmax(360px, 1fr) 400px; gap: 14px; padding: 14px; align-items: start; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+    .card { background: #fff; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+    .stage { position: relative; width: 100%; max-width: 620px; margin: 0 auto; }
+    .stage canvas { width: 100%; display: block; }
+    #overlay { position: absolute; inset: 0; touch-action: none; }
+    .help { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+    .chips button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 14px; border: 1px solid var(--line); background: #f6f5f0; cursor: pointer; }
+    .chips button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .chips .label { color: var(--muted); font-size: 12px; align-self: center; min-width: 3.5em; }
+    #problems { color: var(--red); margin: 0 0 8px; padding-left: 18px; }
+    #problems:empty { display: none; }
+    details.sec { background: #fff; border-radius: 10px; margin-bottom: 10px; }
+    details.sec > summary { cursor: pointer; padding: 10px 12px; font-weight: 700; }
+    details.sec > div { padding: 0 12px 10px; }
+    .row { display: grid; grid-template-columns: 7.5em 1fr 5.5em; gap: 8px; align-items: center; margin: 6px 0; }
+    .row input[type=range] { width: 100%; }
+    .row input[type=number], .row select, .row input[type=text] { width: 100%; font: inherit; padding: 3px 4px; }
+    .row.two { grid-template-columns: 7.5em 1fr 1fr; }
+    .row input[type=color] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--line); }
+    .strokes .stroke { display: grid; grid-template-columns: 1.4em 44px 1fr 4.5em 2em; gap: 6px; align-items: center; margin: 4px 0; }
+    .strokes button, .add { font: inherit; font-size: 12px; padding: 2px 8px; cursor: pointer; }
+    .fontstate { font-size: 12px; }
+    .fontstate.err { color: var(--red); font-weight: 700; }
+    .grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .grid figure { margin: 0; text-align: center; font-size: 11px; color: var(--muted); }
+    .grid canvas { width: 150px; display: block; border: 1px solid var(--line); }
+    #fatal { display: none; background: #fde8e8; color: var(--red); padding: 12px 14px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>金額キャッチのデザイン</h1>
+    <button id="saveBtn" class="primary" title="Ctrl+S">保存してアプリに反映</button>
+    <button id="undoBtn" title="Ctrl+Z">元に戻す</button>
+    <button id="redoBtn" title="Ctrl+Y">やり直し</button>
+    <button id="revertBtn">保存した状態に戻す</button>
+    <span id="status">読み込み中…</span>
+  </header>
+  <div id="fatal"></div>
+  <main>
+    <section>
+      <div class="card">
+        <ul id="problems"></ul>
+        <div class="stage"><canvas id="preview"></canvas><canvas id="overlay"></canvas></div>
+        <p class="help">
+          ○ ギザギザの角をドラッグ ／ 辺をダブルクリックで角を足す ／ 角を右クリックで消す ／
+          ギザギザの中を Shift＋ドラッグでキャッチ全体を動かす ／ 「数」「円」「税」の印をドラッグで文字の位置。
+          数字の左の点線は「これより長い数字は縮める」幅、税の点線は税込の最大幅。
+        </p>
+        <div class="chips" id="sizeChips"><span class="label">サイズ</span></div>
+        <div class="chips" id="priceChips"><span class="label">価格</span></div>
+        <div class="chips">
+          <span class="label">写真</span>
+          <button id="photoSample" class="on">見本</button>
+          <button id="photoPick">PCの写真を選ぶ…</button>
+          <input type="file" id="photoFile" accept="image/*" hidden>
+          <label style="margin-left:auto"><input type="checkbox" id="showHandles" checked> 印を表示</label>
+        </div>
+      </div>
+      <div class="card">
+        <strong>全サイズ×全価格</strong>
+        <span class="help">（クリックするとその組み合わせを上で編集）</span>
+        <div class="grid" id="grid"></div>
+      </div>
+    </section>
+    <aside id="panel"></aside>
+  </main>
+  <script type="module" src="designer.js"></script>
+</body>
+</html>

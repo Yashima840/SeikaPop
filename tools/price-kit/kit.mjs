@@ -3,6 +3,7 @@
 export const MARK_START = '// ===== ここから: デザイン担当が書き換える範囲 =====';
 export const MARK_END = '// ===== ここまで: デザイン担当が書き換える範囲 =====';
 export const PLACEHOLDER = '/*__PRICE_DESIGN__*/';
+export const DESIGN_PLACEHOLDER = '/*__CATCH_DESIGN__*/';
 
 /** 印に挟まれた範囲（印を含む）を取り出す。印が無い・2組あるときは理由つきで止める。 */
 export function extractRegion(text) {
@@ -25,8 +26,17 @@ export function replaceRegion(text, region) {
   return src.replace(old, () => region);
 }
 
-/** 試作キットの雛形へ範囲を埋め込む。 */
-export function kitFromTemplate(template, region) {
-  if (!template.includes(PLACEHOLDER)) throw new Error(`雛形に ${PLACEHOLDER} がありません`);
-  return template.replace(PLACEHOLDER, () => region);
+/** 試作キットの雛形へ、デザインのデータ（catch-design.js の中身）と範囲を埋め込む。 */
+export function kitFromTemplate(template, region, design) {
+  for (const p of [PLACEHOLDER, DESIGN_PLACEHOLDER]) if (!template.includes(p)) throw new Error(`雛形に ${p} がありません`);
+  return template
+    .replace(DESIGN_PLACEHOLDER, () => `const CATCH_DESIGN = ${JSON.stringify(design, null, 2)};`)
+    .replace(PLACEHOLDER, () => region);
+}
+
+/** 試作キットに埋め込まれたデザインのデータを読み出す（キットが古くなっていないかの確かめ用）。 */
+export function designInKit(kitText) {
+  const m = /const CATCH_DESIGN = (\{[\s\S]*?\n\});/.exec(String(kitText).replace(/\r\n/g, '\n'));
+  if (!m) throw new Error('試作キットにデザインのデータがありません');
+  return JSON.parse(m[1]);
 }

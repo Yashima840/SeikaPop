@@ -22,7 +22,7 @@ try {
   const backup = join(HERE, 'backup', `price-design.${stamp}.js`);
   copyFileSync(DESIGN_JS, backup);
   writeFileSync(DESIGN_JS, replaceRegion(readFileSync(DESIGN_JS, 'utf8'), region));
-  buildKit();
+  await buildKit();
   console.log(`取り込みました: ${DESIGN_JS}`);
   console.log(`前のデザインの控え: ${backup}`);
   console.log('次に: npm test → npm run lint → tools/gallery.html で「金額主役」を見る');

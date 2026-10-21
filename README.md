@@ -30,10 +30,11 @@ iPhone・Android どちらもブラウザで動き、ホーム画面に追加す
 
 ### PCで見る
 
-**`start.bat` をダブルクリック**（黒い窓が開き、ブラウザでアプリと見本帳が開く。窓を閉じると止まる）。
+**`start.bat` をダブルクリック**（黒い窓が開き、ブラウザでデザイン編集とアプリが開く。窓を閉じると止まる）。
 
 | ページ | URL |
 |---|---|
+| デザイン編集（金額キャッチをマウスで編集して保存） | http://127.0.0.1:8765/tools/designer.html |
 | アプリ | http://127.0.0.1:8765/ |
 | 見本帳（全デザイン×全サイズ。デザインを直したらここで崩れを見る） | http://127.0.0.1:8765/tools/gallery.html |
 | 金額キャッチの試作キット | http://127.0.0.1:8765/tools/price-kit/price-kit.html |
@@ -66,6 +67,7 @@ python tools/make_icons.py   # アイコンを作り直す（Pillow）
 | `js/layout.js` | 写真の切り出し・指の移動・文字の折り返し（純粋な関数） |
 | `js/image.js` | 写真の縮小・自動補正 |
 | `js/templates.js` | 5つのデザイン |
+| `js/catch-design.js` | 金額キャッチのデザイン（数値・色・書体。`tools/designer.html` の「保存」で書き換わる。前の版は `tools/designer-backup/`） |
 | `js/price-design.js` | 「金額主役」の価格部分（外部AIの案と入れ替える。手順は `tools/price-kit/PROMPT.md`） |
 | `js/render.js` | 描画・画像ファイル化 |
 | `js/store.js` | 保存（今は端末内の IndexedDB）。**クラウド化するときはここを差し替える** |

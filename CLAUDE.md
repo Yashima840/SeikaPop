@@ -26,7 +26,8 @@
 - 日付・ファイル名は端末の時刻で（`toISOString` は UTC＝日本の朝9時前は前日になる）。
 - 想定外の失敗は `crash.js` が記録する（設定 → エラーの記録）。`catch {}` を書くなら理由を1行。
 - デザインを直したら `tools/gallery.html` で全デザイン×全サイズ×長い名前を見て崩れを確かめる。
-- 「金額主役」の価格部分は `js/price-design.js` の印の範囲だけ。外部AIに頼む手順は `tools/price-kit/PROMPT.md`。
+- 金額キャッチの見た目は `js/catch-design.js`（データ）で持ち、`tools/designer.html`（`start.bat` で開く）で編集・保存する。
+  検査は `js/catch-check.js`（税込の併記を小さくしすぎない等）。描き方は `js/price-design.js` の印の範囲だけ。外部AIに頼む手順は `tools/price-kit/PROMPT.md`。
   範囲を手で直したら `node tools/price-kit/build.mjs` で試作キットを作り直す（`npm test` が食い違いを止める）。
 - ファイルを足したら `sw.js` の `SHELL` に足し、`VERSION` を上げる。
 
