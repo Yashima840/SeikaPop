@@ -157,3 +157,16 @@ export function seededRandom(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/** Google Fonts の読み込み先（[{ family: 'Dela Gothic One', weight: '400' }] → css2 の URL）。 */
+export function googleFontsUrl(fonts) {
+  const weights = new Map();
+  for (const f of fonts) {
+    const ws = weights.get(f.family) || new Set();
+    ws.add(String(f.weight || '400'));
+    weights.set(f.family, ws);
+  }
+  const families = [...weights].map(([family, ws]) =>
+    `family=${encodeURIComponent(family).replace(/%20/g, '+')}:wght@${[...ws].sort((a, b) => a - b).join(';')}`);
+  return `https://fonts.googleapis.com/css2?${families.join('&')}&display=swap`;
+}

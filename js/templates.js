@@ -4,6 +4,7 @@
 
 import { coverSource, fitFontSize, layoutLines, seededRandom } from './layout.js';
 import { taxNote } from './model.js';
+import { drawPrice } from './price-design.js';
 
 const FALLBACK = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif';
 export const FONTS = {
@@ -604,19 +605,6 @@ const simple = {
 const PRICE_RED = '#e60012';
 const PRICE_ZONE = 500;   // 写真の下に取る、商品名と価格の場所（1080幅のとき）
 
-/** 縁取りした数字（外側に白、内側に黒の縁、赤い字）。写真に重なっても読めるように。 */
-function outlinedText(ctx, text, x, y, size, u) {
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = size * 0.16 + 6 * u;
-  ctx.strokeText(text, x, y);
-  ctx.strokeStyle = '#1a1a1a';
-  ctx.lineWidth = size * 0.07;
-  ctx.strokeText(text, x, y);
-  ctx.fillStyle = PRICE_RED;
-  ctx.fillText(text, x, y);
-}
-
 /** 商品名（左寄せ・最大2行）と、その後ろに小さく〈単位〉。描いた下端の y を返す。 */
 function drawBoldName(ctx, d, left, maxW, top) {
   const { u, pop } = d;
@@ -642,41 +630,6 @@ function drawBoldName(ctx, d, left, maxW, top) {
     ctx.fillText(unit, left + lastW + 6 * u, base);
   }
   return base + 10 * u;
-}
-
-/**
- * 価格を右寄せで、top〜base の間に入る限り大きく描く。「円」は赤い四角に白抜き。
- * 税抜のときは円の上に小さく「税抜」と書く（大きい数字がどちらかを取り違えないように）。
- */
-function drawBoldPrice(ctx, d, right, maxW, top, base) {
-  const { u, price } = d;
-  const m = measurer(ctx, FONTS.impact);
-  const yenK = 0.34, gapK = 0.06;
-  const byWidth = (maxW - 20 * u) / (m(price.main, 1) + yenK + gapK);
-  const byHeight = (base - top) / 0.78;   // 数字の上端は大きさの約0.78
-  const size = Math.max(90 * u, Math.min(360 * u, byWidth, byHeight));
-  const yen = size * yenK;
-  const yenX = right - yen;
-  ctx.save();
-  ctx.textAlign = 'right';
-  ctx.font = font(FONTS.impact, size);
-  outlinedText(ctx, price.main, yenX - size * gapK, base, size, u);
-  roundRectPath(ctx, yenX, base - yen * 1.05, yen, yen * 1.05, 8 * u);
-  ctx.fillStyle = PRICE_RED;
-  ctx.fill();
-  ctx.lineWidth = 4 * u;
-  ctx.strokeStyle = '#1a1a1a';
-  ctx.stroke();
-  ctx.fillStyle = '#fff';
-  ctx.textAlign = 'center';
-  ctx.font = font(FONTS.impact, yen * 0.8);
-  ctx.fillText('円', yenX + yen / 2, base - yen * 0.2);
-  if (price.incl) {
-    ctx.font = font(FONTS.impact, Math.max(26 * u, yen * 0.42));
-    ctx.fillStyle = '#1a1a1a';
-    ctx.fillText('税抜', yenX + yen / 2, base - yen * 1.05 - 10 * u);
-  }
-  ctx.restore();
 }
 
 const bold = {
@@ -738,22 +691,16 @@ const bold = {
       y += cl.size * 1.4;
     }
 
-    // いちばん下の段: 店名（左）・税込の併記（右）
-    const by = H - 40 * u;
+    // いちばん下: 店名（左に小さく）。価格はその上の残り全部を使う（中身は price-design.js）
     if (d.shopName) {
       ctx.font = font(FONTS.round, 28 * u);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#777';
-      ctx.fillText(d.shopName, left, by);
+      ctx.fillText(d.shopName, left, H - 40 * u);
     }
     if (!d.price) return;
-    const note = `（${taxNote(d.price)}）`;
-    const noteSize = fitFontSize(note, maxW * 0.7, measurer(ctx, FONTS.impact), 46 * u, 26 * u);
-    ctx.font = font(FONTS.impact, noteSize);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#1a1a1a';
-    ctx.fillText(note, W - left, by);
-    drawBoldPrice(ctx, d, W - left, maxW, y + 8 * u, by - noteSize - 22 * u);
+    const top = y + 8 * u;
+    drawPrice(ctx, { x: left, y: top, w: maxW, h: H - (d.shopName ? 80 : 34) * u - top }, d.price, u);
   },
 };
 

@@ -6,7 +6,7 @@
   "description": "青果店のおすすめを、スマホですぐ電子ポップにする PWA",
   "scripts": {
     "test": "node --test \"tests/**/*.test.js\"",
-    "lint": "npx --yes oxlint@latest js tests sw.js",
+    "lint": "npx --yes oxlint@latest js tests sw.js tools/price-kit",
     "serve": "python -m http.server 8765"
   }
 }

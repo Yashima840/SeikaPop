@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>価格デザイン試作キット（SeikaPop）</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@700&display=swap">
+  <style>
+    body { font-family: system-ui, sans-serif; background: #e8e6df; color: #222; margin: 0; padding: 16px; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    .lead { font-size: 14px; line-height: 1.6; max-width: 60em; margin: 0 0 12px; }
+    .bar { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; font-size: 14px; }
+    #summary { font-weight: 700; }
+    #summary.ng, .ng { color: #c00; }
+    #summary.ok, .ok { color: #1b7a2e; }
+    .row { margin-bottom: 18px; }
+    .row h2 { font-size: 15px; margin: 0 0 6px; }
+    .cells { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+    figure { margin: 0; background: #fff; padding: 6px; border-radius: 6px; }
+    canvas { width: 230px; display: block; cursor: zoom-in; }
+    canvas.big { width: min(92vw, 720px); cursor: zoom-out; }
+    figcaption { font-size: 12px; margin-top: 4px; }
+    pre.err { color: #c00; white-space: pre-wrap; font-size: 12px; max-width: 230px; margin: 4px 0 0; }
+  </style>
+</head>
+<body>
+  <h1>価格デザイン試作キット</h1>
+  <p class="lead">
+    青果店のポップ「金額主役」デザインの<b>価格部分だけ</b>を試すページです。下のスクリプトにある
+    「ここから〜ここまで」の印のあいだ（<code>PRICE_FONTS</code> と <code>drawPrice</code>）を書き換えて開き直すと、
+    全サイズ×全パターンで描き直します。写真・商品名・店名はアプリの配置を真似た見本で、変えられません。
+    青い点線が描いてよい範囲で、はみ出すと赤字で知らせます。画像をクリックすると拡大します。
+  </p>
+  <div class="bar">
+    <label><input type="checkbox" id="showArea" checked> 描いてよい範囲（青い点線）を表示</label>
+    <span id="summary">描画中…</span>
+  </div>
+  <div id="out"></div>
+
+  <script type="module">
+// ===== ここから: デザイン担当が書き換える範囲 =====
+// 使う Google Fonts（family は Google Fonts の名前どおり、weight は '400' や '700'）
+const PRICE_FONTS = [
+  { family: 'Dela Gothic One', weight: '400' },
+];
+
+/**
+ * 価格を area の中に描く。
+ * price.main … 大きく出す数字（"298" "1,980" などカンマ入り）
+ * price.incl … 税抜で入れたときの税込額（"321.84"）。税込で入れたときは ""
+ * u          … 倍率（幅1080pxの画像で 1）
+ */
+function drawPrice(ctx, area, price, u) {
+  const RED = '#e60012', INK = '#1a1a1a';
+  const font = s => `400 ${Math.round(s)}px "Dela Gothic One", sans-serif`;
+  const width = (t, s) => { ctx.font = font(s); return ctx.measureText(t).width; };
+  const right = area.x + area.w, bottom = area.y + area.h;
+  ctx.save();
+  ctx.textBaseline = 'alphabetic';
+
+  // 税込の併記（右下）。税抜で入れたときは税込額、税込で入れたときは「税込」とだけ
+  const note = price.incl ? `（税込 ${price.incl}円）` : '（税込）';
+  const noteSize = Math.max(24 * u, Math.min(46 * u, 46 * u * area.w * 0.7 / width(note, 46 * u)));
+  ctx.font = font(noteSize);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = INK;
+  ctx.fillText(note, right, bottom - noteSize * 0.15);
+
+  // 数字: 入る限り大きく。「円」は赤い四角に白抜き
+  const yenK = 0.34, gapK = 0.06;
+  const byWidth = area.w / (width(price.main, 100) / 100 + yenK + gapK + 0.12);
+  const byHeight = bottom - noteSize * 1.3 - area.y;
+  const size = Math.max(40 * u, Math.min(360 * u, byWidth, byHeight));
+  const base = area.y + size * 0.86;
+  const yen = size * yenK;
+  const yenX = right - yen - 4 * u;
+
+  ctx.font = font(size);
+  ctx.textAlign = 'right';
+  ctx.lineJoin = 'round';
+  const x = yenX - size * gapK;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = size * 0.16 + 6 * u;
+  ctx.strokeText(price.main, x, base);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = size * 0.07;
+  ctx.strokeText(price.main, x, base);
+  ctx.fillStyle = RED;
+  ctx.fillText(price.main, x, base);
+
+  ctx.beginPath();
+  ctx.rect(yenX, base - yen * 1.05, yen, yen * 1.05);
+  ctx.fillStyle = RED;
+  ctx.fill();
+  ctx.lineWidth = 4 * u;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.font = font(yen * 0.8);
+  ctx.fillText('円', yenX + yen / 2, base - yen * 0.2);
+  if (price.incl) {
+    // 大きい数字が税抜であることを、円の上に小さく示す
+    ctx.font = font(yen * 0.42);   // 円の箱に比例させる（下限を付けると狭い範囲で上へはみ出す）
+    ctx.fillStyle = INK;
+    ctx.fillText('税抜', yenX + yen / 2, base - yen * 1.05 - 10 * u);
+  }
+  ctx.restore();
+}
+// ===== ここまで: デザイン担当が書き換える範囲 =====
+
+// ===== 以下は試作キットの仕組み（書き換えない）=====
+const CASES = [
+  { label: '税抜 298円（基本）', price: { main: '298', incl: '321.84' } },
+  { label: '税抜 98円（短い）', price: { main: '98', incl: '105.84' } },
+  { label: '税抜 1,980円', price: { main: '1,980', incl: '2,138.4' } },
+  { label: '税抜 1,980円・商品名が2行（価格の範囲が狭い）', price: { main: '1,980', incl: '2,138.4' }, twoLines: true },
+  { label: '税抜 12,800円', price: { main: '12,800', incl: '13,824' } },
+  { label: '税込で入力した 158円（税込額の併記なし。「税込」とだけ添える）', price: { main: '158', incl: '' } },
+  { label: '入力できる最大 1,234,567円', price: { main: '1,234,567', incl: '1,333,332.36' } },
+];
+const SIZES = [['正方形', 1080, 1080], ['縦 4:5', 1080, 1350], ['縦長 9:16', 1080, 1920]];
+const SHOP = '青果の見本 本店';
+
+function samplePhoto() {
+  const cv = document.createElement('canvas');
+  cv.width = 1600; cv.height = 1200;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#6b4a2b'; c.fillRect(0, 0, 1600, 1200);
+  for (let i = 0; i < 14; i++) {
+    const x = 200 + (i % 5) * 300, y = 250 + Math.floor(i / 5) * 330;
+    const g = c.createRadialGradient(x - 40, y - 50, 20, x, y, 170);
+    g.addColorStop(0, '#ff8a70'); g.addColorStop(1, '#c41d10');
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, 160, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#2f7d2a'; c.beginPath(); c.ellipse(x, y - 150, 50, 18, 0, 0, Math.PI * 2); c.fill();
+  }
+  return cv;
+}
+const PHOTO = samplePhoto();
+
+// アプリの「金額主役」と同じ配置で、価格以外を描いて価格の範囲を返す
+function drawCell(ctx, W, H, twoLines) {
+  const u = W / 1080;
+  const F = (s, fam = 'Dela Gothic One', w = 400) => `${w} ${Math.round(s)}px "${fam}", sans-serif`;
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 6 * u; ctx.strokeRect(14 * u, 14 * u, W - 28 * u, H - 28 * u);
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = F(46 * u); ctx.textAlign = 'right'; ctx.fillStyle = '#1a1a1a';
+  ctx.fillText('10/21(水)', W - 44 * u, 88 * u);
+  ctx.font = F(54 * u); ctx.textAlign = 'left';
+  const bw = ctx.measureText('本日のおすすめ').width;
+  ctx.fillStyle = '#e60012'; ctx.fillRect(40 * u, 32 * u, bw + 48 * u, 74 * u);
+  ctx.fillStyle = '#fff'; ctx.fillText('本日のおすすめ', 64 * u, 69 * u + 54 * u * 0.36);
+  const box = { x: 40 * u, y: 120 * u, w: W - 80 * u, h: H - 620 * u };
+  const k = Math.max(box.w / PHOTO.width, box.h / PHOTO.height);
+  const sw = box.w / k, sh = box.h / k;
+  ctx.drawImage(PHOTO, (PHOTO.width - sw) / 2, (PHOTO.height - sh) / 2, sw, sh, box.x, box.y, box.w, box.h);
+  const left = 50 * u, maxW = W - 100 * u;
+  let y = box.y + box.h + 14 * u;
+  ctx.fillStyle = '#1a1a1a';
+  if (twoLines) {
+    const s = 84 * u;
+    ctx.font = F(s);
+    ctx.fillText('シャインマスカット', left, y + s * 0.9);
+    ctx.fillText('（大粒・種なし）〈1房〉', left, y + s * 0.9 + s * 1.08);
+    y += s * 0.9 + s * 1.08 + 10 * u;
+  } else {
+    const s = 104 * u;
+    ctx.font = F(s);
+    ctx.fillText('完熟トマト', left, y + s * 0.9);
+    const nw = ctx.measureText('完熟トマト').width;
+    ctx.font = F(40 * u);
+    ctx.fillText('〈1袋〉', left + nw + 6 * u, y + s * 0.9);
+    y += s * 0.9 + 10 * u;
+  }
+  if (H / W > 1.2) {
+    ctx.font = F(40 * u, 'Zen Maru Gothic', 700); ctx.fillStyle = '#5a3a1a';
+    ctx.fillText('甘さ自慢！ サラダにどうぞ', left, y + 44 * u);
+    y += 56 * u;
+  }
+  ctx.font = F(28 * u, 'Zen Maru Gothic', 700); ctx.fillStyle = '#777';
+  ctx.fillText(SHOP, left, H - 40 * u);
+  const top = y + 8 * u;
+  return { x: left, y: top, w: maxW, h: H - 80 * u - top };
+}
+
+// 価格だけを透明な画用紙に描いて、範囲の外に色が付いたかを数える
+function overflowPixels(W, H, area, price) {
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const c = cv.getContext('2d', { willReadFrequently: true });
+  drawPrice(c, area, price, W / 1080);
+  const data = c.getImageData(0, 0, W, H).data;
+  const x0 = Math.floor(area.x) - 2, x1 = Math.ceil(area.x + area.w) + 2;
+  const y0 = Math.floor(area.y) - 2, y1 = Math.ceil(area.y + area.h) + 2;
+  let n = 0;
+  for (let y = 0; y < H; y++) {
+    const inY = y >= y0 && y < y1;
+    for (let x = 0; x < W; x++) {
+      if (inY && x >= x0 && x < x1) continue;
+      if (data[(y * W + x) * 4 + 3] > 24) n++;
+    }
+  }
+  return n;
+}
+
+function fontsUrl(fonts) {
+  const fam = fonts.map(f => `family=${encodeURIComponent(f.family).replace(/%20/g, '+')}:wght@${f.weight || 400}`);
+  return `https://fonts.googleapis.com/css2?${fam.join('&')}&display=swap`;
+}
+
+async function loadFonts() {
+  const sample = '0123456789,.円税込抜（）()¥';
+  const css = new Promise((resolve, reject) => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet'; link.href = fontsUrl(PRICE_FONTS);
+    link.onload = resolve; link.onerror = () => reject(new Error('書体の読み込みに失敗: ' + link.href));
+    document.head.append(link);
+  });
+  const all = css.then(() => Promise.all([
+    ...PRICE_FONTS.map(f => document.fonts.load(`${f.weight || 400} 40px "${f.family}"`, sample)),
+    document.fonts.load('400 40px "Dela Gothic One"', '完熟トマト本日のおすすめ'),
+    document.fonts.load('700 40px "Zen Maru Gothic"', SHOP),
+  ]));
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('書体の読み込みが8秒で終わりませんでした')), 8000));
+  return Promise.race([all, timeout]);
+}
+
+const cells = [];
+function renderAll() {
+  const out = document.getElementById('out');
+  out.replaceChildren();
+  cells.length = 0;
+  let bad = 0;
+  for (const cs of CASES) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.append(Object.assign(document.createElement('h2'), { textContent: cs.label }));
+    const wrap = document.createElement('div');
+    wrap.className = 'cells';
+    for (const [name, W, H] of SIZES) {
+      const fig = document.createElement('figure');
+      const cv = document.createElement('canvas');
+      cv.width = W; cv.height = H;
+      cv.addEventListener('click', () => cv.classList.toggle('big'));
+      const ctx = cv.getContext('2d');
+      const area = drawCell(ctx, W, H, cs.twoLines);
+      const cap = document.createElement('figcaption');
+      try {
+        ctx.save();
+        drawPrice(ctx, area, cs.price, W / 1080);
+        ctx.restore();
+        const n = overflowPixels(W, H, area, cs.price);
+        cap.innerHTML = n ? `${name} <span class="ng">⚠ はみ出し ${n}px</span>` : `${name} <span class="ok">✓ 範囲内</span>`;
+        if (n) bad++;
+      } catch (err) {
+        bad++;
+        cap.textContent = name;
+        fig.append(Object.assign(document.createElement('pre'), { className: 'err', textContent: `エラー: ${err.message}` }));
+      }
+      if (document.getElementById('showArea').checked) {
+        ctx.save();
+        ctx.setLineDash([16, 10]); ctx.strokeStyle = 'rgba(0,90,255,0.8)'; ctx.lineWidth = 3;
+        ctx.strokeRect(area.x, area.y, area.w, area.h);
+        ctx.restore();
+      }
+      fig.prepend(cv);
+      fig.append(cap);
+      wrap.append(fig);
+    }
+    row.append(wrap);
+    out.append(row);
+  }
+  const sum = document.getElementById('summary');
+  sum.textContent = bad ? `⚠ 問題のある画像が ${bad} 枚あります` : `✓ 全 ${CASES.length * SIZES.length} 枚とも範囲内`;
+  sum.className = bad ? 'ng' : 'ok';
+  document.title = bad ? '価格デザイン試作キット（問題あり）' : '価格デザイン試作キット（OK）';
+}
+
+document.getElementById('showArea').addEventListener('change', renderAll);
+try {
+  await loadFonts();
+} catch (err) {
+  document.querySelector('.lead').insertAdjacentHTML('afterend', `<p class="ng">${err.message}（端末の字で描いています）</p>`);
+}
+renderAll();
+  </script>
+</body>
+</html>

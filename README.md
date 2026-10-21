@@ -59,7 +59,8 @@ python tools/make_icons.py   # アイコンを作り直す（Pillow）
 | `js/model.js` | ポップのデータ・レギュラーの使い回し・価格の読み取り（純粋な関数） |
 | `js/layout.js` | 写真の切り出し・指の移動・文字の折り返し（純粋な関数） |
 | `js/image.js` | 写真の縮小・自動補正 |
-| `js/templates.js` | 4つのデザイン |
+| `js/templates.js` | 5つのデザイン |
+| `js/price-design.js` | 「金額主役」の価格部分（外部AIの案と入れ替える。手順は `tools/price-kit/PROMPT.md`） |
 | `js/render.js` | 描画・画像ファイル化 |
 | `js/store.js` | 保存（今は端末内の IndexedDB）。**クラウド化するときはここを差し替える** |
 | `js/backup.js` | バックアップの検証・重ね合わせ |

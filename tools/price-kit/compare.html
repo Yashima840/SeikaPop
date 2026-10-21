@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>価格デザインの比較（SeikaPop）</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 12px; background: #d9d6cc; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    p { font-size: 13px; margin: 0 0 10px; }
+    .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 10px; }
+    section { background: #fff; border-radius: 8px; padding: 6px; }
+    h2 { font-size: 15px; margin: 4px 6px 6px; }
+    iframe { width: 100%; height: 85vh; border: 1px solid #ccc; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <!-- 返ってきた案を candidates/gemini.html・candidates/chatgpt.html に置いて開く -->
+  <h1>価格デザインの比較</h1>
+  <p>
+    返ってきたファイルを <code>tools/price-kit/candidates/gemini.html</code> と
+    <code>tools/price-kit/candidates/chatgpt.html</code> に保存してから、このページを開き直してください。
+    右端は今のアプリのデザインです。各案の上に「✓ 全 21 枚とも範囲内」と出ていることも確かめてください。
+  </p>
+  <div class="cols">
+    <section><h2>Gemini 案</h2><iframe src="candidates/gemini.html" title="Gemini 案"></iframe></section>
+    <section><h2>ChatGPT 案</h2><iframe src="candidates/chatgpt.html" title="ChatGPT 案"></iframe></section>
+    <section><h2>今のデザイン</h2><iframe src="price-kit.html" title="今のデザイン"></iframe></section>
+  </div>
+</body>
+</html>
