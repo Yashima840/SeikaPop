@@ -1,12 +1,13 @@
 // 金額キャッチのデザイン編集画面（PC 用。tools/serve.py で開く）。
 // 編集中のデザインをアプリ本体の描画（renderPop → price-design.js）にそのまま渡して見せるので、
 // ここで見えるものと、保存後にアプリで出るものは同じになる。
+// 操作は図形ソフトと同じ: クリックで部品を選ぶ → ドラッグで移動・四隅の □ で拡大縮小。
 
 import { CATCH_DESIGN } from '../js/catch-design.js';
-import { catchFrame } from '../js/price-design.js';
+import { editorApi as api } from '../js/price-design.js';
 import { catchDesignProblems, catchFontList } from '../js/catch-check.js';
 import { googleFontsUrl } from '../js/layout.js';
-import { createPop, SIZES } from '../js/model.js';
+import { createPop, priceTexts, SIZES } from '../js/model.js';
 import { ensureFonts, photoBoxOf, renderPop } from '../js/render.js';
 
 const $ = id => document.getElementById(id);
@@ -22,14 +23,21 @@ const FONT_CHOICES = [
   'RocknRoll One', 'Reggae One', 'Rampart One', 'Potta One', 'Kosugi Maru', 'Zen Maru Gothic', 'Yusei Magic',
   'Zen Old Mincho', 'Shippori Mincho', 'DotGothic16',
 ];
-const PARTS = [['num', '数字'], ['yen', '「円」'], ['tax', '税込の併記']];
+const LABELS = { burst: '背景（ギザギザ）', num: '数字', yen: '「円」', tax: '税込コメント' };
+const DEFAULT_ORDER = ['burst', 'num', 'yen', 'tax'];
+const TEXT_KEYS = ['num', 'yen', 'tax'];
 const SIZE_RANGE = { num: [30, 320], yen: [10, 160], tax: [8, 80] };
 
 // ---- 編集中のデザインと履歴 ----
-let design = structuredClone(CATCH_DESIGN);
-let savedJson = JSON.stringify(design);
-let committed = savedJson;
+/** 重なり順が無い古いデザインにも既定の順を入れる（保存の検査で止まらないように）。 */
+function withOrder(d) {
+  return Array.isArray(d.order) ? d : { ...d, order: [...DEFAULT_ORDER] };
+}
+let design = withOrder(structuredClone(CATCH_DESIGN));
+let savedJson = JSON.stringify(withOrder(structuredClone(CATCH_DESIGN)));
+let committed = JSON.stringify(design);
 const undoStack = [], redoStack = [];
+let selected = 'num';   // 選んでいる部品（null＝何も選んでいない）
 
 const getP = path => path.split('.').reduce((o, k) => o[k], design);
 const setP = (path, v) => {
@@ -38,6 +46,7 @@ const setP = (path, v) => {
   keys.reduce((o, k) => o[k], design)[last] = v;
 };
 const round1 = v => Math.round(v * 10) / 10;
+const order = () => (api ? api.partOrder(design) : design.order || DEFAULT_ORDER);
 
 /** アプリの描画が読むデザイン（catch-design.js の中身）を、編集中のもので置き換える。 */
 function applyToRenderer() {
@@ -145,6 +154,7 @@ const currentPop = () => popFor(view.size, view.price);
 
 // ---- 描画 ----
 const preview = $('preview'), overlay = $('overlay');
+const measureCtx = document.createElement('canvas').getContext('2d');   // 部品の範囲を測るだけ
 let drawQueued = false;
 function scheduleDraw() {
   if (drawQueued) return;
@@ -185,28 +195,22 @@ function drawGrid() {
   }
 }
 
-// ---- 印（ハンドル）----
+// ---- 選択の枠と □（ハンドル）----
 function geometry(pop) {
-  const f = catchFrame(photoBoxOf(pop), design);
+  const f = api.catchFrame(photoBoxOf(pop), design);
   return {
     toPx: (x, y) => [f.x + x * f.k, f.y + y * f.k],
     toDesign: (px, py) => [(px - f.x) / f.k, (py - f.y) / f.k],
   };
 }
-const handleR = () => 11 * overlay.width / Math.max(1, overlay.getBoundingClientRect().width);
+const handleR = () => 9 * overlay.width / Math.max(1, overlay.getBoundingClientRect().width);
+const boundsOf = (key, pop = currentPop()) => api.partBounds(measureCtx, key, design, priceTexts(pop, SETTINGS));
+/** 囲みの四隅（左上・右上・右下・左下）。向かいの角は (i + 2) % 4。 */
+const cornersOf = box => [[box.x0, box.y0], [box.x1, box.y0], [box.x1, box.y1], [box.x0, box.y1]];
 
-// 文字の印は基準点から少しずらして置く（数字の右端と「円」の左端はほぼ同じ点なので、重なって選べなくなる）
-const MARKS = [['num', '数', -1.6, -1.6], ['yen', '円', 1.6, -1.6], ['tax', '税', 0, 1.4]];
-function markPositions(g, r) {
-  return MARKS.map(([k, mark, ox, oy]) => {
-    const [ax, ay] = g.toPx(design[k].x, design[k].y);
-    return { k, mark, ax, ay, x: ax + ox * r, y: ay + oy * r };
-  });
-}
-
-function burstPath(g) {
+function polyPath(g, poly) {
   const p = new Path2D();
-  design.burst.points.forEach(([x, y], i) => {
+  poly.forEach(([x, y], i) => {
     const [px, py] = g.toPx(x, y);
     if (i) p.lineTo(px, py); else p.moveTo(px, py);
   });
@@ -217,39 +221,52 @@ function burstPath(g) {
 function drawHandles(pop) {
   const c = overlay.getContext('2d');
   c.clearRect(0, 0, overlay.width, overlay.height);
-  if (!view.handles || !catchFrame) return;
+  if (!view.handles || !api) return;
   const g = geometry(pop), r = handleR();
   c.save();
-  c.lineWidth = r / 5;
-  c.setLineDash([r * 0.7, r * 0.5]);
-  c.strokeStyle = 'rgba(0,180,255,0.95)';
-  c.stroke(burstPath(g));
-  const guide = (x0, x1, y) => {
-    const [ax, ay] = g.toPx(x0, y), [bx, by] = g.toPx(x1, y);
-    c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
-  };
-  c.strokeStyle = 'rgba(255,0,200,0.9)';
-  guide(design.num.x - design.num.maxW, design.num.x, design.num.y + 6);
-  guide(design.tax.x - design.tax.maxW / 2, design.tax.x + design.tax.maxW / 2, design.tax.y + 4);
-  c.setLineDash([]);
-  for (const [x, y] of design.burst.points) {
-    const [px, py] = g.toPx(x, y);
-    c.beginPath(); c.arc(px, py, r * 0.75, 0, Math.PI * 2);
-    c.fillStyle = '#fff'; c.fill();
-    c.strokeStyle = '#0090ff'; c.lineWidth = r / 4; c.stroke();
-  }
-  c.font = `700 ${r * 1.2}px sans-serif`;
-  c.textAlign = 'center';
-  c.textBaseline = 'middle';
-  for (const m of markPositions(g, r)) {
-    c.strokeStyle = 'rgba(255,0,200,0.92)';
-    c.lineWidth = r / 6;
-    c.beginPath(); c.moveTo(m.ax, m.ay); c.lineTo(m.x, m.y); c.stroke();
-    c.fillStyle = 'rgba(255,0,200,0.92)';
-    c.beginPath(); c.arc(m.ax, m.ay, r * 0.3, 0, Math.PI * 2); c.fill();   // 本当の基準点
-    c.fillRect(m.x - r, m.y - r, r * 2, r * 2);
-    c.fillStyle = '#fff';
-    c.fillText(m.mark, m.x, m.y + r * 0.05);
+  // 選べる部品の輪郭（うすく）
+  c.lineWidth = r / 6;
+  c.setLineDash([r * 0.6, r * 0.5]);
+  c.strokeStyle = 'rgba(0,170,255,0.75)';
+  for (const key of order()) if (key !== selected) c.stroke(polyPath(g, boundsOf(key, pop).poly));
+  if (selected) {
+    const b = boundsOf(selected, pop);
+    c.setLineDash([]);
+    c.strokeStyle = 'rgba(255,0,200,0.95)';
+    c.lineWidth = r / 4;
+    c.stroke(polyPath(g, b.poly));
+    // 最大幅の目安（これより長い数字・税込は縮める）
+    c.setLineDash([r * 0.7, r * 0.5]);
+    const t = design[selected];
+    const guide = (x0, x1, y) => {
+      const [ax, ay] = g.toPx(x0, y), [bx, by] = g.toPx(x1, y);
+      c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
+    };
+    if (selected === 'num') guide(t.x - t.maxW, t.x, t.y + 8);
+    if (selected === 'tax') guide(t.x - t.maxW / 2, t.x + t.maxW / 2, t.y + 6);
+    c.setLineDash([]);
+    // ギザギザの角
+    if (selected === 'burst') {
+      for (const [x, y] of design.burst.points) {
+        const [px, py] = g.toPx(x, y);
+        c.beginPath(); c.arc(px, py, r * 0.7, 0, Math.PI * 2);
+        c.fillStyle = '#fff'; c.fill();
+        c.strokeStyle = '#0090ff'; c.lineWidth = r / 4; c.stroke();
+      }
+    } else {
+      const [ax, ay] = g.toPx(t.x, t.y);   // 文字の基準点
+      c.fillStyle = 'rgba(255,0,200,0.95)';
+      c.beginPath(); c.arc(ax, ay, r * 0.35, 0, Math.PI * 2); c.fill();
+    }
+    // 拡大縮小の □
+    for (const [x, y] of cornersOf(b.box)) {
+      const [px, py] = g.toPx(x, y);
+      c.fillStyle = '#fff';
+      c.fillRect(px - r, py - r, r * 2, r * 2);
+      c.strokeStyle = 'rgba(255,0,200,0.95)';
+      c.lineWidth = r / 4;
+      c.strokeRect(px - r, py - r, r * 2, r * 2);
+    }
   }
   c.restore();
 }
@@ -259,30 +276,85 @@ function canvasPoint(ev) {
   return [(ev.clientX - rect.left) * overlay.width / rect.width, (ev.clientY - rect.top) * overlay.height / rect.height];
 }
 
-/** 指している印。文字の印 → 角 → ギザギザの中（Shift のときだけ）の順に探す。 */
-function hitTest(px, py, shift = false) {
+/** 指しているもの: 選んだ部品の □ → ギザギザの角（選んでいるとき）→ 手前の部品から順に中身。 */
+function hitTest(px, py) {
   const g = geometry(currentPop()), r = handleR();
-  for (const m of markPositions(g, r)) {
-    if (Math.abs(px - m.x) <= r * 1.1 && Math.abs(py - m.y) <= r * 1.1) return { type: 'text', part: m.k };
+  if (selected) {
+    const b = boundsOf(selected);
+    const corners = cornersOf(b.box);
+    for (let i = 0; i < 4; i++) {
+      const [hx, hy] = g.toPx(...corners[i]);
+      if (Math.abs(px - hx) <= r * 1.3 && Math.abs(py - hy) <= r * 1.3) {
+        return { type: 'resize', part: selected, anchor: corners[(i + 2) % 4] };
+      }
+    }
+    if (selected === 'burst') {
+      const pts = design.burst.points;
+      for (let i = 0; i < pts.length; i++) {
+        const [hx, hy] = g.toPx(...pts[i]);
+        if (Math.hypot(px - hx, py - hy) <= r * 1.2) return { type: 'point', index: i };
+      }
+    }
   }
-  const pts = design.burst.points;
-  for (let i = 0; i < pts.length; i++) {
-    const [hx, hy] = g.toPx(...pts[i]);
-    if (Math.hypot(px - hx, py - hy) <= r * 1.2) return { type: 'point', index: i };
+  const under = partsAt(px, py, g);
+  return under.length ? { type: 'move', part: under[0], under } : null;
+}
+
+/** その点に重なっている部品（手前から順）。 */
+function partsAt(px, py, g = geometry(currentPop())) {
+  const c = overlay.getContext('2d');
+  return [...order()].reverse().filter(key => c.isPointInPath(polyPath(g, boundsOf(key).poly), px, py));
+}
+
+function select(key) {
+  if (selected === key) return;
+  selected = key;
+  if (key) openSections.add(LABELS[key]);
+  buildPanel();
+  scheduleDraw();
+}
+
+/** 部品を (dx, dy) だけ動かした形を、元の形 o から作る。 */
+function moved(key, o, dx, dy) {
+  if (key === 'burst') design.burst.points = o.burst.points.map(([x, y]) => [round1(x + dx), round1(y + dy)]);
+  else { design[key].x = round1(o[key].x + dx); design[key].y = round1(o[key].y + dy); }
+}
+
+/**
+ * 拡大縮小。anchor（向かいの角）を動かさずに広げる。
+ * 背景は縦横を別々に伸ばせる（Shift で縦横比を保つ）。文字は縦横比を保ったまま、大きさ・縁取り・最大幅を同じ割合で変える。
+ */
+function resized(key, o, anchor, start, cur, keepRatio) {
+  const [ax, ay] = anchor;
+  if (key === 'burst') {
+    let sx = (cur[0] - ax) / ((start[0] - ax) || 1), sy = (cur[1] - ay) / ((start[1] - ay) || 1);
+    if (keepRatio) sx = sy = Math.max(sx, sy);
+    sx = Math.max(0.05, sx); sy = Math.max(0.05, sy);
+    design.burst.points = o.burst.points.map(([x, y]) => [round1(ax + (x - ax) * sx), round1(ay + (y - ay) * sy)]);
+    return;
   }
-  // 全体を動かすのは Shift を押しているときだけ（印の押し損ねで全体が動く事故を防ぐ）
-  if (shift && overlay.getContext('2d').isPointInPath(burstPath(g), px, py)) return { type: 'all' };
-  return null;
+  const s = Math.max(0.05, Math.hypot(cur[0] - ax, cur[1] - ay) / (Math.hypot(start[0] - ax, start[1] - ay) || 1));
+  const t = design[key], ot = o[key];
+  t.size = round1(ot.size * s);
+  t.strokes = ot.strokes.map(st => ({ ...st, width: round1(st.width * s) }));
+  if ('maxW' in ot) t.maxW = round1(ot.maxW * s);
+  t.x = round1(ax + (ot.x - ax) * s);
+  t.y = round1(ay + (ot.y - ay) * s);
 }
 
 let drag = null;
 overlay.addEventListener('pointerdown', ev => {
-  if (ev.button !== 0 || !view.handles || !catchFrame) return;
+  if (ev.button !== 0 || !view.handles || !api) return;
   const [px, py] = canvasPoint(ev);
-  const hit = hitTest(px, py, ev.shiftKey);
-  if (!hit) return;
-  const g = geometry(currentPop());   // 動かしている間は倍率を固定（角を動かすと倍率が変わることがあるため）
-  drag = { hit, g, start: g.toDesign(px, py), orig: structuredClone(design) };
+  const hit = hitTest(px, py);
+  if (!hit) { select(null); return; }
+  // 選んでいる部品の上でもう一度押したら、離したときに（動かしていなければ）下の部品へ選択を移す
+  const cycle = hit.type === 'move' && hit.under.includes(selected) && hit.under.length > 1
+    ? hit.under[(hit.under.indexOf(selected) + 1) % hit.under.length] : null;
+  if (hit.type === 'move') hit.part = cycle ? selected : hit.part;   // 押したまま動かせば、選んでいる部品を動かす
+  if (hit.type === 'move' && !cycle) select(hit.part);
+  const g = geometry(currentPop());
+  drag = { hit, g, start: g.toDesign(px, py), orig: structuredClone(design), cycle };
   overlay.setPointerCapture(ev.pointerId);
 });
 overlay.addEventListener('pointermove', ev => {
@@ -291,29 +363,33 @@ overlay.addEventListener('pointermove', ev => {
   // （終わらないままだと、保存ボタンへ手を動かす間もデザインを動かし続けてしまう）
   if (drag && ev.buttons === 0) { endDrag(); return; }
   if (!drag) {
-    if (view.handles && catchFrame) overlay.style.cursor = hitTest(px, py, ev.shiftKey) ? 'move' : 'default';
+    if (view.handles && api) {
+      const hit = hitTest(px, py);
+      overlay.style.cursor = !hit ? 'default' : hit.type === 'resize' ? 'nwse-resize' : hit.type === 'point' ? 'crosshair' : 'move';
+    }
     return;
   }
-  const [x, y] = drag.g.toDesign(px, py);
-  const dx = x - drag.start[0], dy = y - drag.start[1];
-  const o = drag.orig;
-  const { hit } = drag;
+  const cur = drag.g.toDesign(px, py);
+  const { hit, orig, start } = drag;
   if (hit.type === 'point') {
-    design.burst.points[hit.index] = [round1(o.burst.points[hit.index][0] + dx), round1(o.burst.points[hit.index][1] + dy)];
-  } else if (hit.type === 'text') {
-    design[hit.part].x = round1(o[hit.part].x + dx);
-    design[hit.part].y = round1(o[hit.part].y + dy);
+    const [x, y] = orig.burst.points[hit.index];
+    design.burst.points[hit.index] = [round1(x + cur[0] - start[0]), round1(y + cur[1] - start[1])];
+  } else if (hit.type === 'move') {
+    moved(hit.part, orig, cur[0] - start[0], cur[1] - start[1]);
   } else {
-    design.burst.points = o.burst.points.map(([px0, py0]) => [round1(px0 + dx), round1(py0 + dy)]);
-    for (const [k] of PARTS) { design[k].x = round1(o[k].x + dx); design[k].y = round1(o[k].y + dy); }
+    resized(hit.part, orig, hit.anchor, start, cur, ev.shiftKey);
   }
   live();
-  refreshPositionInputs();
+  syncInputs();
 });
 function endDrag() {
   if (!drag) return;
+  const { cycle } = drag;
+  const changed = JSON.stringify(design) !== committed;
   drag = null;
   commit();
+  syncInputs();
+  if (cycle && !changed) select(cycle);   // 動かさずに離した＝下の部品を選ぶクリックだった
 }
 overlay.addEventListener('pointerup', endDrag);
 overlay.addEventListener('pointercancel', endDrag);
@@ -321,9 +397,9 @@ overlay.addEventListener('lostpointercapture', endDrag);
 window.addEventListener('pointerup', endDrag);
 window.addEventListener('blur', endDrag);
 
-// 辺をダブルクリック → そこに角を足す
+// 背景を選んでいるとき: 辺をダブルクリック → そこに角を足す
 overlay.addEventListener('dblclick', ev => {
-  if (!view.handles || !catchFrame) return;
+  if (!view.handles || !api || selected !== 'burst') return;
   const [px, py] = canvasPoint(ev);
   const g = geometry(currentPop()), r = handleR();
   const pts = design.burst.points.map(p => g.toPx(...p));
@@ -333,7 +409,7 @@ overlay.addEventListener('dblclick', ev => {
     const len2 = (bx - ax) ** 2 + (by - ay) ** 2 || 1;
     const t = Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / len2));
     const d = Math.hypot(px - (ax + t * (bx - ax)), py - (ay + t * (by - ay)));
-    if (d <= r * 1.5 && (!best || d < best.d)) best = { d, i, t };
+    if (d <= r * 1.5 && (!best || d < best.d)) best = { d, i };
   });
   if (!best) return;
   const [x, y] = g.toDesign(px, py);
@@ -341,9 +417,9 @@ overlay.addEventListener('dblclick', ev => {
   commit();
 });
 
-// 角を右クリック → 消す（3つは残す）
+// 背景を選んでいるとき: 角を右クリック → 消す（3つは残す）
 overlay.addEventListener('contextmenu', ev => {
-  if (!view.handles || !catchFrame) return;
+  if (!view.handles || !api || selected !== 'burst') return;
   const hit = hitTest(...canvasPoint(ev));
   if (hit?.type !== 'point') return;
   ev.preventDefault();
@@ -352,22 +428,41 @@ overlay.addEventListener('contextmenu', ev => {
   commit();
 });
 
-// ---- 右の設定パネル ----
-const openSections = new Set(['全体', 'ギザギザ', '数字']);
-const positionInputs = [];   // ドラッグ中に数値を追従させる欄
-
-function section(title, rows) {
-  const d = document.createElement('details');
-  d.className = 'sec';
-  d.open = openSections.has(title);
-  d.addEventListener('toggle', () => (d.open ? openSections.add(title) : openSections.delete(title)));
-  const s = document.createElement('summary');
-  s.textContent = title;
-  const body = document.createElement('div');
-  body.append(...rows.filter(Boolean));
-  d.append(s, body);
-  return d;
+// ---- 重なり順 ----
+/** key を to（'front' 最前面・'back' 最背面・'up' 1つ手前・'down' 1つ奥）へ。 */
+function reorder(key, to) {
+  const o = [...order()];
+  const i = o.indexOf(key);
+  o.splice(i, 1);
+  const at = { front: o.length, back: 0, up: Math.min(o.length, i + 1), down: Math.max(0, i - 1) }[to];
+  o.splice(at, 0, key);
+  design.order = o;
+  commit();
+  buildPanel();
 }
+
+function layerSection() {
+  const list = el('div', { className: 'layers' });
+  const o = order();
+  [...o].reverse().forEach((key, idx) => {   // 上に表示するほど手前
+    const name = el('button', { className: key === selected ? 'name on' : 'name', textContent: `${idx === 0 ? '最前面: ' : idx === o.length - 1 ? '最背面: ' : ''}${LABELS[key]}` });
+    name.addEventListener('click', () => select(key));
+    const btn = (text, to, disabled, title) => {
+      const b = el('button', { textContent: text, disabled, title });
+      b.addEventListener('click', () => reorder(key, to));
+      return b;
+    };
+    list.append(el('div', { className: 'layer' }, name,
+      btn('⤒', 'front', idx === 0, '最前面へ'), btn('↑', 'up', idx === 0, '1つ手前へ'),
+      btn('↓', 'down', idx === o.length - 1, '1つ奥へ'), btn('⤓', 'back', idx === o.length - 1, '最背面へ')));
+  });
+  return section('重なり順（上ほど手前）', [list,
+    el('p', { className: 'help', textContent: '選んでいる部品は Ctrl+Shift+↑ で最前面、Ctrl+Shift+↓ で最背面へ。' })]);
+}
+
+// ---- 右の設定パネル ----
+const openSections = new Set(['重なり順（上ほど手前）', '全体', LABELS.num]);
+let syncers = [];   // ドラッグ中に数値を追従させる欄
 
 function el(tag, props = {}, ...children) {
   const e = Object.assign(document.createElement(tag), props);
@@ -375,14 +470,22 @@ function el(tag, props = {}, ...children) {
   return e;
 }
 
-function numRow(label, path, min, max, step, { position = false } = {}) {
+function section(title, rows, { highlight = false } = {}) {
+  const d = el('details', { className: highlight ? 'sec selected' : 'sec' });
+  d.open = openSections.has(title);
+  d.addEventListener('toggle', () => (d.open ? openSections.add(title) : openSections.delete(title)));
+  d.append(el('summary', { textContent: title }), el('div', {}, ...rows.filter(Boolean)));
+  return d;
+}
+
+function numRow(label, path, min, max, step) {
   const range = el('input', { type: 'range', min, max, step });
   const num = el('input', { type: 'number', step });
-  const sync = () => { range.value = getP(path); num.value = getP(path); };
+  const sync = () => { range.value = getP(path); if (document.activeElement !== num) num.value = getP(path); };
   sync();
   const onInput = src => () => {
     const v = Number(src.value);
-    if (!Number.isFinite(v)) return;   // 打ちかけ（空・「-」だけ）は反映しない
+    if (!Number.isFinite(v) || src.value === '') return;   // 打ちかけ（空・「-」だけ）は反映しない
     setP(path, v);
     (src === range ? num : range).value = v;
     live();
@@ -391,7 +494,7 @@ function numRow(label, path, min, max, step, { position = false } = {}) {
   num.addEventListener('input', onInput(num));
   range.addEventListener('change', commit);
   num.addEventListener('change', () => { sync(); commit(); });
-  if (position) positionInputs.push(sync);
+  syncers.push(sync);
   return el('div', { className: 'row' }, el('span', { textContent: label }), range, num);
 }
 
@@ -404,32 +507,32 @@ function colorRow(label, path) {
 
 function fontRow(part) {
   const t = () => design[part];
-  const select = el('select');
-  for (const name of FONT_CHOICES) select.append(el('option', { value: name, textContent: name }));
-  select.append(el('option', { value: '', textContent: 'その他（名前を入れる）' }));
-  const custom = el('input', { type: 'text', placeholder: 'Google Fonts の名前', hidden: true });
+  const select_ = el('select');
+  for (const name of FONT_CHOICES) select_.append(el('option', { value: name, textContent: name }));
+  select_.append(el('option', { value: '', textContent: 'その他（名前を入れる）' }));
+  const custom = el('input', { type: 'text', placeholder: 'Google Fonts の名前' });
   const weight = el('select');
   for (let w = 100; w <= 900; w += 100) weight.append(el('option', { value: String(w), textContent: String(w) }));
   const state = el('span', { className: 'fontstate' });
   state.dataset.part = part;
   const known = FONT_CHOICES.includes(t().font);
-  select.value = known ? t().font : '';
+  select_.value = known ? t().font : '';
   custom.hidden = known;
   custom.value = known ? '' : t().font;
   weight.value = String(t().weight);
   const set = () => {
-    const family = select.value || custom.value.trim();
-    custom.hidden = !!select.value;
+    const family = select_.value || custom.value.trim();
+    custom.hidden = !!select_.value;
     if (!family) return;
     t().font = family;
     t().weight = weight.value;
     commit();
   };
-  select.addEventListener('change', set);
+  select_.addEventListener('change', set);
   custom.addEventListener('change', set);
   weight.addEventListener('change', set);
   return [
-    el('div', { className: 'row two' }, el('span', { textContent: '書体・太さ' }), select, weight),
+    el('div', { className: 'row two' }, el('span', { textContent: '書体・太さ' }), select_, weight),
     el('div', { className: 'row two' }, el('span'), custom, state),
   ];
 }
@@ -453,12 +556,12 @@ function strokesEditor(part) {
       const color = el('input', { type: 'color', value: s.color });
       const range = el('input', { type: 'range', min: 0, max: 80, step: 0.5, value: s.width });
       const num = el('input', { type: 'number', step: 0.5, value: s.width });
-      color.addEventListener('input', () => { s.color = color.value; live(); });
+      color.addEventListener('input', () => { design[part].strokes[i].color = color.value; live(); });
       color.addEventListener('change', commit);
       const onW = src => () => {
         const v = Number(src.value);
-        if (!Number.isFinite(v) || v < 0) return;
-        s.width = v;
+        if (!Number.isFinite(v) || v < 0 || src.value === '') return;
+        design[part].strokes[i].width = v;
         (src === range ? num : range).value = v;
         live();
       };
@@ -466,13 +569,14 @@ function strokesEditor(part) {
       num.addEventListener('input', onW(num));
       range.addEventListener('change', commit);
       num.addEventListener('change', commit);
+      syncers.push(() => { range.value = design[part].strokes[i]?.width ?? 0; num.value = range.value; });
       const del = el('button', { textContent: '×', title: 'この縁取りを消す' });
-      del.addEventListener('click', () => { list.splice(i, 1); commit(); render(); });
+      del.addEventListener('click', () => { design[part].strokes.splice(i, 1); commit(); render(); });
       box.append(el('div', { className: 'stroke' }, el('span', { textContent: String(i + 1) }), color, range, num, del));
     });
     if (list.length < 4) {
       const add = el('button', { className: 'add', textContent: '＋ 縁取りを足す（内側に）' });
-      add.addEventListener('click', () => { list.push({ color: '#ffffff', width: 6 }); commit(); render(); });
+      add.addEventListener('click', () => { design[part].strokes.push({ color: '#ffffff', width: 6 }); commit(); render(); });
       box.append(add);
     }
   };
@@ -487,33 +591,34 @@ function textRows(part) {
     numRow('大きさ', `${part}.size`, lo, hi, 0.5),
     'maxW' in design[part] ? numRow(part === 'num' ? '最大幅（超えたら縮小）' : '最大幅', `${part}.maxW`, 20, 900, 1) : null,
     numRow('傾き', `${part}.slant`, -0.5, 0.5, 0.01),
-    numRow('横の位置', `${part}.x`, -900, 100, 0.5, { position: true }),
-    numRow('縦の位置', `${part}.y`, -600, 100, 0.5, { position: true }),
+    numRow('横の位置', `${part}.x`, -900, 100, 0.5),
+    numRow('縦の位置', `${part}.y`, -600, 100, 0.5),
     colorRow('文字の色', `${part}.fill`),
     strokesEditor(part),
   ];
 }
 
 function buildPanel() {
-  positionInputs.length = 0;
-  $('panel').replaceChildren(
-    section('全体', [
-      numRow('大きさ（写真の幅に対する倍率）', 'fit.scale', 0.3, 5, 0.01),
-      numRow('高さの上限（写真の高さに対する割合）', 'fit.maxH', 0.2, 1, 0.01),
-      el('p', { className: 'help', textContent: 'ギザギザの高さが上限を超える写真（低い写真）では、その分だけ全体を縮めます。' }),
-    ]),
-    section('ギザギザ', [
+  syncers = [];
+  const partSection = key => section(LABELS[key], key === 'burst'
+    ? [
       colorRow('塗り', 'burst.fill'),
       colorRow('縁の色', 'burst.line'),
       numRow('縁の太さ', 'burst.lineWidth', 0, 40, 0.5),
-      el('p', { className: 'help', textContent: '形は左の見本で: 角をドラッグ／辺をダブルクリックで角を足す／角を右クリックで消す。' }),
+      el('p', { className: 'help', textContent: '左の見本で背景を選ぶと角が出ます: 角をドラッグ／辺をダブルクリックで角を足す／角を右クリックで消す。四隅の □ で拡大縮小（Shift で縦横比を保つ）。' }),
+    ]
+    : textRows(key), { highlight: key === selected });
+  $('panel').replaceChildren(
+    layerSection(),
+    section('全体', [
+      numRow('大きさ（写真の幅に対する倍率）', 'fit.scale', 0.3, 5, 0.01),
+      el('p', { className: 'help', textContent: 'キャッチ全体の大きさ。部品ごとの大きさは、見本で選んで四隅の □ で変えます。' }),
     ]),
-    ...PARTS.map(([k, label]) => section(label, textRows(k))),
+    ...['burst', ...TEXT_KEYS].map(partSection),
   );
-  // 位置の欄はドラッグで変わるので、その場で更新する
   refreshFontStates();
 }
-function refreshPositionInputs() { for (const sync of positionInputs) sync(); }
+function syncInputs() { for (const sync of syncers) sync(); }
 
 // ---- 状態・保存 ----
 function setStatus(text, kind = '') {
@@ -597,23 +702,35 @@ $('photoFile').addEventListener('change', async ev => {
   }
 });
 document.addEventListener('keydown', ev => {
-  if (!(ev.ctrlKey || ev.metaKey)) return;
-  if (ev.target.matches?.('input[type=text], input[type=number]')) return;   // 入力欄の中では普段どおり
+  if (ev.target.matches?.('input, select, textarea')) return;   // 入力欄の中では普段どおり
   const k = ev.key.toLowerCase();
-  if (k === 's') { ev.preventDefault(); save(); } else if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); undo(); } else if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); redo(); }
+  const mod = ev.ctrlKey || ev.metaKey;
+  if (mod && k === 's') { ev.preventDefault(); save(); return; }
+  if (mod && k === 'z' && !ev.shiftKey) { ev.preventDefault(); undo(); return; }
+  if (mod && (k === 'y' || (k === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); return; }
+  if (!selected || !k.startsWith('arrow')) return;
+  ev.preventDefault();
+  if (mod && ev.shiftKey && (k === 'arrowup' || k === 'arrowdown')) { reorder(selected, k === 'arrowup' ? 'front' : 'back'); return; }
+  // 矢印で少しずつ動かす（Shift で10ずつ）
+  const step = ev.shiftKey ? 10 : 1;
+  const [dx, dy] = { arrowleft: [-step, 0], arrowright: [step, 0], arrowup: [0, -step], arrowdown: [0, step] }[k];
+  moved(selected, structuredClone(design), dx, dy);
+  commit();
+  syncInputs();
 });
 window.addEventListener('beforeunload', ev => {
   if (JSON.stringify(design) !== savedJson) { ev.preventDefault(); ev.returnValue = ''; }
 });
-window.addEventListener('resize', scheduleDraw);   // 印の大きさは画面上の大きさで決めている
+window.addEventListener('resize', scheduleDraw);   // □ の大きさは画面上の大きさで決めている
 
 // ---- 起動 ----
-if (!catchFrame) {
+if (!api) {
   const f = $('fatal');
   f.style.display = 'block';
-  f.textContent = '今の js/price-design.js は外部の案（コード）に入れ替わっているため、この画面では印を動かせません。'
+  f.textContent = '今の js/price-design.js は外部の案（コード）に入れ替わっているため、この画面では部品を選んで動かせません。'
     + '色や大きさの欄は、その案が catch-design.js を使っている場合だけ効きます。';
 }
+applyToRenderer();
 buildChips();
 buildPanel();
 updateStatus();

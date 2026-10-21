@@ -34,6 +34,12 @@
     details.sec { background: #fff; border-radius: 10px; margin-bottom: 10px; }
     details.sec > summary { cursor: pointer; padding: 10px 12px; font-weight: 700; }
     details.sec > div { padding: 0 12px 10px; }
+    details.sec.selected { outline: 3px solid #ff00c8; }
+    .layer { display: grid; grid-template-columns: 1fr repeat(4, 2.2em); gap: 4px; margin: 4px 0; }
+    .layer button { font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: #f6f5f0; cursor: pointer; }
+    .layer button:disabled { opacity: 0.35; cursor: default; }
+    .layer button.name { text-align: left; }
+    .layer button.name.on { background: #ff00c8; color: #fff; border-color: #ff00c8; font-weight: 700; }
     .row { display: grid; grid-template-columns: 7.5em 1fr 5.5em; gap: 8px; align-items: center; margin: 6px 0; }
     .row input[type=range] { width: 100%; }
     .row input[type=number], .row select, .row input[type=text] { width: 100%; font: inherit; padding: 3px 4px; }
@@ -65,9 +71,10 @@
         <ul id="problems"></ul>
         <div class="stage"><canvas id="preview"></canvas><canvas id="overlay"></canvas></div>
         <p class="help">
-          ○ ギザギザの角をドラッグ ／ 辺をダブルクリックで角を足す ／ 角を右クリックで消す ／
-          ギザギザの中を Shift＋ドラッグでキャッチ全体を動かす ／ 「数」「円」「税」の印をドラッグで文字の位置。
-          数字の左の点線は「これより長い数字は縮める」幅、税の点線は税込の最大幅。
+          クリックで部品（背景・数字・「円」・税込コメント）を選ぶ（同じ所をもう一度クリックで下の部品へ）→ ドラッグで移動、四隅の □ で拡大縮小
+          （背景は Shift で縦横比を保つ）。矢印キーで少しずつ動かす（Shift で10ずつ）。
+          背景を選ぶと角が出る: 角をドラッグ／辺をダブルクリックで角を足す／角を右クリックで消す。
+          重なり順は右の「重なり順」で（Ctrl+Shift+↑ 最前面・↓ 最背面）。点線は「これより長いと縮める」幅。
         </p>
         <div class="chips" id="sizeChips"><span class="label">サイズ</span></div>
         <div class="chips" id="priceChips"><span class="label">価格</span></div>

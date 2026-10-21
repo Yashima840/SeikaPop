@@ -12,6 +12,7 @@ import datetime
 import functools
 import http.server
 import json
+import re
 import shutil
 import socket
 import subprocess
@@ -36,7 +37,8 @@ MAX_BODY = 200_000
 CATCH_HEADER = """// 金額キャッチのデザイン（tools/designer.html の「保存」で書き換わる。手で直してもよい）
 // 座標は、写真の枠の右下を (0, 0) とした「デザイン単位」。左・上がマイナス。
 // 大きさは fit.scale（写真の幅 1000px あたり、デザイン単位1つを何 px にするか）。
-// ただしギザギザの高さが写真の高さの fit.maxH 倍を超えるときは、そこまで縮める。
+// 写真がとても横長（高さが幅の半分未満）のときだけ、高さに合わせて縮める。
+// order は重なり順（先頭がいちばん奥、最後がいちばん手前）。
 """
 
 
@@ -48,6 +50,8 @@ def save_catch_design(design):
     """
     if not isinstance(design, dict) or design.get("version") != 1:
         raise ValueError("デザインの形が違います（version 1 ではありません）")
+    if not isinstance(design.get("order"), list):
+        raise ValueError("デザインに重なり順（order）がありません")
     for key in ("fit", "burst", "num", "yen", "tax"):
         if not isinstance(design.get(key), dict):
             raise ValueError(f"デザインに {key} がありません")
@@ -55,7 +59,10 @@ def save_catch_design(design):
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     backup = BACKUP_DIR / f"catch-design.{stamp}.js"
     shutil.copy2(CATCH_JS, backup)
-    text = CATCH_HEADER + "export const CATCH_DESIGN = " + json.dumps(design, ensure_ascii=False, indent=2) + ";\n"
+    body = json.dumps(design, ensure_ascii=False, indent=2)
+    # 座標の組 [x, y] は1行にまとめる（数字1つごとに改行されると、手で読み直すのがつらい）
+    body = re.sub(r"\[\s*(-?[\d.]+(?:e-?\d+)?),\s*(-?[\d.]+(?:e-?\d+)?)\s*\]", r"[\1, \2]", body)
+    text = CATCH_HEADER + "export const CATCH_DESIGN = " + body + ";\n"
     tmp = CATCH_JS.with_suffix(".tmp")
     tmp.write_text(text, encoding="utf-8", newline="\n")
     tmp.replace(CATCH_JS)  # 途中で止まっても半端なファイルを残さない

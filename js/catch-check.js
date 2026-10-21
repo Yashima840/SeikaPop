@@ -27,9 +27,11 @@ export function catchDesignProblems(d) {
   const out = [];
   if (!d || typeof d !== 'object') return ['デザインの形が壊れています'];
   if (d.version !== 1) out.push('version が 1 ではありません');
-  if (!(finite(d.fit?.scale) && d.fit.scale > 0 && d.fit.scale <= 10)) out.push('キャッチの大きさ（fit.scale）は 0 より大きく 10 以下にしてください');
-  if (!(finite(d.fit?.maxH) && d.fit.maxH > 0 && d.fit.maxH <= 1)) out.push('高さの上限（fit.maxH）は 0 より大きく 1 以下にしてください');
-  const b = d.burst;
+  const keys = ['burst', ...Object.keys(PARTS)];
+  if (!(Array.isArray(d.order) && d.order.length === keys.length && keys.every(k => d.order.includes(k)))) {
+    out.push(`重なり順（order）は ${keys.join('・')} を1つずつ並べてください`);
+  }
+  if (!(finite(d.fit?.scale) && d.fit.scale > 0 && d.fit.scale <= 10)) out.push('キャッチの大きさ（fit.scale）は 0 より大きく 10 以下にしてください');  const b = d.burst;
   const pts = Array.isArray(b?.points) ? b.points : [];
   if (pts.length < 3) out.push('ギザギザの点は 3 つ以上必要です');
   else if (!pts.every(p => Array.isArray(p) && p.length === 2 && finite(p[0]) && finite(p[1]))) out.push('ギザギザの点の座標が壊れています');

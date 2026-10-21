@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { catchFrame, PRICE_FONTS, drawPrice } from '../js/price-design.js';
+import { drawPrice, editorApi, PRICE_FONTS } from '../js/price-design.js';
 import { CATCH_DESIGN } from '../js/catch-design.js';
 import { catchDesignProblems, catchFontList } from '../js/catch-check.js';
 import { googleFontsUrl } from '../js/layout.js';
@@ -19,12 +19,17 @@ function fakeContext() {
     restore: () => { depth--; minDepth = Math.min(minDepth, depth); },
     fillText: t => texts.push(String(t)),
     strokeText: t => texts.push(String(t)),
-    measureText: t => ({
-      width: String(t).length * size() * 0.6,
-      actualBoundingBoxAscent: size() * 0.8, actualBoundingBoxDescent: size() * 0.2,
-      actualBoundingBoxLeft: 0, actualBoundingBoxRight: String(t).length * size() * 0.6,
-      fontBoundingBoxAscent: size() * 0.9, fontBoundingBoxDescent: size() * 0.2,
-    }),
+    measureText: t => {
+      // ブラウザと同じく、左右の広がりは textAlign の基準点から測る
+      const w = String(t).length * size() * 0.6;
+      const left = { right: w, end: w, center: w / 2 }[state.textAlign] ?? 0;
+      return {
+        width: w,
+        actualBoundingBoxAscent: size() * 0.8, actualBoundingBoxDescent: size() * 0.2,
+        actualBoundingBoxLeft: left, actualBoundingBoxRight: w - left,
+        fontBoundingBoxAscent: size() * 0.9, fontBoundingBoxDescent: size() * 0.2,
+      };
+    },
     createLinearGradient: () => ({ addColorStop() {} }),
     createRadialGradient: () => ({ addColorStop() {} }),
     createPattern: () => ({}),
@@ -101,7 +106,6 @@ test('デザインの検査: 壊れた値・総額表示に反する値は保存
   assert.match(bad(d => { d.num.fill = 'red'; }).join(), /数字の色/);
   assert.match(bad(d => { d.yen.weight = '850'; }).join(), /「円」の太さ/);
   assert.match(bad(d => { d.num.strokes.push(...Array(4).fill({ color: '#000000', width: 1 })); }).join(), /0〜4 本/);
-  assert.match(bad(d => { d.fit.maxH = 1.5; }).join(), /fit\.maxH/);
   assert.match(bad(d => { d.fit.scale = 0; }).join(), /fit\.scale/);
   assert.match(bad(d => { d.num.size = Number.NaN; }).join(), /数字の size/);
   assert.deepEqual(catchFontList({ ...ok, yen: { ...ok.yen, font: 'Anton', weight: '400' } }).length, 2);
@@ -117,9 +121,40 @@ test('編集中のデザインを渡すと、その色・縁取りで描く（�
   drawPrice(ctx, AREAS[0], CASES[0], 1, d);
   assert.ok(fills.includes('#123456'));
   assert.deepEqual(f.balance(), { depth: 0, minDepth: 0 });
-  const frame = catchFrame(AREAS[0], d);
+  const frame = editorApi.catchFrame(AREAS[0], d);
   assert.equal(frame.x, AREAS[0].x + AREAS[0].w);
   assert.ok(frame.k > 0);
+});
+
+test('重なり順: order の順に描く（後のものが手前）。壊れた order は既定の順で描く', () => {
+  const firstFill = order => {
+    const d = { ...structuredClone(CATCH_DESIGN), order };
+    d.burst.fill = '#000001'; d.num.fill = '#000002'; d.yen.fill = '#000003'; d.tax.fill = '#000004';
+    const f = fakeContext();
+    const fills = [];
+    const ctx = new Proxy(f.ctx, { set: (s, k, v) => { if (k === 'fillStyle' && /^#00000\d$/.test(v)) fills.push(v); s[k] = v; return true; } });
+    drawPrice(ctx, AREAS[0], CASES[0], 1, d);
+    return fills;
+  };
+  assert.deepEqual(firstFill(['tax', 'yen', 'num', 'burst']), ['#000004', '#000003', '#000002', '#000001']);
+  assert.deepEqual(firstFill(['num', 'num']), ['#000001', '#000002', '#000003', '#000004']);
+  assert.match(catchDesignProblems({ ...structuredClone(CATCH_DESIGN), order: ['num', 'num', 'yen', 'tax'] }).join(), /重なり順/);
+});
+
+test('部品の範囲: 文字は基準点・揃え方・傾きに沿い、ギザギザは角を囲む', () => {
+  const d = structuredClone(CATCH_DESIGN);
+  d.num.slant = 0;
+  const f = fakeContext();
+  const num = editorApi.partBounds(f.ctx, 'num', d, { main: '298', incl: '321.84' });
+  assert.ok(num.box.x1 > d.num.x && num.box.x1 - d.num.x < 30, '右揃えなので右端は基準点のすぐ右（縁取りの分）');
+  assert.ok(num.box.x0 < d.num.x - 100, '数字は基準点の左に伸びる');
+  assert.ok(num.box.y0 < d.num.y && num.box.y1 > d.num.y);
+  const burst = editorApi.partBounds(f.ctx, 'burst', d, CASES[0]);
+  assert.equal(burst.box.x0, Math.min(...d.burst.points.map(p => p[0])) - d.burst.lineWidth / 2);
+  d.num.slant = 0.3;
+  const slanted = editorApi.partBounds(f.ctx, 'num', d, { main: '298', incl: '' });
+  assert.ok(slanted.poly[0][0] > slanted.poly[3][0], '右へ傾けると上の辺が右にずれる');
+  assert.deepEqual(editorApi.partOrder({ order: null }), ['burst', 'num', 'yen', 'tax']);
 });
 
 test('範囲の取り出し・差し替え', () => {
@@ -133,4 +168,13 @@ test('範囲の取り出し・差し替え', () => {
   assert.throws(() => extractRegion('no marks'), /印が見つかりません/);
   assert.throws(() => extractRegion(`${region}\n${region}`), /2組/);
   assert.throws(() => extractRegion(`${MARK_START}\nfunction drawPrice() {}\n${MARK_END}`), /PRICE_FONTS/);
+});
+
+test('キャッチの倍率は写真の大きさだけで決まる（背景の形を変えても、数字の大きさは変わらない）', () => {
+  const d = structuredClone(CATCH_DESIGN);
+  const before = editorApi.catchFrame(AREAS[0], d).k;
+  d.burst.points = d.burst.points.map(([x, y]) => [x * 3, y * 3]);
+  assert.equal(editorApi.catchFrame(AREAS[0], d).k, before);
+  // とても横長の写真（高さが幅の半分未満）では、高さに合わせて縮める
+  assert.ok(editorApi.catchFrame({ x: 0, y: 0, w: 1000, h: 200 }, d).k < editorApi.catchFrame({ x: 0, y: 0, w: 1000, h: 800 }, d).k);
 });
