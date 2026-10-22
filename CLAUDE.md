@@ -9,7 +9,7 @@
 - iPhone（Safari）と Android（Chrome）の両方で動くこと。HTTPS でしか動かない機能
   （`navigator.share`・Service Worker・`crypto.randomUUID`）は**無くても動く代わりを必ず持つ**
   （LAN の http で試すことがあるため）。
-- 計算・判定は `model.js` / `layout.js` / `backup.js` と `image.js` の画素処理に置き、
+- 計算・判定は `model.js` / `layout.js` / `backup.js` / `frames.js` と `image.js` の画素処理に置き、
   画面・Canvas・IndexedDB に触らない（`npm test` で確かめられるように）。新しい判定もここへ。
 - 保存は `store.js` の関数だけを通す（将来クラウド版に差し替えるため）。
 

@@ -15,16 +15,16 @@ export const FONTS = {
   mincho: { family: 'Zen Old Mincho', weight: '700' },    // 上品な見出し
 };
 
-function font(f, size) {
+export function font(f, size) {
   const fb = f === FONTS.mincho ? `"Hiragino Mincho ProN", "Yu Mincho", serif` : FALLBACK;
   return `${f.weight} ${Math.round(size)}px "${f.family}", ${fb}`;
 }
 
-function measurer(ctx, f) {
+export function measurer(ctx, f) {
   return (t, s) => { ctx.font = font(f, s); return ctx.measureText(t).width; };
 }
 
-function roundRectPath(ctx, x, y, w, h, r) {
+export function roundRectPath(ctx, x, y, w, h, r) {
   ctx.beginPath();
   if (ctx.roundRect) { ctx.roundRect(x, y, w, h, r); return; }
   ctx.moveTo(x + r, y);

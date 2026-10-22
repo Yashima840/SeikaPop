@@ -1,16 +1,19 @@
-// 起動と画面の切り替え（#/ ・ #/edit/<id> ・ #/settings）
+// 起動と画面の切り替え（#/ ・ #/edit/<id> ・ #/settings ・ #/history ・ #/ad）
 
 import { installCrashHandlers, recordError } from './crash.js';
 import { toast } from './ui.js';
 import { showHome } from './views/home.js';
 import { showEditor } from './views/editor.js';
 import { showSettings } from './views/settings.js';
+import { showHistory } from './views/history.js';
+import { showAd } from './views/ad.js';
 
 const report = installCrashHandlers(msg => toast(msg, { error: true }));
 
 const root = document.getElementById('view');
 const titleEl = document.getElementById('title');
 const backBtn = document.getElementById('backBtn');
+let backTo = '#/';
 let leaveCurrent = null;   // 今の画面を離れるときの後始末（書きかけの保存など）
 let routing = Promise.resolve();
 
@@ -19,9 +22,11 @@ const app = {
     if (location.hash === hash) route(); else location.hash = hash;
   },
   refresh() { route(); },
+  /** back: false＝戻るボタンを出さない／true＝はじめの画面へ／'#/…'＝その画面へ */
   setTitle(text, { back }) {
     titleEl.textContent = text;
     backBtn.hidden = !back;
+    backTo = typeof back === 'string' ? back : '#/';
   },
 };
 
@@ -39,6 +44,8 @@ function route() {
       const m = hash.match(/^#\/edit\/(.+)$/);
       if (m) leaveCurrent = await showEditor(root, app, decodeURIComponent(m[1]));
       else if (hash === '#/settings') leaveCurrent = await showSettings(root, app);
+      else if (hash === '#/history') leaveCurrent = await showHistory(root, app);
+      else if (hash === '#/ad') leaveCurrent = await showAd(root, app);
       else leaveCurrent = await showHome(root, app);
     } catch (err) {
       report(`route ${hash}`, err);
@@ -47,7 +54,7 @@ function route() {
   return routing;
 }
 
-backBtn.addEventListener('click', () => app.go('#/'));
+backBtn.addEventListener('click', () => app.go(backTo));
 document.getElementById('settingsBtn').addEventListener('click', () => app.go('#/settings'));
 window.addEventListener('hashchange', route);
 // スマホでアプリを裏へ回したまま閉じられても、書きかけが残るように

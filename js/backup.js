@@ -17,6 +17,12 @@ export function validateBackup(obj) {
   }
   const bad = obj.pops.find(p => !p || typeof p.id !== 'string');
   if (bad !== undefined) return { ok: false, message: 'id の無いポップが含まれています' };
+  // shots（作った画像の履歴）は後から足した欄。無い古いバックアップもそのまま読める
+  if (obj.shots != null) {
+    if (!Array.isArray(obj.shots)) return { ok: false, message: 'バックアップの形が壊れています（shots が一覧になっていません）' };
+    const badShot = obj.shots.find(s => !s || typeof s.id !== 'string' || typeof s.data !== 'string');
+    if (badShot !== undefined) return { ok: false, message: '画像の欠けた履歴が含まれています' };
+  }
   return { ok: true };
 }
 
@@ -34,6 +40,21 @@ export function mergePops(existing, incoming) {
     if (String(p.updatedAt) > String(cur.updatedAt)) { toPut.push(p); updated += 1; } else { skipped += 1; }
   }
   return { toPut, added, updated, skipped };
+}
+
+/**
+ * 作った画像の履歴を重ねる。履歴の画像は後から変わらないので、無いものだけ足す。
+ * ピンだけは「どちらかで付けていれば付ける」（重ねてピンが外れる、を起こさない）。
+ */
+export function mergeShots(existing, incoming) {
+  const byId = new Map(existing.map(s => [s.id, s]));
+  const toPut = [];
+  let added = 0;
+  for (const s of incoming) {
+    const cur = byId.get(s.id);
+    if (!cur) { toPut.push(s); added += 1; } else if (s.pinnedAt && !cur.pinnedAt) toPut.push({ ...cur, pinnedAt: s.pinnedAt });
+  }
+  return { toPut, added };
 }
 
 /** どのポップからも使われていない写真の id（消してよいもの）。 */

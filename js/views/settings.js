@@ -65,7 +65,7 @@ export async function showSettings(root, app) {
       const data = await store.exportBackup();
       const file = new File([JSON.stringify(data)], backupFileName(), { type: 'application/json' });
       downloadFile(file);
-      toast(`ポップ ${data.pops.length} 件・写真 ${data.photos.length} 枚を書き出しました`);
+      toast(`ポップ ${data.pops.length} 件・写真 ${data.photos.length} 枚・作った画像 ${data.shots.length} 枚を書き出しました`);
     } catch (err) {
       toast(`書き出せませんでした: ${err.message}`, { error: true });
     }
@@ -78,7 +78,7 @@ export async function showSettings(root, app) {
       if (!file) return;
       try {
         const r = await store.importBackup(JSON.parse(await file.text()));
-        toast(`読み込みました（追加 ${r.added} 件・更新 ${r.updated} 件・こちらが新しいので残した ${r.skipped} 件）`);
+        toast(`読み込みました（追加 ${r.added} 件・更新 ${r.updated} 件・こちらが新しいので残した ${r.skipped} 件・作った画像 ${r.shotsAdded} 枚）`);
       } catch (err) {
         toast(`読み込めませんでした: ${err.message}`, { error: true });
       }

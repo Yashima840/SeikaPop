@@ -3,14 +3,14 @@
 // 書体（Google Fonts）は変わらないので「控えがあれば控え」。
 // ファイルを足したら SHELL にも足し、VERSION を上げること。
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL_CACHE = `seikapop-shell-${VERSION}`;
 const FONT_CACHE = 'seikapop-fonts';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/model.js', './js/layout.js', './js/image.js', './js/backup.js',
-  './js/store.js', './js/templates.js', './js/price-design.js', './js/catch-design.js', './js/render.js', './js/ui.js', './js/crash.js',
-  './js/views/home.js', './js/views/editor.js', './js/views/settings.js',
+  './js/store.js', './js/frames.js', './js/templates.js', './js/price-design.js', './js/catch-design.js', './js/render.js', './js/ui.js', './js/crash.js',
+  './js/views/home.js', './js/views/editor.js', './js/views/settings.js', './js/views/history.js', './js/views/ad.js',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',
 ];
 

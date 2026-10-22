@@ -189,3 +189,62 @@ export function exportFileName(pop, now = new Date()) {
   const name = String(pop.name).trim().replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 20) || 'pop';
   return `pop_${ymd}_${name}.jpg`;
 }
+
+export function adFileName(now = new Date()) {
+  return `ad_${localStamp(now, true)}.jpg`;
+}
+
+// ---- 作った画像の履歴 ----
+// 出した（共有・保存・「履歴に残す」）画像そのものを控える。ポップのデータとは別に持つ
+// （ポップを後で直しても、その日に出した画像は残る）。
+
+/** ピンの無い画像を残す枚数。超えた古い分から消す（スマホの容量を食い尽くさないため）。ピン付きは数えず消さない。 */
+export const HISTORY_MAX = 60;
+
+/**
+ * 同じ中身を2回残さないための印（ポップは id と更新日時。広告は frames.js の adShotKey）。
+ * 日付を入れるポップは、直していなくても日が変われば別の画像になるので日付も含める。
+ */
+export function popShotKey(pop, now = new Date()) {
+  const day = pop.showDate ? `#${localStamp(now)}` : '';
+  return `pop:${pop.id}@${pop.updatedAt}${day}`;
+}
+
+export function shotFromPop(pop, { w, h, thumb }, now = new Date()) {
+  return {
+    id: newId(), kind: 'pop', title: popTitle(pop), key: popShotKey(pop, now),
+    w, h, thumb, createdAt: now.toISOString(), pinnedAt: null,
+  };
+}
+
+/** 並び順: ピン付きが最上段（後からピンを付けたものほど上）、その下に新しい順。 */
+export function sortHistory(shots) {
+  return [...shots].sort((a, b) => {
+    if (!!a.pinnedAt !== !!b.pinnedAt) return a.pinnedAt ? -1 : 1;
+    if (a.pinnedAt) return String(b.pinnedAt).localeCompare(String(a.pinnedAt));
+    return String(b.createdAt).localeCompare(String(a.createdAt));
+  });
+}
+
+/** 上限を超えた、消してよい画像の id（ピンの無いものの古い方から）。 */
+export function historyOverflow(shots, max = HISTORY_MAX) {
+  return sortHistory(shots).filter(s => !s.pinnedAt).slice(max).map(s => s.id);
+}
+
+export function setPinned(shot, pinned, now = new Date()) {
+  return { ...shot, pinnedAt: pinned ? now.toISOString() : null };
+}
+
+/** 履歴から出し直すときのファイル名（作った日時。端末の時刻で）。 */
+export function shotFileName(shot) {
+  const d = new Date(shot.createdAt);
+  const stamp = Number.isNaN(d.getTime()) ? 'unknown' : localStamp(d, true);
+  return `${shot.kind === 'ad' ? 'ad' : 'pop'}_${stamp}.jpg`;
+}
+
+/** 一覧に出す日時（端末の時刻で「10/22(木) 7:05」）。 */
+export function formatShotTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${formatDate(d)} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+}

@@ -1,4 +1,4 @@
-// はじめの画面: 新しく作る／レギュラーから作る／最近作ったもの
+// はじめの画面: 新しく作る／作った画像・広告へ／レギュラーから作る／最近作ったもの
 
 import * as store from '../store.js';
 import { createPop, popFromRegular, popTitle, sortByUpdated } from '../model.js';
@@ -45,6 +45,7 @@ export async function showHome(root, app) {
 
   root.replaceChildren(
     h('button', { class: 'primary big', onclick: openNew }, '＋ 新しく作る'),
+    h('button', { class: 'big', onclick: () => app.go('#/history') }, '🖼 作った画像・🧩 広告を作る'),
     isStandalone() ? null : h('p', { class: 'hint' },
       'ホーム画面に追加すると、アプリのように開けて保存も消えにくくなります',
       h('br'), '（iPhone: 共有ボタン →「ホーム画面に追加」／Android: メニュー →「ホーム画面に追加」）'),

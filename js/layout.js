@@ -20,6 +20,18 @@ export function coverSource(imgW, imgH, boxW, boxH, crop) {
   return { sx: (imgW - sw) / 2 * (1 + cx), sy: (imgH - sh) / 2 * (1 + cy), sw, sh, scale };
 }
 
+/**
+ * 画像を枠の中に丸ごと収める（contain）ときの描く位置・大きさ。中央に置く。
+ * 広告のフレームではポップの画像を切らない（価格や「税込」が欠けると総額表示にならない）ためにこれを使う。
+ */
+export function containRect(imgW, imgH, box) {
+  // 合わせる側の辺は枠の値そのものを使う（掛け算の端数で枠から 0.00…1px はみ出さないように）
+  const wide = box.w / imgW <= box.h / imgH;
+  const w = wide ? box.w : imgW * box.h / imgH;
+  const h = wide ? imgH * box.w / imgW : box.h;
+  return { x: box.x + (box.w - w) / 2, y: box.y + (box.h - h) / 2, w, h };
+}
+
 /** 枠の上で (dx, dy) 出力px だけ指でずらしたときの新しい crop。 */
 export function dragCrop(crop, dx, dy, imgW, imgH, boxW, boxH) {
   const { sw, sh, scale } = coverSource(imgW, imgH, boxW, boxH, crop);

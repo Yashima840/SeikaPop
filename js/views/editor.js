@@ -3,7 +3,7 @@
 import * as store from '../store.js';
 import {
   DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, parsePriceInput,
-  priceTexts, regularFromPop, SIZES, taxRateOf, updateRegularFrom,
+  priceTexts, regularFromPop, shotFromPop, SIZES, taxRateOf, updateRegularFrom,
 } from '../model.js';
 import { dragCrop, zoomCrop, ZOOM_MAX } from '../layout.js';
 import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.js';
@@ -251,6 +251,7 @@ export async function showEditor(root, app, popId) {
   // ---- 出力・レギュラー ----
   const shareBtn = h('button', { class: 'primary big', onclick: () => doExport(true) }, '共有する（LINE・Instagram など）');
   const saveBtn = h('button', { onclick: () => doExport(false) }, '画像を保存');
+  const keepBtn = h('button', { onclick: () => doExport(null) }, '履歴に残すだけ（広告用）');
   const problemsEl = h('ul', { class: 'problems' });
   const confirmRow = pop.fromRegularId ? h('label', { class: 'check confirm' },
     h('input', { type: 'checkbox', checked: pop.confirmed, onchange: ev => { pop.confirmed = ev.target.checked; changed(); } }),
@@ -259,27 +260,51 @@ export async function showEditor(root, app, popId) {
   function updateExportState() {
     const problems = exportProblems(pop);
     problemsEl.replaceChildren(...problems.map(p => h('li', { text: p })));
-    shareBtn.disabled = saveBtn.disabled = problems.length > 0;
+    shareBtn.disabled = saveBtn.disabled = keepBtn.disabled = problems.length > 0;
   }
 
+  /** 出した画像を履歴に残す。失敗しても共有・保存は止めない（知らせるだけ）。 */
+  async function keepInHistory(made, { quiet }) {
+    try {
+      const r = await store.addShot(shotFromPop(pop, made), made.file);
+      if (!quiet) toast(r.added ? '作った画像の履歴に残しました' : 'この内容はもう履歴にあります');
+      return true;
+    } catch (err) {
+      toast(`画像を履歴に残せませんでした: ${err.message}`, { error: true });
+      return false;
+    }
+  }
+
+  /** share: true＝共有／false＝画像を保存／null＝履歴に残すだけ。どれも履歴に残す。 */
   async function doExport(share) {
     if (exportProblems(pop).length) return;
+    let made;
     try {
       await save.flush();
-      const file = await renderToFile(pop, photoShown, settings);
+      made = await renderToFile(pop, photoShown, settings);
+    } catch (err) {
+      toast(`画像を作れませんでした: ${err.message}`, { error: true });
+      return;
+    }
+    if (share === null) { await keepInHistory(made, { quiet: false }); return; }
+    // 共有画面を開く前に待つと、端末によっては「タップから時間が経った」として共有を断られるので並行して残す
+    const kept = keepInHistory(made, { quiet: true });
+    try {
+      const { file } = made;
       if (share && navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: pop.name });
         } catch (err) {
-          if (err?.name === 'AbortError') return;  // 共有画面で「キャンセル」した＝失敗ではない
-          throw err;
+          if (err?.name !== 'AbortError') throw err;  // 共有画面で「キャンセル」した＝失敗ではない
         }
-        return;
+      } else {
+        downloadFile(file);
+        toast(share ? 'この端末は共有に対応していないため、画像を保存しました' : '画像を保存しました');
       }
-      downloadFile(file);
-      toast(share ? 'この端末は共有に対応していないため、画像を保存しました' : '画像を保存しました');
     } catch (err) {
-      toast(`画像を作れませんでした: ${err.message}`, { error: true });
+      toast(`画像を出せませんでした: ${err.message}`, { error: true });
+    } finally {
+      await kept;
     }
   }
 
@@ -308,7 +333,7 @@ export async function showEditor(root, app, popId) {
       confirmRow,
       problemsEl,
       shareBtn,
-      saveBtn,
+      h('div', { class: 'row' }, saveBtn, keepBtn),
       pop.isRegular
         ? h('p', { class: 'hint' }, 'これはレギュラーの元です。ここで直すと、次に呼び出したときから反映されます。')
         : h('div', { class: 'row' },
