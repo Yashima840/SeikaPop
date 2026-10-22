@@ -5,14 +5,29 @@
 // order は重なり順（先頭がいちばん奥、最後がいちばん手前）。
 export const CATCH_DESIGN = {
   "version": 1,
-  "order": ["burst", "num", "yen", "tax"],
+  "order": [
+    "burst",
+    "num",
+    "yen",
+    "tax"
+  ],
   "fit": {
     "scale": 2.09
   },
   "burst": {
     "points": [
-      [-383, -6], [-319, -38], [-367, -94], [-287, -82], [-295, -150], [-223, -114], [-191, -178],
-      [-143, -130], [-71, -186], [-55, -122], [1, -154], [1, -6]
+      [-383, -6],
+      [-319, -38],
+      [-367, -94],
+      [-287, -82],
+      [-295, -150],
+      [-223, -114],
+      [-191, -178],
+      [-143, -130],
+      [-71, -186],
+      [-55, -122],
+      [1, -154],
+      [1, -6]
     ],
     "fill": "#111111",
     "line": "#ffffff",
@@ -21,15 +36,21 @@ export const CATCH_DESIGN = {
   "num": {
     "font": "Anton",
     "weight": "400",
-    "x": -68,
-    "y": -44,
-    "size": 140,
-    "maxW": 265,
+    "x": -62.9,
+    "y": -42.2,
+    "size": 121.7,
+    "maxW": 230.4,
     "slant": 0.21,
     "fill": "#e60012",
     "strokes": [
-      { "color": "#111111", "width": 26 },
-      { "color": "#ffffff", "width": 12 }
+      {
+        "color": "#111111",
+        "width": 22.6
+      },
+      {
+        "color": "#ffffff",
+        "width": 10.4
+      }
     ]
   },
   "yen": {
@@ -41,8 +62,14 @@ export const CATCH_DESIGN = {
     "slant": 0.21,
     "fill": "#e60012",
     "strokes": [
-      { "color": "#111111", "width": 16 },
-      { "color": "#ffffff", "width": 8 }
+      {
+        "color": "#111111",
+        "width": 16
+      },
+      {
+        "color": "#ffffff",
+        "width": 8
+      }
     ]
   },
   "tax": {

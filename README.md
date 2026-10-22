@@ -40,7 +40,7 @@ iPhone・Android どちらもブラウザで動き、ホーム画面に追加す
 
 | ページ | URL |
 |---|---|
-| デザイン編集（金額キャッチをマウスで編集して保存） | http://127.0.0.1:8765/tools/designer.html |
+| デザイン編集（金額主役の金額キャッチと、産地・商品名・数量と単位の3行をマウスで編集して保存） | http://127.0.0.1:8765/tools/designer.html |
 | アプリ | http://127.0.0.1:8765/ |
 | 見本帳（全デザイン×全サイズ。デザインを直したらここで崩れを見る） | http://127.0.0.1:8765/tools/gallery.html |
 | 金額キャッチの試作キット | http://127.0.0.1:8765/tools/price-kit/price-kit.html |
@@ -75,6 +75,8 @@ python tools/make_icons.py   # アイコンを作り直す（Pillow）
 | `js/templates.js` | 5つのデザイン |
 | `js/frames.js` | 広告のフレーム（データ）と、枠への画像の入れ方・出力を止める判定（純粋な関数）。**フレームの足し方は冒頭のコメント** |
 | `js/catch-design.js` | 金額キャッチのデザイン（数値・色・書体。`tools/designer.html` の「保存」で書き換わる。前の版は `tools/designer-backup/`） |
+| `js/label-design.js` | 「金額主役」の産地・商品名・数量と単位の3行のデザイン（書体・大きさ・色・縁取り・背景の帯・置き場所。`tools/designer.html` の「保存」で書き換わる） |
+| `js/labels.js` | 3行の置き方・描き方・保存前の検査 |
 | `js/price-design.js` | 「金額主役」の価格部分（外部AIの案と入れ替える。手順は `tools/price-kit/PROMPT.md`） |
 | `js/render.js` | 描画・画像ファイル化 |
 | `js/store.js` | 保存（今は端末内の IndexedDB）。**クラウド化するときはここを差し替える** |

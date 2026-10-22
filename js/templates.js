@@ -5,6 +5,7 @@
 import { coverSource, fitFontSize, layoutLines, seededRandom } from './layout.js';
 import { taxNote } from './model.js';
 import { drawPrice } from './price-design.js';
+import { drawLabels } from './labels.js';
 
 const FALLBACK = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif';
 export const FONTS = {
@@ -601,37 +602,11 @@ const simple = {
 // ------------------------------------------------------------------
 // 5. 金額主役: 写真の右下に金額キャッチ（黒いギザギザ＋価格＋税込）、写真の下に商品名
 //    税抜で入れたときは、価格の下に税込の金額を必ず添える（中身は price-design.js）
+//    産地・商品名・数量と単位の3行は labels.js（見た目と置き場所は label-design.js）
 // ------------------------------------------------------------------
 const PRICE_RED = '#e60012';
 // 写真の下に取る、商品名の場所（1080幅のとき。縦長はひとことの分を足す）。写真の大きさは仮
 const NAME_ZONE = 230, NAME_ZONE_TALL = 300;
-
-/** 商品名（左寄せ・最大2行）と、その後ろに小さく〈単位〉。描いた下端の y を返す。 */
-function drawBoldName(ctx, d, left, maxW, top) {
-  const { u, pop } = d;
-  const unit = pop.unit ? `〈${pop.unit}〉` : '';
-  const unitSize = 40 * u;
-  const m = measurer(ctx, FONTS.impact);
-  const nl = layoutLines(pop.name, maxW - m(unit, unitSize), m, { maxSize: 104 * u, minSize: 56 * u, maxLines: 2 });
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#1a1a1a';
-  if (!nl.lines.length) {
-    if (!unit) return top;
-    ctx.font = font(FONTS.impact, unitSize);
-    ctx.fillText(unit, left, top + unitSize);
-    return top + unitSize + 10 * u;
-  }
-  ctx.font = font(FONTS.impact, nl.size);
-  const lh = nl.size * 1.08;
-  fillLines(ctx, nl.lines, left, top + nl.size * 0.9, lh);
-  const lastW = ctx.measureText(nl.lines[nl.lines.length - 1]).width;
-  const base = top + nl.size * 0.9 + (nl.lines.length - 1) * lh;
-  if (unit) {
-    ctx.font = font(FONTS.impact, unitSize);
-    ctx.fillText(unit, left + lastW + 6 * u, base);
-  }
-  return base + 10 * u;
-}
 
 const bold = {
   id: 'bold',
@@ -671,20 +646,13 @@ const bold = {
 
     const box = this.photoBox(W, H);
     if (!drawPhoto(ctx, d.photo, box, pop.crop)) drawNoPhoto(ctx, box, ['#ffcf6b', '#f08a24'], d);
-    if (pop.origin) {
-      ctx.font = font(FONTS.round, 36 * u);
-      const tw = ctx.measureText(pop.origin).width;
-      roundRectPath(ctx, box.x + 20 * u, box.y + box.h - 78 * u, tw + 48 * u, 58 * u, 29 * u);
-      ctx.fillStyle = '#2e7d32';
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.textAlign = 'left';
-      ctx.fillText(pop.origin, box.x + 44 * u, box.y + box.h - 36 * u);
-    }
+    // 産地・商品名・数量と単位（置き場所と見た目は label-design.js）
+    const lay = drawLabels(ctx, box, pop, u);
 
     const left = 50 * u, maxW = W - 100 * u;
-    const y = drawBoldName(ctx, d, left, maxW, box.y + box.h + 14 * u);
-    if (H / W > 1.2 && pop.catch.trim()) {   // 縦長はひとことを1行
+    if (H / W > 1.2 && pop.catch.trim()) {   // 縦長はひとことを1行（商品名の下。商品名が無ければ写真のすぐ下）
+      const y = box.y + box.h + (lay.bottom == null ? 14 : lay.bottom + 10) * u;
+      ctx.textAlign = 'left';
       const cl = layoutLines(pop.catch.replace(/\s*\n\s*/g, ' '), maxW, measurer(ctx, FONTS.round), { maxSize: 40 * u, minSize: 30 * u, maxLines: 1 });
       ctx.font = font(FONTS.round, cl.size);
       ctx.fillStyle = '#5a3a1a';

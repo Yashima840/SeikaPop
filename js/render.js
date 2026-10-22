@@ -5,6 +5,8 @@ import { FONTS, font, measurer, roundRectPath, TEMPLATES } from './templates.js'
 import { canvasToBlob } from './image.js';
 import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.js';
 import { PRICE_FONTS } from './price-design.js';
+import { labelFontList } from './labels.js';
+import { LABEL_DESIGN } from './label-design.js';
 
 export function sizeOf(pop) {
   return SIZES[pop.size] || SIZES.square;
@@ -22,17 +24,20 @@ export function photoBoxOf(pop) {
 let fontWarned = false;
 let priceFontCss = null;
 
-/** 価格のデザインが使う書体の定義（@font-face）を読み込む。差し替えで書体が変わっても index.html を直さずに済むように。 */
+/** デザイン編集画面で選べる書体（金額キャッチと、産地・商品名・数量と単位の3行）。 */
+const designFonts = () => [...PRICE_FONTS, ...labelFontList(LABEL_DESIGN)];
+
+/** その書体の定義（@font-face）を読み込む。デザインで書体が変わっても index.html を直さずに済むように。 */
 function loadPriceFontCss() {
   priceFontCss ??= new Promise((resolve, reject) => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = googleFontsUrl(PRICE_FONTS);
+    link.href = googleFontsUrl(designFonts());
     link.onload = resolve;
     link.onerror = () => {
       link.remove();
       priceFontCss = null;   // 電波が戻ったら次の描画で読み直す
-      reject(new Error('価格の書体を読み込めませんでした'));
+      reject(new Error('デザインの書体を読み込めませんでした'));
     };
     document.head.append(link);
   });
@@ -45,13 +50,14 @@ function loadPriceFontCss() {
  */
 export async function ensureFonts(pop, settings, onFail) {
   if (!document.fonts?.load) return;
-  const text = [pop.name, pop.catch, pop.badge, pop.unit, pop.origin, settings?.shopName,
+  const decor = Object.values(LABEL_DESIGN).flatMap(t => [t?.prefix, t?.suffix]).filter(Boolean);   // 〈〉など3行の前後の飾り
+  const text = [pop.name, pop.catch, pop.badge, pop.unit, pop.origin, settings?.shopName, ...decor,
     '0123456789,.円税込抜()（）〈〉月火水木金土日/📷写真を追加—'].join('');
   try {
     const load = f => document.fonts.load(`${f.weight} 40px "${f.family}"`, text);
     await Promise.all([
       ...Object.values(FONTS).map(load),
-      loadPriceFontCss().then(() => Promise.all(PRICE_FONTS.map(load))),
+      loadPriceFontCss().then(() => Promise.all(designFonts().map(load))),
     ]);
   } catch (err) {
     if (!fontWarned) { fontWarned = true; onFail?.(err); }

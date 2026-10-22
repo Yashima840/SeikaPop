@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>金額キャッチのデザイン（SeikaPop）</title>
+  <title>金額主役のデザイン（SeikaPop）</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Yusei+Magic&family=Zen+Maru+Gothic:wght@500;700&family=Zen+Old+Mincho:wght@700&display=swap">
   <style>
     :root { --line: #d6d2c6; --muted: #6b6a63; --accent: #2f7d43; --red: #c62828; }
@@ -57,7 +57,7 @@
 </head>
 <body>
   <header>
-    <h1>金額キャッチのデザイン</h1>
+    <h1>金額主役のデザイン</h1>
     <button id="saveBtn" class="primary" title="Ctrl+S">保存してアプリに反映</button>
     <button id="undoBtn" title="Ctrl+Z">元に戻す</button>
     <button id="redoBtn" title="Ctrl+Y">やり直し</button>
@@ -71,13 +71,14 @@
         <ul id="problems"></ul>
         <div class="stage"><canvas id="preview"></canvas><canvas id="overlay"></canvas></div>
         <p class="help">
-          クリックで部品（背景・数字・「円」・税込コメント）を選ぶ（同じ所をもう一度クリックで下の部品へ）→ ドラッグで移動、四隅の □ で拡大縮小
-          （背景は Shift で縦横比を保つ）。矢印キーで少しずつ動かす（Shift で10ずつ）。
+          クリックで部品（背景・数字・「円」・税込コメント・産地・商品名・数量と単位）を選ぶ（同じ所をもう一度クリックで下の部品へ）→ ドラッグで移動、四隅の □ で拡大縮小
+          （背景は Shift で縦横比を保つ。産地・商品名・単位は ● の基準点を動かさずに大きさを変える）。矢印キーで少しずつ動かす（Shift で10ずつ）。
           背景を選ぶと角が出る: 角をドラッグ／辺をダブルクリックで角を足す／角を右クリックで消す。
           重なり順は右の「重なり順」で（Ctrl+Shift+↑ 最前面・↓ 最背面）。点線は「これより長いと縮める」幅。
         </p>
         <div class="chips" id="sizeChips"><span class="label">サイズ</span></div>
         <div class="chips" id="priceChips"><span class="label">価格</span></div>
+        <div class="chips" id="nameChips"><span class="label">商品名</span></div>
         <div class="chips">
           <span class="label">写真</span>
           <button id="photoSample" class="on">見本</button>

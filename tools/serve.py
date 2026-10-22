@@ -5,7 +5,8 @@
 
 python -m http.server と違い、ブラウザにファイルを控えさせない（Cache-Control: no-store）。
 控えられると、JS やデザインを直してもブラウザが古いまま表示し、直したのに変わらないように見える。
-また、デザイン編集画面（tools/designer.html）の「保存」を受けて js/catch-design.js を書き換える。
+また、デザイン編集画面（tools/designer.html）の「保存」を受けて js/catch-design.js（金額キャッチ）と
+js/label-design.js（産地・商品名・数量と単位の3行）を書き換える。
 """
 import argparse
 import datetime
@@ -24,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 8765
 PAGES = {
-    "デザイン編集（金額キャッチ）": "/tools/designer.html",
+    "デザイン編集（金額主役）": "/tools/designer.html",
     "アプリ": "/",
     "見本帳（全デザイン×全サイズ）": "/tools/gallery.html",
     "金額キャッチの試作キット": "/tools/price-kit/price-kit.html",
@@ -33,6 +34,14 @@ PAGES = {
 CATCH_JS = ROOT / "js" / "catch-design.js"
 BACKUP_DIR = ROOT / "tools" / "designer-backup"
 SAVE_PATH = "/api/catch-design"
+LABEL_JS = ROOT / "js" / "label-design.js"
+LABEL_SAVE_PATH = "/api/label-design"
+LABEL_HEADER = """// 「金額主役」の 産地・商品名・数量と単位 の3行のデザイン（tools/designer.html の「保存」で書き換わる。手で直してもよい）
+// 座標は、写真の枠の左下を (0, 0) とした「デザイン単位」（幅1080pxの画像で 1 単位＝1px）。右・下がプラス。
+// x, y は1行目の文字の基準点（align の位置・文字の下端の線）。
+// size は最大の大きさ。maxW を超えると maxLines まで折り返し、それでも入らなければ minSize まで縮める。
+// unit.follow が true のときは、x, y は「商品名の最後の行の終わり」からのずれ（名前の長さに付いていく）。
+"""
 MAX_BODY = 200_000
 CATCH_HEADER = """// 金額キャッチのデザイン（tools/designer.html の「保存」で書き換わる。手で直してもよい）
 // 座標は、写真の枠の右下を (0, 0) とした「デザイン単位」。左・上がマイナス。
@@ -77,6 +86,32 @@ def save_catch_design(design):
     return backup.relative_to(ROOT).as_posix(), note
 
 
+def write_js(path, header, const_name, design):
+    """前の版を tools/designer-backup/ へ控えてから、デザインを JS のファイルへ書く。控えのパスを返す。"""
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup = BACKUP_DIR / f"{path.stem}.{stamp}.js"
+    shutil.copy2(path, backup)
+    body = json.dumps(design, ensure_ascii=False, indent=2)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(header + f"export const {const_name} = " + body + ";\n", encoding="utf-8", newline="\n")
+    tmp.replace(path)  # 途中で止まっても半端なファイルを残さない
+    return backup.relative_to(ROOT).as_posix()
+
+
+def save_label_design(design):
+    """3行のデザインを js/label-design.js へ書く。(控えのパス, 注意) を返す。
+
+    中身の細かい検査は編集画面が js/labels.js で済ませている。ここでは形だけ見る。
+    """
+    if not isinstance(design, dict) or design.get("version") != 1:
+        raise ValueError("3行のデザインの形が違います（version 1 ではありません）")
+    for key in ("origin", "name", "unit"):
+        if not isinstance(design.get(key), dict):
+            raise ValueError(f"3行のデザインに {key} がありません")
+    return write_js(LABEL_JS, LABEL_HEADER, "LABEL_DESIGN", design), ""
+
+
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
     extensions_map = {
         **http.server.SimpleHTTPRequestHandler.extensions_map,
@@ -98,7 +133,8 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path != SAVE_PATH:
+        savers = {SAVE_PATH: save_catch_design, LABEL_SAVE_PATH: save_label_design}
+        if self.path not in savers:
             self.send_json(404, {"ok": False, "message": "ありません"})
             return
         # 書き換えはこの PC のブラウザから、編集画面を通したときだけ。
@@ -111,7 +147,7 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json(413, {"ok": False, "message": "データが大きすぎるか空です"})
             return
         try:
-            backup, note = save_catch_design(json.loads(self.rfile.read(length).decode("utf-8")))
+            backup, note = savers[self.path](json.loads(self.rfile.read(length).decode("utf-8")))
         except (ValueError, UnicodeDecodeError) as err:
             self.send_json(400, {"ok": False, "message": str(err)})
             return
@@ -163,7 +199,7 @@ def main():
         print(f"ポート {PORT} は使用中です。起動済みとみなしてブラウザだけ開きます。")
         print("（別のソフトが使っている場合は、そちらを止めてからやり直してください）")
         if not args.no_browser:
-            webbrowser.open(base + PAGES["デザイン編集（金額キャッチ）"])
+            webbrowser.open(base + PAGES["デザイン編集（金額主役）"])
         return 1
 
     print("SeikaPop を起動しました。この窓を閉じると止まります。\n")
@@ -176,7 +212,7 @@ def main():
     print("\n直したら、ブラウザで再読み込み（F5）すれば反映されます。")
 
     if not args.no_browser:
-        threading.Timer(0.5, lambda: [webbrowser.open(base + PAGES[k]) for k in ("デザイン編集（金額キャッチ）", "アプリ")]).start()
+        threading.Timer(0.5, lambda: [webbrowser.open(base + PAGES[k]) for k in ("デザイン編集（金額主役）", "アプリ")]).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
