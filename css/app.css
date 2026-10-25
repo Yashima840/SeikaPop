@@ -47,6 +47,13 @@ button.danger { color: var(--red); }
 button.ok.danger { background: var(--red); color: #fff; border-color: var(--red); }
 button.big { width: 100%; min-height: 56px; font-size: 18px; margin: 4px 0 8px; }
 button.mini { min-height: 34px; padding: 4px 10px; font-size: 13px; }
+/* はじめの画面の「事務所へ送れていないもの」のお知らせ */
+button.notice {
+  width: 100%; margin: 0 0 8px; text-align: left; font-size: 14px;
+  background: #eef6f0; border-color: var(--green); color: var(--green-dark);
+}
+button.notice.error { background: #fdecea; border-color: var(--red); color: var(--red); }
+button.notice[hidden] { display: none; }
 
 h2 { font-size: 17px; margin: 24px 0 8px; }
 h2 small { color: var(--muted); font-weight: normal; font-size: 13px; }

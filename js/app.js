@@ -1,10 +1,11 @@
-// 起動と画面の切り替え（#/ ・ #/edit/<id> ・ #/settings ・ #/history ・ #/ad）
+// 起動と画面の切り替え（#/ ・ #/edit/<id> ・ #/settings ・ #/history ・ #/ad ・ #/setup?…）
 
 import { installCrashHandlers, recordError } from './crash.js';
 import { toast } from './ui.js';
 import { showHome } from './views/home.js';
 import { showEditor } from './views/editor.js';
-import { showSettings } from './views/settings.js';
+import { showSettings, showSetup } from './views/settings.js';
+import { flushOutbox } from './sender.js';
 import { showHistory } from './views/history.js';
 import { showAd } from './views/ad.js';
 
@@ -44,6 +45,7 @@ function route() {
       const m = hash.match(/^#\/edit\/(.+)$/);
       if (m) leaveCurrent = await showEditor(root, app, decodeURIComponent(m[1]));
       else if (hash === '#/settings') leaveCurrent = await showSettings(root, app);
+      else if (hash.startsWith('#/setup?')) leaveCurrent = await showSetup(root, app, location.href);
       else if (hash === '#/history') leaveCurrent = await showHistory(root, app);
       else if (hash === '#/ad') leaveCurrent = await showAd(root, app);
       else leaveCurrent = await showHome(root, app);
@@ -62,8 +64,12 @@ window.addEventListener('hashchange', route);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     Promise.resolve(leaveCurrent?.flush?.()).catch(err => report('flush on hide', err));
+  } else {
+    flushOutbox();   // 共有画面から戻ったときなど。送れなかった分を送り直す
   }
 });
+// 事務所へ送れなかった分は、電波が戻ったときにも送り直す（flushOutbox は例外を投げない）
+window.addEventListener('online', () => { flushOutbox(); });
 
 if ('serviceWorker' in navigator && window.isSecureContext) {
   navigator.serviceWorker.register('./sw.js').catch(err => recordError('serviceWorker.register', err));
@@ -73,3 +79,4 @@ if (navigator.storage?.persist) {
 }
 
 route();
+flushOutbox();

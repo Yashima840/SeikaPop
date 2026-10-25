@@ -9,9 +9,11 @@
 - iPhone（Safari）と Android（Chrome）の両方で動くこと。HTTPS でしか動かない機能
   （`navigator.share`・Service Worker・`crypto.randomUUID`）は**無くても動く代わりを必ず持つ**
   （LAN の http で試すことがあるため）。
-- 計算・判定は `model.js` / `layout.js` / `backup.js` / `frames.js` / `labels.js`（置き方・検査）と `image.js` の画素処理に置き、
+- 計算・判定は `model.js` / `layout.js` / `backup.js` / `frames.js` / `labels.js`（置き方・検査）/ `collect.js`（事務所へ集める）と `image.js` の画素処理に置き、
   画面・Canvas・IndexedDB に触らない（`npm test` で確かめられるように）。新しい判定もここへ。
 - 保存は `store.js` の関数だけを通す（将来クラウド版に差し替えるため）。
+- 事務所への送信は `sender.js` だけが行う。送れないものは端末に控えて送り直し、理由を画面に出す（黙って捨てない）。
+  合言葉はリポジトリに書かない（受け取り口のスクリプト プロパティと、配る設定用リンクにだけある）。
 
 ## 守ること
 

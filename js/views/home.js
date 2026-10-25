@@ -3,6 +3,7 @@
 import * as store from '../store.js';
 import { createPop, popFromRegular, popTitle, sortByUpdated } from '../model.js';
 import { confirmBox, h, toast } from '../ui.js';
+import { onOutboxChange, outboxStatus } from '../sender.js';
 
 const RECENT_MAX = 30;
 
@@ -43,7 +44,26 @@ export async function showHome(root, app) {
     app.refresh();
   };
 
+  // 事務所へ送れていないものがあるときだけ出す（タップで設定画面の詳しい理由へ）
+  const outboxNote = h('button', { class: 'notice', hidden: true, onclick: () => app.go('#/settings') });
+  const showOutbox = async () => {
+    try {
+      const st = await outboxStatus();
+      outboxNote.hidden = !st.count;
+      outboxNote.textContent = st.lastError
+        ? `⚠ 事務所へ送れていないものが ${st.count} 件あります（${st.lastError}）`
+        : `事務所へ送っています（残り ${st.count} 件）`;
+      outboxNote.classList.toggle('error', !!st.lastError);
+    } catch (err) {
+      outboxNote.hidden = false;
+      outboxNote.textContent = `⚠ 事務所へ送る控えを読めませんでした: ${err.message}`;
+    }
+  };
+  showOutbox();
+  const dispose = onOutboxChange(() => { showOutbox(); });
+
   root.replaceChildren(
+    outboxNote,
     h('button', { class: 'primary big', onclick: openNew }, '＋ 新しく作る'),
     h('button', { class: 'big', onclick: () => app.go('#/history') }, '🖼 作った画像・🧩 広告を作る'),
     isStandalone() ? null : h('p', { class: 'hint' },
@@ -67,4 +87,5 @@ export async function showHome(root, app) {
       })))
       : h('p', { class: 'empty' }, 'まだありません。'),
   );
+  return dispose;
 }

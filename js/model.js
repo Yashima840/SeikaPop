@@ -49,7 +49,7 @@ export function createPop(now = new Date()) {
   };
 }
 
-function contentOf(pop) {
+export function contentOf(pop) {
   const out = {};
   for (const k of CONTENT_FIELDS) {
     const v = pop[k];

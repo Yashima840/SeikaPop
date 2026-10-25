@@ -10,6 +10,7 @@ import { blobToImage } from '../image.js';
 import { adToFile, ensureAdFonts, renderAd } from '../render.js';
 import { debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
 import { shotCard } from './history.js';
+import { queueAd } from '../sender.js';
 
 function chips(items, onPick, current) {
   return h('div', { class: 'chips' }, items.map(([value, label]) =>
@@ -178,8 +179,10 @@ export async function showAd(root, app) {
     }
     // 共有画面を開く前に待つと共有を断る端末があるので、履歴へは並行して残す
     // （同じ組み合わせが既にあれば addShot が足さない）
-    const kept = store.addShot(shotFromAd(ad, frame, made), made.file)
+    const shot = shotFromAd(ad, frame, made);
+    const kept = store.addShot(shot, made.file)
       .catch(err => toast(`広告を履歴に残せませんでした: ${err.message}`, { error: true }));
+    queueAd(shot, made.file).catch(err => toast(`事務所へ送る準備ができませんでした: ${err.message}`, { error: true }));
     try {
       if (share && navigator.canShare?.({ files: [made.file] })) {
         try {

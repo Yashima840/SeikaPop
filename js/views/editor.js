@@ -10,6 +10,7 @@ import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.
 import { ensureFonts, photoBoxOf, renderPop, renderToFile, thumbnailOf } from '../render.js';
 import { TEMPLATE_ORDER, TEMPLATES } from '../templates.js';
 import { debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
+import { queuePop } from '../sender.js';
 
 const BADGES = ['本日のおすすめ', '朝採れ', '入荷しました', '本日の特価', '旬の味', '数量限定'];
 const UNITS = ['1袋', '1個', '1パック', '1本', '1玉', '1房', '100g', '1盛'];
@@ -286,6 +287,8 @@ export async function showEditor(root, app, popId) {
       toast(`画像を作れませんでした: ${err.message}`, { error: true });
       return;
     }
+    // 事務所へ送る控えも並行して作る（送り先が未設定なら何もしない。送るのは裏で）
+    queuePop(pop, made.file).catch(err => toast(`事務所へ送る準備ができませんでした: ${err.message}`, { error: true }));
     if (share === null) { await keepInHistory(made, { quiet: false }); return; }
     // 共有画面を開く前に待つと、端末によっては「タップから時間が経った」として共有を断られるので並行して残す
     const kept = keepInHistory(made, { quiet: true });

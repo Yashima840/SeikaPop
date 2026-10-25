@@ -3,10 +3,11 @@
 // クラウド版を作ってここを差し替える。画面側はこのファイルの関数しか呼ばない。
 
 import { BACKUP_FORMAT, BACKUP_VERSION, mergePops, mergeShots, unreferencedPhotoIds, validateBackup } from './backup.js';
+import { outboxReplaced, sortOutbox } from './collect.js';
 import { DEFAULT_TAX_RATE, historyOverflow, newId } from './model.js';
 
 const DB_NAME = 'seikapop';
-const DB_VERSION = 2;   // 2: 作った画像の履歴（shots・shotImages）を追加
+const DB_VERSION = 3;   // 2: 作った画像の履歴（shots・shotImages）を追加／3: 事務所へ送る控え（outbox）を追加
 let dbPromise = null;
 
 function openDb() {
@@ -25,6 +26,7 @@ function openDb() {
       // 履歴は一覧用（名前・見本・ピン）と画像本体を分ける（一覧を開くたびに全部の画像を読まないため）
       if (!db.objectStoreNames.contains('shots')) db.createObjectStore('shots', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('shotImages')) db.createObjectStore('shotImages', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'id' });
     };
     // 別のタブが古い版で開いたままだと新しい版を開けない。待たされていることを知らせる
     req.onblocked = () => reject(new Error('他のタブで青果ポップが開いたままです。そちらを閉じてから開き直してください'));
@@ -156,6 +158,35 @@ export async function putAdDraft(value) {
   await run(['meta'], 'readwrite', tx => reqDone(tx.objectStore('meta').put({ key: 'adDraft', value })));
 }
 
+// ---- 事務所へ送る控え ----
+// 送り終わるまで画像（と写真）を端末に持つ。届いたら消す。
+
+/** 控えを足す。同じものの古い控え（まだ送れていないもの）は置き換える。 */
+export async function queueDelivery(record, image, photo) {
+  await run(['outbox'], 'readwrite', async tx => {
+    const all = await reqDone(tx.objectStore('outbox').getAll());
+    for (const id of outboxReplaced(all, record.key)) tx.objectStore('outbox').delete(id);
+    tx.objectStore('outbox').put({ ...record, image, photo: photo || null });
+  });
+}
+
+/** 送る順（古いものから）の控え。画像の本体も入っている。 */
+export async function listOutbox() {
+  return sortOutbox(await run(['outbox'], 'readonly', tx => reqDone(tx.objectStore('outbox').getAll())));
+}
+
+/** 送れなかった理由を控えに書き残す（消えていたら何もしない）。 */
+export async function markOutboxFailed(id, message, now = new Date()) {
+  await run(['outbox'], 'readwrite', async tx => {
+    const rec = await reqDone(tx.objectStore('outbox').get(id));
+    if (rec) tx.objectStore('outbox').put({ ...rec, tries: (rec.tries || 0) + 1, lastError: message, lastTriedAt: now.toISOString() });
+  });
+}
+
+export async function deleteOutbox(id) {
+  await run(['outbox'], 'readwrite', tx => reqDone(tx.objectStore('outbox').delete(id)));
+}
+
 const DEFAULT_SETTINGS = { shopName: '', taxRate: DEFAULT_TAX_RATE, taxRounding: 'decimal' };
 
 export async function getSettings() {
@@ -169,7 +200,7 @@ export async function putSettings(value) {
 
 // ---- バックアップ ----
 
-function blobToBase64(blob) {
+export function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
     fr.onload = () => resolve(String(fr.result).split(',')[1] || '');

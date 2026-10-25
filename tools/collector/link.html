@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>設定用リンクを作る</title>
+<style>
+  :root { --green: #2f7d43; --red: #d32f2f; --line: #dcd8cc; --muted: #6b726b; color-scheme: light; }
+  body { margin: 0; background: #f4f2ec; color: #1f2a22; font-family: "Yu Gothic UI", "Hiragino Sans", sans-serif; line-height: 1.6; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; color: var(--green); }
+  label { display: block; margin: 14px 0 4px; font-weight: 700; }
+  input, textarea { box-sizing: border-box; width: 100%; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  textarea { min-height: 90px; word-break: break-all; }
+  button { font: inherit; padding: 6px 14px; margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; }
+  .hint { color: var(--muted); font-size: 14px; }
+  .error { color: var(--red); min-height: 1.6em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>設定用リンクを作る（事務所用）</h1>
+  <p class="hint">受け取り口の設置手順は <code>tools/collector/README.md</code>。ここで作ったリンクを店員さんに LINE などで送ります。
+    リンクには合言葉が入っているので、店の外の人には送らないでください。</p>
+
+  <label for="pass">① 合言葉（受け取り口のスクリプト プロパティ PASSCODE と同じもの）</label>
+  <input id="pass" autocomplete="off" spellcheck="false">
+  <button id="gen" type="button">新しい合言葉を作る</button>
+  <button id="copyPass" type="button">合言葉をコピー</button>
+
+  <label for="url">② 受け取り口のウェブアプリの URL（https://script.google.com/macros/s/…/exec）</label>
+  <input id="url" autocomplete="off" spellcheck="false">
+
+  <label for="app">③ アプリの URL（ふつうは変えなくてよい）</label>
+  <input id="app" value="https://yashima840.github.io/SeikaPop/" spellcheck="false">
+
+  <label for="out">設定用リンク</label>
+  <textarea id="out" readonly></textarea>
+  <div id="err" class="error"></div>
+  <button id="copyLink" type="button">リンクをコピー</button>
+</main>
+<script type="module">
+  import { isValidPasscode, makeSetupLink, parseSetupCode } from '../../js/collect.js';
+
+  const $ = id => document.getElementById(id);
+  const update = () => {
+    $('out').value = '';
+    const pass = $('pass').value.trim(), url = $('url').value.trim();
+    if (!pass || !url) { $('err').textContent = ''; return; }
+    if (!isValidPasscode(pass)) { $('err').textContent = '合言葉は英数字と - _ で 8〜64 文字にしてください（「新しい合言葉を作る」がおすすめ）'; return; }
+    const link = makeSetupLink($('app').value.trim(), url, pass);
+    // アプリ側と同じ読み方で読めるかを確かめてから出す（読めないリンクを配らないように）
+    const r = parseSetupCode(link);
+    $('err').textContent = r.ok ? '' : r.message;
+    if (r.ok) $('out').value = link;
+  };
+  const copy = async (text, what) => {
+    if (!text) { $('err').textContent = `${what}がまだありません`; return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      $('err').textContent = '';
+      $('copyLink').textContent = what === 'リンク' ? 'コピーしました' : 'リンクをコピー';
+    } catch (err) {
+      $('err').textContent = `コピーできませんでした（手で選んでコピーしてください）: ${err.message}`;
+    }
+  };
+  $('gen').addEventListener('click', () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(18));
+    $('pass').value = Array.from(bytes, b => 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 56]).join('');
+    update();
+  });
+  $('copyPass').addEventListener('click', () => copy($('pass').value.trim(), '合言葉'));
+  $('copyLink').addEventListener('click', () => copy($('out').value, 'リンク'));
+  for (const id of ['pass', 'url', 'app']) $(id).addEventListener('input', update);
+</script>
+</body>
+</html>
