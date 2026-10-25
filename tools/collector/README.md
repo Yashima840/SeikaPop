@@ -16,7 +16,8 @@
 
 ## 2. 合言葉を決めて入れる
 
-1. PC で `start.bat` を起動し、<http://127.0.0.1:8765/tools/collector/link.html> を開く
+1. PC のブラウザで <https://yashima840.github.io/SeikaPop/tools/collector/link.html> を開く
+   （ファイルをダブルクリックで直接開くと動かない。`start.bat` を起動して <http://127.0.0.1:8765/tools/collector/link.html> でもよい）
 2. 「新しい合言葉を作る」→「合言葉をコピー」
 3. スクリプトの画面の左の ⚙（プロジェクトの設定）→ 一番下「スクリプト プロパティ」→「スクリプト プロパティを追加」
    - プロパティ: `PASSCODE`
