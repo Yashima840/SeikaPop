@@ -23,12 +23,15 @@
   <p class="hint">受け取り口の設置手順は <code>tools/collector/README.md</code>。ここで作ったリンクを店員さんに LINE などで送ります。
     リンクには合言葉が入っているので、店の外の人には送らないでください。</p>
 
+  <p class="hint">使う順番: ① 合言葉を作ってコピー → Google の画面で受け取り口を作る（PASSCODE に貼り付け・ウェブアプリとして公開）
+    → この画面に戻って ② に URL を貼る → 下に設定用リンクが出る。<b>この画面は閉じずに置いておいてください</b>（閉じると合言葉が消えます）。</p>
+
   <label for="pass">① 合言葉（受け取り口のスクリプト プロパティ PASSCODE と同じもの）</label>
   <input id="pass" autocomplete="off" spellcheck="false">
   <button id="gen" type="button">新しい合言葉を作る</button>
   <button id="copyPass" type="button">合言葉をコピー</button>
 
-  <label for="url">② 受け取り口のウェブアプリの URL（https://script.google.com/macros/s/…/exec）</label>
+  <label for="url">② 受け取り口のウェブアプリの URL（https://script.google.com/…/exec の形）</label>
   <input id="url" autocomplete="off" spellcheck="false">
 
   <label for="app">③ アプリの URL（ふつうは変えなくてよい）</label>
@@ -46,7 +49,9 @@
   const update = () => {
     $('out').value = '';
     const pass = $('pass').value.trim(), url = $('url').value.trim();
-    if (!pass || !url) { $('err').textContent = ''; return; }
+    // 足りないものを黙らずに出す（何も出ないと、どこで止まっているか分からない）
+    if (!pass) { $('err').textContent = '① の合言葉がまだです（「新しい合言葉を作る」を押してください）'; return; }
+    if (!url) { $('err').textContent = '② に受け取り口の URL を貼り付けてください（README の「3. ウェブアプリとして公開する」の最後に出る URL）'; return; }
     if (!isValidPasscode(pass)) { $('err').textContent = '合言葉は英数字と - _ で 8〜64 文字にしてください（「新しい合言葉を作る」がおすすめ）'; return; }
     const link = makeSetupLink($('app').value.trim(), url, pass);
     // アプリ側と同じ読み方で読めるかを確かめてから出す（読めないリンクを配らないように）

@@ -10,8 +10,9 @@ export const DELIVERY_FORMAT = 'seikapop-delivery';
 export const DELIVERY_VERSION = 1;
 
 // 受け取り口（Google Apps Script のウェブアプリ）の URL の形。
-// 違う所へ送らせないように、この形以外は受け付けない
-const COLLECTOR_URL = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+// 違う所へ送らせないように、この形以外は受け付けない。
+// 法人用（Google Workspace）のアカウントで作ると /a/macros/<会社のドメイン>/s/… になる
+const COLLECTOR_URL = /^https:\/\/script\.google\.com\/(?:a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/;
 const PASSCODE = /^[\w-]{8,64}$/;
 
 /** 設定から送り先を取り出す。ready: 送れる状態か。 */

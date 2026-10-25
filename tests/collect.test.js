@@ -17,6 +17,12 @@ test('設定用リンクを作って、同じ読み方で読み戻せる', () =>
   assert.deepEqual(parseSetupCode(link), { ok: true, url: URL_OK, passcode: PASS });
 });
 
+test('法人用（Google Workspace）の受け取り口の URL も読める', () => {
+  const work = 'https://script.google.com/a/macros/example.co.jp/s/AKfycbx-abc_123/exec';
+  assert.deepEqual(parseSetupCode(makeSetupLink(APP, work, PASS)), { ok: true, url: work, passcode: PASS });
+  assert.equal(parseSetupCode(makeSetupLink(APP, 'https://script.google.com/a/macros/example.co.jp/s/x/dev', PASS)).ok, false);
+});
+
 test('アプリのURLに # が付いていても設定用リンクは1つの # だけ', () => {
   const link = makeSetupLink(`${APP}#/settings`, URL_OK, PASS);
   assert.equal(link.split('#').length, 2);
