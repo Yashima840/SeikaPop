@@ -2,12 +2,53 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  adProblems, adShotKey, createAd, dropMissing, fitSlots, frameProblems, FRAME_ORDER, FRAMES, toggleShot,
+  adProblems, adShotKey, createAd, CUSTOM_ID, customFrame, dropMissing, fitSlots, frameFor, frameProblems, FRAME_ORDER,
+  FRAMES, normalizeRows, toggleShot,
 } from '../js/frames.js';
 import { containRect } from '../js/layout.js';
 
 test('同梱のフレームはどれも枠が画像からはみ出さず、上下の帯にも重ならない', () => {
   for (const id of FRAME_ORDER) assert.deepEqual(frameProblems(FRAMES[id]), [], id);
+});
+
+test('カスタム: 1行目1枚・2行目2枚・3行目3枚・4行目以降なし → 3行6枚。上の行から左→右の順', () => {
+  const f = customFrame([1, 2, 3, 0, 0, 0]);
+  assert.equal(f.slots.length, 6);
+  assert.match(f.label, /3行 6枚/);
+  assert.deepEqual(frameProblems(f), []);
+  const ys = [...new Set(f.slots.map(s => s.y))];
+  assert.equal(ys.length, 3);
+  assert.ok(f.slots[1].x < f.slots[2].x && f.slots[1].y === f.slots[2].y, '同じ行は左から');
+  assert.ok(f.h <= 1920 && f.h >= 1080);
+});
+
+test('カスタム: 押さなかった行は使わない（途中の行が空でも詰める）。1枚も無ければフレームにならない', () => {
+  assert.deepEqual(customFrame([0, 2, 0, 1, 0, 0]).slots.length, 3);
+  assert.equal(customFrame([0, 0, 0, 0, 0, 0]), null);
+  assert.equal(customFrame(undefined), null);
+  assert.deepEqual(normalizeRows([9, -1, '2', null]), [3, 0, 2, 0, 0, 0], '壊れた値は 0〜3 へ');
+});
+
+test('カスタム: 6行×0〜3枚のどの組み合わせでも、枠ははみ出さず重ならない', () => {
+  for (let code = 1; code < 4 ** 6; code++) {
+    const rows = Array.from({ length: 6 }, (_, i) => Math.floor(code / 4 ** i) % 4);
+    const f = customFrame(rows);
+    assert.deepEqual(frameProblems(f), [], rows.join(','));
+    for (let a = 0; a < f.slots.length; a++) {
+      for (let b = a + 1; b < f.slots.length; b++) {
+        const p = f.slots[a], q = f.slots[b];
+        const overlap = p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h;
+        assert.ok(!overlap, `${rows.join(',')} の ${a + 1} と ${b + 1} が重なる`);
+      }
+    }
+  }
+});
+
+test('カスタム: 広告で使うフレームは行の指定から作り、同じ組み合わせの印に行の形も入る', () => {
+  const ad = { ...createAd(), frameId: CUSTOM_ID, customRows: [1, 2, 0, 0, 0, 0], slots: ['a', 'b', 'c'] };
+  assert.equal(frameFor(ad).slots.length, 3);
+  assert.notEqual(adShotKey(ad), adShotKey({ ...ad, customRows: [2, 1, 0, 0, 0, 0] }));
+  assert.equal(frameFor({ ...ad, frameId: 'no-such' }), null);
 });
 
 test('FRAME_ORDER と FRAMES が食い違っていない（足し忘れで選べないフレームを作らない）', () => {

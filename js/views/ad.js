@@ -5,7 +5,8 @@
 import * as store from '../store.js';
 import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
-  AD_TITLES, adProblems, createAd, dropMissing, fitSlots, FRAME_ORDER, FRAMES, shotFromAd, toggleShot,
+  AD_TITLES, adProblems, createAd, CUSTOM_ID, CUSTOM_MAX_PER_ROW, customFrame, dropMissing, fitSlots, frameFor,
+  FRAME_ORDER, FRAMES, normalizeRows, shotFromAd, toggleShot, usedRows,
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
 import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../render.js';
@@ -60,8 +61,9 @@ export async function showAd(root, app) {
   const popById = new Map(listed.map(p => [p.id, p]));
 
   let ad = { ...createAd(), ...await store.getAdDraft() };
-  if (!FRAMES[ad.frameId]) ad.frameId = FRAME_ORDER[0];
-  const frameOf = () => FRAMES[ad.frameId];
+  ad.customRows = normalizeRows(ad.customRows);
+  if (!frameFor(ad)) ad.frameId = FRAME_ORDER[0];
+  const frameOf = () => frameFor(ad);
   ad.slots = fitSlots(slotsToPopIds(ad.slots, await store.listShots()), frameOf().slots.length).slots;
   const missing = dropMissing(ad.slots, listed.map(p => p.id));
   ad.slots = missing.slots;
@@ -137,12 +139,49 @@ export async function showAd(root, app) {
     oninput: () => { ad.title = titleInput.value; statusEl.textContent = '保存中…'; draw(); save(); },
   });
   const pickFrame = id => {
-    const r = fitSlots(ad.slots, FRAMES[id].slots.length);
+    if (id === CUSTOM_ID && !customFrame(ad.customRows)) { openBuilder(); return; }   // まだ作っていない
+    builder = null;
+    const r = fitSlots(ad.slots, frameFor({ ...ad, frameId: id }).slots.length);
     ad.frameId = id;
     ad.slots = r.slots;
     if (r.dropped) toast(`枠が足りないので、後から選んだ ${r.dropped} 枚を外しました`);
     changed();
   };
+
+  // ---- カスタムフレームを組む（6行のボタン。押した行に 1〜3 枚、押さない行は使わない）----
+  let builder = null;   // 組んでいる途中: { rows, picking＝枚数を選んでいる行（無ければ -1）}
+  const openBuilder = () => { builder = { rows: [...ad.customRows], picking: -1 }; rebuild(); };
+  const setRow = (i, n) => { builder.rows[i] = n; builder.picking = -1; rebuild(); };
+  const finishBuilder = () => {
+    if (!customFrame(builder.rows)) { toast('写真を入れる行を1つ以上選んでください', { error: true }); return; }
+    ad.customRows = normalizeRows(builder.rows);
+    pickFrame(CUSTOM_ID);
+  };
+  function builderView() {
+    const used = usedRows(builder.rows), count = used.reduce((a, b) => a + b, 0);
+    const row = (n, i) => h('div', { class: n ? 'b-row on' : 'b-row' },
+      builder.picking === i
+        ? h('div', { class: 'b-pick' },
+          h('span', { class: 'b-label', text: `${i + 1}行目` }),
+          ...Array.from({ length: CUSTOM_MAX_PER_ROW }, (_, k) =>
+            h('button', { type: 'button', class: n === k + 1 ? 'chip on' : 'chip', onclick: () => setRow(i, k + 1) }, `${k + 1}枚`)),
+          h('button', { type: 'button', class: 'chip', onclick: () => setRow(i, 0) }, '使わない'))
+        : h('button', { type: 'button', class: 'b-main', onclick: () => { builder.picking = i; rebuild(); } },
+          h('span', { class: 'b-label', text: `${i + 1}行目` }),
+          n ? h('span', { class: 'b-cells' }, Array.from({ length: n }, () => h('span', { class: 'b-cell' })))
+            : h('span', { class: 'b-empty', text: '＋ 押して写真の枚数を選ぶ' }),
+          n ? h('span', { class: 'b-count', text: `${n}枚` }) : null));
+    return h('div', { class: 'builder' },
+      h('p', { class: 'hint' }, '写真を入れたい行のボタンを押して、1行に何枚（1〜3枚）入れるかを選びます。押さなかった行は使いません。'),
+      h('div', { class: 'b-frame' },
+        h('div', { class: 'b-head', text: '見出し' }),
+        ...builder.rows.map(row),
+        h('div', { class: 'b-foot', text: '店名・日付' })),
+      h('div', { class: 'row' },
+        h('button', { class: 'primary', disabled: !count, onclick: finishBuilder },
+          count ? `作成（${used.length}行 ${count}枚）` : '作成'),
+        h('button', { onclick: () => { builder = null; rebuild(); } }, 'やめる')));
+  }
   const pickPop = id => {
     const p = exportProblems(popById.get(id));
     // 枠に入っているものは外せるようにする（入れるときだけ止める）
@@ -169,7 +208,12 @@ export async function showAd(root, app) {
     form.replaceChildren(
       h('section', {},
         h('h3', {}, '① フレーム'),
-        chips(FRAME_ORDER.map(id => [id, `${FRAMES[id].label}（${FRAMES[id].note}）`]), pickFrame, ad.frameId),
+        chips([
+          ...FRAME_ORDER.map(id => [id, `${FRAMES[id].label}（${FRAMES[id].note}）`]),
+          [CUSTOM_ID, customFrame(ad.customRows) ? `${customFrame(ad.customRows).label}` : '＋ カスタム'],
+        ], pickFrame, ad.frameId),
+        builder ? builderView()
+          : ad.frameId === CUSTOM_ID ? h('div', { class: 'row' }, h('button', { onclick: openBuilder }, 'カスタムの行を作り直す')) : null,
       ),
       h('section', {},
         h('h3', {}, `② ポップを選ぶ（${filled}/${n}）`),

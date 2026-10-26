@@ -6,6 +6,7 @@
 //   overlay 別に用意した飾りの画像（PNG。枠の部分を透明に抜いたもの）。'frames/xxx.png' のように
 //           置き場所を書く。置いたら sw.js の SHELL にも足すこと。画像に文字まで入れたなら header/footer は 0 に
 // 足したら npm test（frameProblems で枠のはみ出しを止める）と tools/gallery.html で見た目を確かめる。
+// カスタムフレーム（広告の画面で行ごとの枚数を選んで作る）は customFrame が行の指定から作る。
 
 import { localStamp, newId } from './model.js';
 
@@ -45,7 +46,66 @@ export const FRAMES = {
 };
 export const FRAME_ORDER = ['single', 'pair', 'stack2', 'trio', 'grid4'];  // 枚数の少ない順
 
-export const AD_TITLES = ['本日のおすすめ', '今週の特売', '朝採れ入荷', '旬の味覚', '数量限定'];
+// ---- カスタムフレーム: 6行それぞれに 0（使わない）〜3 枚。使う行だけを上から詰めて並べる ----
+export const CUSTOM_ID = 'custom';
+export const CUSTOM_ROWS = 6;
+export const CUSTOM_MAX_PER_ROW = 3;
+const CUSTOM = {
+  w: 1080, minH: 1080, maxH: 1920, margin: 36, gap: 24,
+  bg: '#fdf6e3', header: { h: 200, bg: '#2f7d43', color: '#ffffff' }, footer: { h: 110, color: '#22603a' },
+};
+
+/** 行ごとの枚数を 0〜3 の整数 6 個にそろえる（壊れた保存データでも落ちないように）。 */
+export function normalizeRows(rows) {
+  return Array.from({ length: CUSTOM_ROWS }, (_, i) => {
+    const n = Math.floor(Number(rows?.[i]) || 0);
+    return Math.min(CUSTOM_MAX_PER_ROW, Math.max(0, n));
+  });
+}
+
+/** 使う行の枚数だけ（上から順）。 */
+export const usedRows = rows => normalizeRows(rows).filter(n => n > 0);
+
+/**
+ * 行ごとの枚数からフレームを作る。使う行が無ければ null。
+ * 各行は横幅いっぱいに n 枚を並べ、枠は正方形（ポップは正方形が多い）。
+ * 縦は中身に合わせて伸ばし（縦長 9:16 まで）、入り切らないときは行の高さを同じ割合で縮める。
+ */
+export function customFrame(rows) {
+  const used = usedRows(rows);
+  if (!used.length) return null;
+  const { w: W, margin: m, gap } = CUSTOM;
+  const innerW = W - 2 * m;
+  const cellW = used.map(n => (innerW - (n - 1) * gap) / n);
+  const top = CUSTOM.header.h + gap, bottomBand = CUSTOM.footer.h + gap;
+  const gaps = (used.length - 1) * gap;
+  const natural = cellW.reduce((a, b) => a + b, 0) + gaps;
+  const H = Math.round(Math.min(CUSTOM.maxH, Math.max(CUSTOM.minH, top + natural + bottomBand)));
+  const avail = H - top - bottomBand;
+  const k = natural > avail ? (avail - gaps) / (natural - gaps) : 1;
+  const rowH = cellW.map(cw => cw * k);
+  const contentH = rowH.reduce((a, b) => a + b, 0) + gaps;
+  let y = top + (avail - contentH) / 2;   // 中身が少ないときは上下の真ん中へ
+  const slots = [];
+  used.forEach((n, r) => {
+    for (let i = 0; i < n; i++) {
+      slots.push({ x: Math.round(m + i * (cellW[r] + gap)), y: Math.round(y), w: Math.floor(cellW[r]), h: Math.floor(rowH[r]) });
+    }
+    y += rowH[r] + gap;
+  });
+  const count = slots.length;
+  return {
+    label: `カスタム（${used.length}行 ${count}枚）`, note: `${used.join('・')}枚`, w: W, h: H,
+    bg: CUSTOM.bg, header: CUSTOM.header, footer: CUSTOM.footer, slots,
+  };
+}
+
+/** 広告で使うフレーム（カスタムなら行の指定から作る）。無ければ null。 */
+export function frameFor(ad) {
+  return ad.frameId === CUSTOM_ID ? customFrame(ad.customRows) : FRAMES[ad.frameId] || null;
+}
+
+export const AD_TITLES =['本日のおすすめ', '今週の特売', '朝採れ入荷', '旬の味覚', '数量限定'];
 
 /** フレームのデータの誤り（空なら使える）。手で足したフレームの打ち間違いを、画面に出す前に止める。 */
 export function frameProblems(frame) {
@@ -65,7 +125,10 @@ export function frameProblems(frame) {
 }
 
 export function createAd(now = new Date()) {
-  return { frameId: FRAME_ORDER[0], title: AD_TITLES[0], showDate: true, slots: [], updatedAt: now.toISOString() };
+  return {
+    frameId: FRAME_ORDER[0], customRows: normalizeRows([]), title: AD_TITLES[0], showDate: true, slots: [],
+    updatedAt: now.toISOString(),
+  };
 }
 
 /**
@@ -108,7 +171,8 @@ export function adProblems(ad, frame) {
 /** 同じ組み合わせを2回残さないための印。日付を入れる日は、日が変われば別の画像になる。 */
 export function adShotKey(ad, now = new Date()) {
   const day = ad.showDate ? `@${localStamp(now)}` : '';
-  return `ad:${ad.frameId}|${ad.slots.join(',')}|${ad.title}${day}`;
+  const frame = ad.frameId === CUSTOM_ID ? `${CUSTOM_ID}:${usedRows(ad.customRows).join('-')}` : ad.frameId;
+  return `ad:${frame}|${ad.slots.join(',')}|${ad.title}${day}`;
 }
 
 export function shotFromAd(ad, frame, { thumb }, now = new Date()) {
