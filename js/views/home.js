@@ -1,11 +1,9 @@
 // はじめの画面: 1枚作る／まとめて1枚（広告）の入口と、レギュラー・履歴の2つの欄
 
 import * as store from '../store.js';
-import { createPop, formatShotTime, moveToRegular, popFromRegular, popTitle, sortByUpdated } from '../model.js';
+import { createPop, formatShotTime, moveToRegular, popFromRegular, popLists, popTitle } from '../model.js';
 import { confirmBox, h, toast } from '../ui.js';
 import { onOutboxChange, outboxStatus } from '../sender.js';
-
-const RECENT_MAX = 30;
 
 function card(pop, { onOpen, actions, sub = '' }) {
   return h('div', { class: 'card' },
@@ -24,9 +22,8 @@ function isStandalone() {
 
 export async function showHome(root, app) {
   app.setTitle('青果ポップ', { back: false });
-  const pops = sortByUpdated(await store.listPops());
-  const regulars = pops.filter(p => p.isRegular);
-  const recent = pops.filter(p => !p.isRegular).slice(0, RECENT_MAX);
+  const pops = await store.listPops();
+  const { regulars, recent } = popLists(pops);   // 広告の画面にも同じものが並ぶ
 
   const openNew = async () => {
     const pop = createPop();

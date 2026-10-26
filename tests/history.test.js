@@ -2,8 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createPop, formatShotTime, historyOverflow, keptShotIds, moveToRegular, popFromRegular, popIdOfShot, popShotKey,
-  shotFileName, shotFromPop, shotsForAd, sortHistory,
+  createPop, formatShotTime, historyOverflow, keptShotIds, moveToRegular, popFromRegular, popIdOfShot, popLists, popShotKey,
+  RECENT_MAX, shotFileName, shotFromPop, slotsToPopIds, sortHistory,
 } from '../js/model.js';
 import { mergeShots, validateBackup, BACKUP_FORMAT } from '../js/backup.js';
 
@@ -21,22 +21,23 @@ test('画像を出したポップの id を印から読む（広告の画像は 
   assert.equal(popIdOfShot({}), null);
 });
 
-test('広告の画面: レギュラーの画像（レギュラーそのもの・そこから作った今日のポップ）が先、ほかの履歴が後', () => {
-  const reg = { ...createPop(), isRegular: true };
-  const today = popFromRegular(reg);
-  const plain = createPop();
-  const orphan = { ...createPop(), fromRegularId: 'deleted-regular' };
-  const shots = [
-    shot('plain', '2026-10-05T00:00:00Z', plain.id),
-    shot('today', '2026-10-04T00:00:00Z', today.id),
-    shot('regSelf', '2026-10-03T00:00:00Z', reg.id),
-    shot('orphan', '2026-10-06T00:00:00Z', orphan.id),
-    shot('gone', '2026-10-07T00:00:00Z', 'no-such-pop'),
-    { id: 'ad', createdAt: '2026-10-08T00:00:00Z', key: 'ad:x@1', kind: 'ad' },
-  ];
-  const g = shotsForAd(shots, [reg, today, plain, orphan]);
-  assert.deepEqual(g.regular.map(s => s.id), ['today', 'regSelf']);
-  assert.deepEqual(g.others.map(s => s.id), ['ad', 'gone', 'orphan', 'plain']);
+test('広告の画面とはじめの画面は同じポップを並べる: レギュラーと、それ以外の新しい順 RECENT_MAX 件', () => {
+  const at = n => new Date(Date.UTC(2026, 9, 1, 0, n)).toISOString();
+  const reg = { ...createPop(), isRegular: true, updatedAt: at(1) };
+  const today = { ...popFromRegular(reg), updatedAt: at(3) };
+  const plain = { ...createPop(), updatedAt: at(2) };
+  const many = Array.from({ length: RECENT_MAX }, (_, i) => ({ ...createPop(), updatedAt: at(100 + i) }));
+  const l = popLists([reg, today, plain, ...many]);
+  assert.deepEqual(l.regulars.map(p => p.id), [reg.id]);
+  assert.equal(l.recent.length, RECENT_MAX);
+  assert.equal(l.recent[0].id, many.at(-1).id, '新しい順');
+  assert.ok(!l.recent.some(p => p.id === plain.id), '古いものは上限で外れる');
+});
+
+test('以前の広告の作りかけ（枠に画像の id）は、そのポップの id へ読み替える', () => {
+  const pop = createPop();
+  const shots = [{ id: 's1', key: popShotKey(pop) }, { id: 'a1', key: 'ad:x@1' }];
+  assert.deepEqual(slotsToPopIds(['s1', 'a1', null, pop.id], shots), [pop.id, null, null, pop.id]);
 });
 
 test('上限を超えたら古い方から消すが、各レギュラーの最新の1枚は数えず残す', () => {
@@ -66,8 +67,7 @@ test('履歴のポップをレギュラーへ移す: 同じ id のまま（出�
   assert.equal(reg.isRegular, true);
   assert.equal(reg.fromRegularId, null);
   assert.equal(reg.updatedAt, now.toISOString());
-  const s = shot('s', '2026-10-25T00:00:00Z', pop.id);
-  assert.deepEqual(shotsForAd([s], [reg]).regular.map(x => x.id), ['s']);
+  assert.deepEqual(popLists([reg]).regulars.map(p => p.id), [pop.id], 'レギュラーの欄に移る');
 });
 
 test('同じポップを直さずに2回出しても同じ印＝履歴は1枚（日が変わっても。ポップに日付は入れない）。直せば別の印', () => {

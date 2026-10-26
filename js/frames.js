@@ -102,7 +102,7 @@ export function dropMissing(slots, existingIds) {
 export function adProblems(ad, frame) {
   if (!frame) return ['フレームを選んでください'];
   const empty = ad.slots.filter(s => !s).length;
-  return empty ? [`あと ${empty} 枚、下の一覧から画像を選んでください`] : [];
+  return empty ? [`あと ${empty} 枚、「② ポップを選ぶ」から選んでください`] : [];
 }
 
 /** 同じ組み合わせを2回残さないための印。日付を入れる日は、日が変われば別の画像になる。 */

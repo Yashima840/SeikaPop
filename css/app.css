@@ -82,6 +82,8 @@ h3 { font-size: 15px; margin: 0 0 10px; color: var(--green-dark); }
 .card.shot .card-main img { object-fit: contain; background: #e8e4d8; }
 .card-sub { display: block; padding: 0 10px 6px; font-size: 12px; color: var(--muted); }
 .card.picked { box-shadow: 0 0 0 4px var(--green); }
+.card.blocked img, .card.blocked .thumb-empty { opacity: 0.45; }
+.card.blocked .card-sub { color: #b26a00; font-weight: 700; }
 h4.group { font-size: 14px; margin: 12px 0 6px; color: var(--muted); }
 .pick-num {
   position: absolute; top: 6px; right: 6px; min-width: 36px; height: 36px; border-radius: 18px;

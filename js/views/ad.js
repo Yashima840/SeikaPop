@@ -1,13 +1,14 @@
-// 広告を作る画面: ①フレームを選ぶ ②作った画像（レギュラーの画像が先、ほかの履歴が後）からタップした順に枠へ入れる ③共有・保存。
-// 作りかけ（フレーム・選んだ画像・見出し）は自動で保存し、次に開いたときに続きから。
+// 広告を作る画面: ①フレームを選ぶ ②はじめの画面と同じポップ（レギュラー・履歴）からタップした順に枠へ入れる ③共有・保存。
+// 枠に入る画像は、選んだポップの今の中身からその場で作る（はじめの画面で直したものがそのまま入る）。
+// 作りかけ（フレーム・選んだポップ・見出し）は自動で保存し、次に開いたときに続きから。
 
 import * as store from '../store.js';
-import { formatShotTime, shotsForAd } from '../model.js';
+import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
   AD_TITLES, adProblems, createAd, dropMissing, fitSlots, FRAME_ORDER, FRAMES, shotFromAd, toggleShot,
 } from '../frames.js';
-import { blobToImage } from '../image.js';
-import { adToFile, ensureAdFonts, renderAd } from '../render.js';
+import { adjustedCopy, blobToImage } from '../image.js';
+import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../render.js';
 import { debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
 import { queueAd } from '../sender.js';
 
@@ -16,16 +17,30 @@ function chips(items, onPick, current) {
     h('button', { type: 'button', class: value === current ? 'chip on' : 'chip', onclick: () => onPick(value) }, label)));
 }
 
-/** 作った画像の1枚（badge＝右上の枠の番号、selected＝枠に入れている）。 */
-function shotCard(shot, { onOpen, badge = '', selected = false }) {
-  return h('div', { class: selected ? 'card shot picked' : 'card shot' },
-    h('button', { class: 'card-main', onclick: onOpen, 'aria-label': shot.title, 'aria-pressed': selected ? 'true' : 'false' },
-      h('img', { src: shot.thumb, alt: '', loading: 'lazy' }),
+/** ポップの1枚（badge＝右上の枠の番号、selected＝枠に入れている、blocked＝まだ出せない（確認待ち））。 */
+function popCard(pop, { onOpen, badge = '', selected = false, blocked = false }) {
+  return h('div', { class: ['card shot', selected ? 'picked' : '', blocked ? 'blocked' : ''].filter(Boolean).join(' ') },
+    h('button', { class: 'card-main', onclick: onOpen, 'aria-label': popTitle(pop), 'aria-pressed': selected ? 'true' : 'false' },
+      pop.thumb ? h('img', { src: pop.thumb, alt: '', loading: 'lazy' }) : h('div', { class: 'thumb-empty', text: '📷' }),
       badge ? h('span', { class: 'pick-num', text: badge }) : null,
-      h('span', { class: 'card-title', text: shot.title }),
-      h('span', { class: 'card-sub', text: formatShotTime(shot.createdAt) }),
+      h('span', { class: 'card-title', text: popTitle(pop) }),
+      h('span', { class: 'card-sub', text: blocked ? '⚠ 確認待ち' : formatShotTime(pop.updatedAt) }),
     ),
   );
+}
+
+/** ポップの今の中身を画像（Canvas）にする。写真の補正・仕上げは編集画面と同じ。 */
+async function popImage(pop, settings) {
+  let photo = null;
+  const blob = pop.photoId ? await store.getPhoto(pop.photoId) : null;
+  if (blob) {
+    photo = adjustedCopy(await blobToImage(blob), pop.adjust || {},
+      { sepia: !!pop.photoSepia, vintage: !!pop.photoVintage });
+  }
+  await ensureFonts(pop, settings);
+  const cv = document.createElement('canvas');
+  renderPop(cv, pop, photo, settings);
+  return cv;
 }
 
 function loadOverlay(src) {
@@ -40,32 +55,25 @@ function loadOverlay(src) {
 export async function showAd(root, app) {
   app.setTitle('広告を作る', { back: true });
   const settings = await store.getSettings();
-  const groups = shotsForAd(await store.listShots(), await store.listPops());
-  const shots = [...groups.regular, ...groups.others];
+  const groups = popLists(await store.listPops());
+  const listed = [...groups.regulars, ...groups.recent];
+  const popById = new Map(listed.map(p => [p.id, p]));
 
   let ad = { ...createAd(), ...await store.getAdDraft() };
   if (!FRAMES[ad.frameId]) ad.frameId = FRAME_ORDER[0];
   const frameOf = () => FRAMES[ad.frameId];
-  ad.slots = fitSlots(ad.slots, frameOf().slots.length).slots;
-  const missing = dropMissing(ad.slots, shots.map(s => s.id));
+  ad.slots = fitSlots(slotsToPopIds(ad.slots, await store.listShots()), frameOf().slots.length).slots;
+  const missing = dropMissing(ad.slots, listed.map(p => p.id));
   ad.slots = missing.slots;
-  if (missing.removed) toast(`履歴から削除された画像 ${missing.removed} 枚を枠から外しました`);
+  if (missing.removed) toast(`削除されたポップ ${missing.removed} 枚を枠から外しました`);
 
-  // ---- 画像（選んだ分だけ読み込む）とフレームの飾り ----
-  const images = new Map();       // shotId → 画像
+  // ---- 画像（選んだポップの分だけ、今の中身から作る）とフレームの飾り ----
+  const images = new Map();       // popId → 画像
   const overlays = new Map();     // frameId → { img } か { error }
   async function loadChosen() {
     for (const id of ad.slots) {
       if (!id || images.has(id)) continue;
-      const blob = await store.getShotImage(id);
-      if (!blob) {
-        ad.slots = ad.slots.map(s => (s === id ? null : s));
-        toast('画像の本体が見つからなかったので枠から外しました', { error: true });
-        save();
-        rebuild();
-        continue;
-      }
-      images.set(id, await blobToImage(blob));
+      images.set(id, await popImage(popById.get(id), settings));
     }
     const f = frameOf();
     if (f.overlay && !overlays.has(ad.frameId)) {
@@ -79,6 +87,11 @@ export async function showAd(root, app) {
   const overlayState = () => overlays.get(ad.frameId) || {};
   const problems = () => {
     const out = adProblems(ad, frameOf());
+    // 選んだ後に確認の印が外れた等（レギュラーから作ったポップは、価格・産地の確認が済むまで出さない）
+    for (const id of new Set(ad.slots.filter(Boolean))) {
+      const p = exportProblems(popById.get(id));
+      if (p.length) out.push(`「${popTitle(popById.get(id))}」: ${p.join('・')}`);
+    }
     if (overlayState().error) out.push(overlayState().error);
     return out;
   };
@@ -130,7 +143,10 @@ export async function showAd(root, app) {
     if (r.dropped) toast(`枠が足りないので、後から選んだ ${r.dropped} 枚を外しました`);
     changed();
   };
-  const pickShot = id => {
+  const pickPop = id => {
+    const p = exportProblems(popById.get(id));
+    // 枠に入っているものは外せるようにする（入れるときだけ止める）
+    if (p.length && !ad.slots.includes(id)) { toast(`まだ入れられません: ${p.join('・')}（はじめの画面から開いて直してください）`, { error: true }); return; }
     const r = toggleShot(ad.slots, id);
     if (r.full) { toast('枠がいっぱいです（外したい画像をもう一度タップしてください）'); return; }
     ad.slots = r.slots;
@@ -139,9 +155,12 @@ export async function showAd(root, app) {
 
   const groupGrid = (label, list) => (list.length ? [
     h('h4', { class: 'group', text: label }),
-    h('div', { class: 'grid' }, list.map(shot => {
-      const at = ad.slots.indexOf(shot.id);
-      return shotCard(shot, { onOpen: () => pickShot(shot.id), badge: at >= 0 ? String(at + 1) : '', selected: at >= 0 });
+    h('div', { class: 'grid' }, list.map(pop => {
+      const at = ad.slots.indexOf(pop.id);
+      return popCard(pop, {
+        onOpen: () => pickPop(pop.id), badge: at >= 0 ? String(at + 1) : '', selected: at >= 0,
+        blocked: exportProblems(pop).length > 0,
+      });
     })),
   ] : []);
 
@@ -153,13 +172,13 @@ export async function showAd(root, app) {
         chips(FRAME_ORDER.map(id => [id, `${FRAMES[id].label}（${FRAMES[id].note}）`]), pickFrame, ad.frameId),
       ),
       h('section', {},
-        h('h3', {}, `② 画像を選ぶ（${filled}/${n}）`),
-        h('p', { class: 'hint' }, 'タップした順に 1, 2, … の枠へ入ります。もう一度タップで外します。日付は画像を出した日です（価格はその日のもの）。'),
-        shots.length ? [
-          ...groupGrid('★ レギュラー', groups.regular),
-          ...groupGrid('履歴', groups.others),
+        h('h3', {}, `② ポップを選ぶ（${filled}/${n}）`),
+        h('p', { class: 'hint' }, 'タップした順に 1, 2, … の枠へ入ります。もう一度タップで外します。はじめの画面と同じポップが並び、今の中身（価格・写真）で入ります。'),
+        listed.length ? [
+          ...groupGrid('★ レギュラー', groups.regulars),
+          ...groupGrid('履歴', groups.recent),
         ] : h('p', { class: 'empty' },
-          'まだ作った画像がありません。ポップの編集画面で「共有する」「画像を保存」「履歴に残すだけ」を押すと、ここに並びます。'),
+          'まだポップがありません。はじめの画面の「＋ 1枚作る」で作ると、ここに並びます。'),
       ),
       h('section', {},
         h('h3', {}, '③ 文字'),
@@ -197,7 +216,8 @@ export async function showAd(root, app) {
     }
     // 共有画面を開く前に待つと共有を断る端末があるので、履歴へは並行して残す
     // （同じ組み合わせが既にあれば addShot が足さない）
-    const shot = shotFromAd(ad, frame, made);
+    // 同じ組み合わせかどうかは、ポップの中身の版（直した日時）まで見る（直したら別の広告として残す）
+    const shot = shotFromAd({ ...ad, slots: ad.slots.map(id => popShotKey(popById.get(id))) }, frame, made);
     const kept = store.addShot(shot, made.file)
       .catch(err => toast(`広告を履歴に残せませんでした: ${err.message}`, { error: true }));
     queueAd(shot, made.file).catch(err => toast(`事務所へ送る準備ができませんでした: ${err.message}`, { error: true }));

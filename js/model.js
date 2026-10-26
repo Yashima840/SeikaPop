@@ -233,6 +233,27 @@ export function sortByUpdated(pops) {
   return [...pops].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
 }
 
+// はじめの画面の「履歴」に並べる数
+export const RECENT_MAX = 30;
+
+/**
+ * はじめの画面と広告の画面に並べるポップ: レギュラーと履歴（レギュラー以外の新しい順 RECENT_MAX 件）。
+ * 2つの画面で同じものが並ぶように、ここだけで決める。
+ */
+export function popLists(pops) {
+  const sorted = sortByUpdated(pops);
+  return {
+    regulars: sorted.filter(p => p.isRegular),
+    recent: sorted.filter(p => !p.isRegular).slice(0, RECENT_MAX),
+  };
+}
+
+/** 以前の広告の作りかけは、枠に画像（履歴）の id を持っていた。そのポップの id へ読み替える（無ければそのまま）。 */
+export function slotsToPopIds(slots, shots) {
+  const byId = new Map(shots.map(s => [s.id, s]));
+  return slots.map(id => (id && byId.has(id) ? popIdOfShot(byId.get(id)) : id));
+}
+
 /** 端末の時刻での年月日（toISOString は UTC なので、日本の朝9時前は前日になってしまう）。 */
 export function localStamp(d, withTime = false) {
   const p = n => String(n).padStart(2, '0');
@@ -292,14 +313,6 @@ export function regularIdOfShot(shot, popsById) {
   if (!pop) return null;
   const regId = pop.isRegular ? pop.id : pop.fromRegularId;
   return regId && popsById.get(regId)?.isRegular ? regId : null;
-}
-
-/** 広告の画面の並び: レギュラーの画像（新しい順）→ ほかの履歴（新しい順）。 */
-export function shotsForAd(shots, pops) {
-  const byId = new Map(pops.map(p => [p.id, p]));
-  const regular = [], others = [];
-  for (const s of sortHistory(shots)) (regularIdOfShot(s, byId) ? regular : others).push(s);
-  return { regular, others };
 }
 
 /**
