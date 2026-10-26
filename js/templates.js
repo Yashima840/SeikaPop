@@ -92,13 +92,15 @@ function paintMixed(ctx, text, x, y, f, size, align, paint) {
 }
 
 /**
- * 「各」を (x, y)＝数字の左端・基準の線 に重ねる。数字と同じ色なので、halo（下地の色）で縁取って数字から浮かせる。
+ * 「各」を、x＝数字の左端 から「各」の大きさの半分だけ左・y＝基準の線 に重ねる。
+ * 数字と同じ色なので、halo（下地の色）で縁取って数字から浮かせる。
  */
 function paintEach(ctx, x, y, f, size, color, halo) {
   ctx.save();
   ctx.font = font(f, size);
   ctx.textAlign = 'left';
   ctx.lineJoin = 'round';
+  x -= size / 2;
   ctx.lineWidth = size * 0.3;
   ctx.strokeStyle = halo;
   ctx.strokeText('各', x, y);

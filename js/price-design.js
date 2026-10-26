@@ -60,12 +60,17 @@ function layeredText(ctx, text, t, align, scale = 1) {
   ctx.restore();
 }
 
-/** 「各」を、数字（右揃え）の左端の下に、「円」の8割の大きさで重ねる（縁取りも同じ割合で細くする）。 */
+/**
+ * 「各」を、数字（右揃え）の左端の下に、「円」の8割の大きさで重ねる。
+ * 書体・色・縁取りは「円」と同じ（数字の書体は和字を持たないことがあり、細い代わりの字になるため）。
+ * 置き場所は数字の左端から「各」の大きさの半分だけ左。
+ */
 function drawEach(ctx, price, design) {
   const t = design.num, text = TEXT_PARTS.num.text(price), scale = fitScale(ctx, text, t);
   ctx.font = `${t.weight} ${t.size * scale}px "${t.font}", "Hiragino Sans", sans-serif`;
-  const left = t.x - ctx.measureText(text).width;
-  layeredText(ctx, '各', { ...t, x: left }, 'left', design.yen.size * EACH_OF_YEN / t.size);
+  const size = design.yen.size * EACH_OF_YEN;
+  const left = t.x - ctx.measureText(text).width - size / 2;
+  layeredText(ctx, '各', { ...design.yen, x: left, y: t.y, slant: t.slant }, 'left', EACH_OF_YEN);
 }
 
 /** maxW に収まる倍率（収まるなら 1）。 */
