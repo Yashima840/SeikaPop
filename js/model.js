@@ -14,7 +14,7 @@ export const DEFAULT_ADJUST = Object.freeze({ brightness: 0, contrast: 0, satura
 // id・日時・レギュラーかどうか・確認済みかどうかは引き継がない。
 const CONTENT_FIELDS = [
   'name', 'catch', 'price', 'priceTax', 'unit', 'origin', 'badge',
-  'template', 'size', 'showDate', 'photoId', 'crop', 'adjust', 'thumb',
+  'template', 'size', 'photoId', 'crop', 'adjust', 'thumb',
 ];
 
 export function newId() {
@@ -36,7 +36,6 @@ export function createPop(now = new Date()) {
     badge: '本日のおすすめ',
     template: 'fresh',
     size: 'square',
-    showDate: true,
     photoId: null,
     crop: { ...DEFAULT_CROP },
     adjust: { ...DEFAULT_ADJUST },
@@ -211,16 +210,15 @@ export const HISTORY_MAX = 60;
 
 /**
  * 同じ中身を2回残さないための印（ポップは id と更新日時。広告は frames.js の adShotKey）。
- * 日付を入れるポップは、直していなくても日が変われば別の画像になるので日付も含める。
+ * ポップには日付を入れない（日付はフレームにだけ）ので、直さなければ日が変わっても同じ画像。
  */
-export function popShotKey(pop, now = new Date()) {
-  const day = pop.showDate ? `#${localStamp(now)}` : '';
-  return `pop:${pop.id}@${pop.updatedAt}${day}`;
+export function popShotKey(pop) {
+  return `pop:${pop.id}@${pop.updatedAt}`;
 }
 
 export function shotFromPop(pop, { w, h, thumb }, now = new Date()) {
   return {
-    id: newId(), kind: 'pop', title: popTitle(pop), key: popShotKey(pop, now),
+    id: newId(), kind: 'pop', title: popTitle(pop), key: popShotKey(pop),
     w, h, thumb, createdAt: now.toISOString(),
   };
 }

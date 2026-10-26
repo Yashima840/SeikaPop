@@ -145,16 +145,8 @@ const fresh = {
     ctx.fillRect(0, shadeTop, W, H - shadeTop);
 
     ctx.textBaseline = 'alphabetic';
-    let dateW = 0;
-    if (d.dateText) {
-      ctx.font = font(FONTS.round, 42 * u);
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#fff';
-      dateW = ctx.measureText(d.dateText).width + 40 * u;
-      withShadow(ctx, 10 * u, 'rgba(0,0,0,0.5)', () => ctx.fillText(d.dateText, W - 56 * u, 104 * u));
-    }
     if (pop.badge) {
-      const l = layoutLines(pop.badge, W - 112 * u - dateW - 64 * u, measurer(ctx, FONTS.impact),
+      const l = layoutLines(pop.badge, W - 112 * u - 64 * u, measurer(ctx, FONTS.impact),
         { maxSize: 58 * u, minSize: 34 * u });
       ctx.font = font(FONTS.impact, l.size);
       const tw = ctx.measureText(l.lines[0]).width;
@@ -290,16 +282,8 @@ const marche = {
     ctx.drawImage(kraftTexture(W, H), 0, 0);
     ctx.textBaseline = 'alphabetic';
 
-    let dateW = 0;
-    if (d.dateText) {
-      ctx.font = font(FONTS.marker, 44 * u);
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#4e2f12';
-      dateW = ctx.measureText(d.dateText).width + 30 * u;
-      ctx.fillText(d.dateText, W - 70 * u, 118 * u);
-    }
     if (pop.badge) {
-      const l = layoutLines(pop.badge, W - 140 * u - dateW, measurer(ctx, FONTS.marker), { maxSize: 86 * u, minSize: 44 * u });
+      const l = layoutLines(pop.badge, W - 140 * u, measurer(ctx, FONTS.marker), { maxSize: 86 * u, minSize: 44 * u });
       ctx.font = font(FONTS.marker, l.size);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#c62828';
@@ -429,16 +413,8 @@ const chirashi = {
     ctx.fillStyle = '#e60012';
     ctx.fillRect(0, 0, W, 156 * u);
     ctx.textBaseline = 'alphabetic';
-    let dateW = 0;
-    if (d.dateText) {
-      ctx.font = font(FONTS.round, 40 * u);
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#fff';
-      dateW = ctx.measureText(d.dateText).width + 30 * u;
-      ctx.fillText(d.dateText, W - 50 * u, 96 * u);
-    }
     if (pop.badge) {
-      const l = layoutLines(pop.badge, W - 100 * u - dateW, measurer(ctx, FONTS.impact), { maxSize: 96 * u, minSize: 44 * u });
+      const l = layoutLines(pop.badge, W - 100 * u, measurer(ctx, FONTS.impact), { maxSize: 96 * u, minSize: 44 * u });
       ctx.font = font(FONTS.impact, l.size);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#fff200';
@@ -524,16 +500,6 @@ const simple = {
     const box = this.photoBox(W, H);
     if (!drawPhoto(ctx, d.photo, box, pop.crop)) drawNoPhoto(ctx, box, ['#cfd8c4', '#8fa585'], d);
     ctx.textBaseline = 'alphabetic';
-    if (d.dateText) {
-      ctx.font = font(FONTS.roundM, 36 * u);
-      const tw = ctx.measureText(d.dateText).width;
-      roundRectPath(ctx, 44 * u, 44 * u, tw + 48 * u, 62 * u, 31 * u);
-      ctx.fillStyle = 'rgba(255,255,255,0.88)';
-      ctx.fill();
-      ctx.fillStyle = '#3a4a34';
-      ctx.textAlign = 'left';
-      ctx.fillText(d.dateText, 68 * u, 88 * u);
-    }
 
     const left = 64 * u, maxW = W - 128 * u;
     let y = box.y + box.h + 70 * u;
@@ -624,16 +590,8 @@ const bold = {
     ctx.strokeRect(14 * u, 14 * u, W - 28 * u, H - 28 * u);
     ctx.textBaseline = 'alphabetic';
 
-    let dateW = 0;
-    if (d.dateText) {
-      ctx.font = font(FONTS.impact, 46 * u);
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#1a1a1a';
-      dateW = ctx.measureText(d.dateText).width + 30 * u;
-      ctx.fillText(d.dateText, W - 44 * u, 88 * u);
-    }
     if (pop.badge) {
-      const l = layoutLines(pop.badge, W - 140 * u - dateW, measurer(ctx, FONTS.impact), { maxSize: 54 * u, minSize: 32 * u });
+      const l = layoutLines(pop.badge, W - 140 * u, measurer(ctx, FONTS.impact), { maxSize: 54 * u, minSize: 32 * u });
       ctx.font = font(FONTS.impact, l.size);
       const tw = ctx.measureText(l.lines[0]).width;
       roundRectPath(ctx, 40 * u, 32 * u, tw + 48 * u, 74 * u, 10 * u);

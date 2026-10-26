@@ -65,7 +65,7 @@ export async function ensureFonts(pop, settings, onFail) {
 }
 
 /** pop を canvas へ描く。canvas の大きさは出力サイズ（1080幅）に合わせる。 */
-export function renderPop(canvas, pop, photo, settings, { preview = false, now = new Date() } = {}) {
+export function renderPop(canvas, pop, photo, settings, { preview = false } = {}) {
   const s = sizeOf(pop);
   if (canvas.width !== s.w) canvas.width = s.w;
   if (canvas.height !== s.h) canvas.height = s.h;
@@ -76,7 +76,6 @@ export function renderPop(canvas, pop, photo, settings, { preview = false, now =
     W: s.w, H: s.h, u: s.w / 1080, pop, photo, preview,
     price: priceTexts(pop, settings),   // 価格が無ければ null
     shopName: String(settings?.shopName || '').trim(),
-    dateText: pop.showDate ? formatDate(now) : '',
   });
   ctx.restore();
 }

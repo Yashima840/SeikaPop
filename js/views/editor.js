@@ -242,9 +242,6 @@ export async function showEditor(root, app, popId) {
           v => { pop.priceTax = v; showPriceNote(); changed({ rebuild: true }); }, isTaxExcluded(pop) ? 'excl' : 'incl'),
         chips(UNITS.map(u => [u, u]), v => setText('unit', unitInput, v), pop.unit),
         field('産地', originInput),
-        h('label', { class: 'check' },
-          h('input', { type: 'checkbox', checked: pop.showDate, onchange: ev => { pop.showDate = ev.target.checked; changed(); } }),
-          '今日の日付を入れる'),
       ),
     );
   }

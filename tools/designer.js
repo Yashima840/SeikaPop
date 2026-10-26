@@ -174,7 +174,7 @@ function popFor(size, priceIndex, nameIndex = view.name) {
   const [, price, priceTax] = PRICES[priceIndex];
   return {
     ...createPop(), ...NAMES[nameIndex][1], catch: '甘くてやわらか',
-    badge: '本日のおすすめ', template: 'bold', size, price, priceTax, showDate: true,
+    badge: '本日のおすすめ', template: 'bold', size, price, priceTax,
   };
 }
 const currentPop = () => popFor(view.size, view.price);

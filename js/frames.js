@@ -10,6 +10,12 @@
 import { localStamp, newId } from './model.js';
 
 export const FRAMES = {
+  // 特売が1品だけの日用。ポップ1枚に日付を入れないので、日付はこの下の帯で入れる
+  single: {
+    label: '1枚', note: '縦 4:5', w: 1080, h: 1350,
+    bg: '#fffaf0', header: { h: 200, bg: '#2f7d43', color: '#ffffff' }, footer: { h: 110, color: '#22603a' },
+    slots: [{ x: 36, y: 224, w: 1008, h: 992 }],
+  },
   pair: {
     label: '2枚 横並び', note: '正方形', w: 1080, h: 1080,
     bg: '#fff8e8', header: { h: 220, bg: '#2f7d43', color: '#ffffff' }, footer: { h: 110, color: '#22603a' },
@@ -37,7 +43,7 @@ export const FRAMES = {
     slots: [{ x: 178, y: 284, w: 724, h: 724 }, { x: 178, y: 1032, w: 724, h: 724 }],
   },
 };
-export const FRAME_ORDER = ['pair', 'grid4', 'trio', 'stack2'];
+export const FRAME_ORDER = ['single', 'pair', 'stack2', 'trio', 'grid4'];  // 枚数の少ない順
 
 export const AD_TITLES = ['本日のおすすめ', '今週の特売', '朝採れ入荷', '旬の味覚', '数量限定'];
 

@@ -70,18 +70,10 @@ test('履歴のポップをレギュラーへ移す: 同じ id のまま（出�
   assert.deepEqual(shotsForAd([s], [reg]).regular.map(x => x.id), ['s']);
 });
 
-test('同じポップを直さずに2回出しても同じ印＝履歴は1枚。直せば別の印', () => {
-  const now = new Date(2026, 9, 22, 7, 0);
-  const pop = { ...createPop(), showDate: false };
-  assert.equal(popShotKey(pop, now), popShotKey(pop, now));
-  assert.notEqual(popShotKey(pop, now), popShotKey({ ...pop, updatedAt: '2026-10-22T00:00:01Z' }, now));
-});
-
-test('日付を入れるポップは、直していなくても日が変われば別の画像として残す（日付が違うため）', () => {
-  const pop = { ...createPop(), showDate: true };
-  assert.notEqual(popShotKey(pop, new Date(2026, 9, 22, 7)), popShotKey(pop, new Date(2026, 9, 23, 7)));
-  const noDate = { ...pop, showDate: false };
-  assert.equal(popShotKey(noDate, new Date(2026, 9, 22, 7)), popShotKey(noDate, new Date(2026, 9, 23, 7)));
+test('同じポップを直さずに2回出しても同じ印＝履歴は1枚（日が変わっても。ポップに日付は入れない）。直せば別の印', () => {
+  const pop = createPop();
+  assert.equal(popShotKey(pop), popShotKey({ ...pop }));
+  assert.notEqual(popShotKey(pop), popShotKey({ ...pop, updatedAt: '2026-10-22T00:00:01Z' }));
 });
 
 test('ポップから作る履歴は、商品名を題名に持つ', () => {
