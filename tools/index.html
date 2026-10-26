@@ -29,6 +29,15 @@
   a.go:hover { background: var(--dark); }
   .note { display: block; color: var(--muted); font-size: 13px; }
   .note.local { color: var(--red); }
+  section.wide { grid-column: 1 / -1; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 6px 24px; }
+  h3 { margin: 6px 0 4px; font-size: 14px; }
+  a.ext { color: var(--green); font-weight: 700; }
+  a.ext::after { content: " ↗"; font-weight: 400; }
+  details { margin-top: 4px; font-size: 13px; }
+  details input { width: 100%; font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px; margin: 4px 0; }
+  details button { font: inherit; padding: 3px 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; }
+  .err { color: var(--red); font-size: 13px; }
   code { background: #f0eee6; padding: 0 4px; border-radius: 4px; font-size: 13px; }
 </style>
 </head>
@@ -91,13 +100,90 @@
         <li><a class="go" href="collector/link.html">設定用リンクを作る</a>
           <span class="note">画面の ① で合言葉を作る。<b>この画面は閉じずに</b>次へ（閉じると合言葉が消える）</span></li>
         <li>Google の画面で受け取り口を作る（<code>tools/collector/README.md</code> の 1〜3）
+          <a class="ext" data-ext="script" href="https://script.google.com/home" target="_blank" rel="noopener">Apps Script を開く</a>
           <span class="note">合言葉は PASSCODE に貼る。<code>Code.gs</code> には書かない</span></li>
         <li>設定用リンクの画面に戻り、② に受け取り口の URL を貼る → できたリンクを店員さんへ LINE などで送る</li>
       </ol>
     </section>
+
+    <section class="wide">
+      <h2>メンテナンス（外のサイトを開く）</h2>
+      <p class="when">公開版の更新・受け取り口の直し・集まったポップの確認に。新しいタブで開きます</p>
+      <div class="groups">
+        <div>
+          <h3>GitHub（アプリの公開）</h3>
+          <ol class="plain">
+            <li><a class="ext" href="https://yashima840.github.io/SeikaPop/" target="_blank" rel="noopener">公開版のアプリ</a>
+              <span class="note">店員さんのスマホが開いているもの。直したものが届いているか見る</span></li>
+            <li><a class="ext" href="https://github.com/Yashima840/SeikaPop" target="_blank" rel="noopener">リポジトリ</a>
+              <span class="note">上げたコミット・ファイルの中身</span></li>
+            <li><a class="ext" href="https://github.com/Yashima840/SeikaPop/actions" target="_blank" rel="noopener">公開の進み具合（Actions）</a>
+              <span class="note">上げてから公開版に届くまで1〜2分。赤い × は公開の失敗</span></li>
+            <li><a class="ext" href="https://github.com/Yashima840/SeikaPop/settings/pages" target="_blank" rel="noopener">公開の設定（Pages）</a></li>
+          </ol>
+        </div>
+        <div>
+          <h3>Google（事務所へ集める）</h3>
+          <p class="note">法人の Google アカウントで開くこと（別のアカウントで開いたら右上で切り替える）</p>
+          <ol class="plain">
+            <li><a class="ext" data-ext="script" href="https://script.google.com/home" target="_blank" rel="noopener">受け取り口（Apps Script）</a>
+              <span class="note">Code.gs の差し替え・合言葉（PASSCODE）・デプロイの管理</span>
+              <details data-reg="script">
+                <summary>直接開く先を登録する（この PC のブラウザだけに覚える）</summary>
+                プロジェクトを開いたときのアドレス（<code>https://script.google.com/…/edit</code>）を貼る
+                <input type="url" spellcheck="false" placeholder="https://script.google.com/home/projects/…/edit">
+                <button type="button" data-save>登録</button> <button type="button" data-clear>登録を消す</button>
+                <div class="err" data-msg></div>
+              </details></li>
+            <li><a class="ext" data-ext="drive" href="https://drive.google.com/drive/search?q=%E9%9D%92%E6%9E%9C%E3%83%9D%E3%83%83%E3%83%97%20%E6%88%90%E6%9E%9C%E7%89%A9" target="_blank" rel="noopener">集まったポップ（ドライブ）</a>
+              <span class="note">「青果ポップ 成果物」フォルダ。未登録のあいだはドライブで探す</span>
+              <details data-reg="drive">
+                <summary>直接開く先を登録する（この PC のブラウザだけに覚える）</summary>
+                フォルダを開いたときのアドレス（<code>https://drive.google.com/drive/…/folders/…</code>）を貼る
+                <input type="url" spellcheck="false" placeholder="https://drive.google.com/drive/folders/…">
+                <button type="button" data-save>登録</button> <button type="button" data-clear>登録を消す</button>
+                <div class="err" data-msg></div>
+              </details></li>
+          </ol>
+        </div>
+      </div>
+    </section>
   </div>
 </main>
 <script>
+  // Apps Script・ドライブの直接の行き先は法人ごとに違い、リポジトリ（公開）には書かないので、この PC のブラウザに覚える
+  const EXT = {
+    script: { prefix: 'https://script.google.com/', what: 'Apps Script のアドレス（https://script.google.com/ で始まる）' },
+    drive: { prefix: 'https://drive.google.com/', what: 'ドライブのアドレス（https://drive.google.com/ で始まる）' },
+  };
+  const extKey = name => `seikapop.hub.ext.${name}`;
+  for (const [name, spec] of Object.entries(EXT)) {
+    const links = document.querySelectorAll(`[data-ext="${name}"]`);
+    for (const a of links) a.dataset.fallback = a.href;
+    const box = document.querySelector(`[data-reg="${name}"]`);
+    const input = box.querySelector('input'), msg = box.querySelector('[data-msg]');
+    const apply = url => {
+      for (const a of links) a.href = url || a.dataset.fallback;
+      input.value = url || '';
+    };
+    let saved = '';
+    try { saved = localStorage.getItem(extKey(name)) || ''; } catch { /* 読めない設定（シークレット等）は未登録として扱う */ }
+    apply(saved);
+    box.querySelector('[data-save]').addEventListener('click', () => {
+      const url = input.value.trim();
+      if (!url.startsWith(spec.prefix)) { msg.textContent = `登録できません: ${spec.what}を貼ってください`; return; }
+      try { localStorage.setItem(extKey(name), url); } catch (err) { msg.textContent = `覚えられませんでした（${err.message}）`; return; }
+      apply(url);
+      msg.textContent = '';
+      box.open = false;
+    });
+    box.querySelector('[data-clear]').addEventListener('click', () => {
+      try { localStorage.removeItem(extKey(name)); } catch (err) { msg.textContent = `消せませんでした（${err.message}）`; return; }
+      apply('');
+      msg.textContent = '';
+    });
+  }
+
   // file:// で開くと、他の画面の部品（js/*.js）を読めず何も動かない
   if (location.protocol === 'file:') document.getElementById('fileWarn').style.display = 'block';
   // デザインの保存は tools/serve.py が受ける。この PC で start.bat から開いたときは注意を出さない
