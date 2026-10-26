@@ -1,9 +1,10 @@
-// はじめの画面: 新しく作る／作った画像・広告へ／レギュラーから作る／最近作ったもの
+// はじめの画面: 1枚作る／まとめて1枚（広告）の入口・レギュラー・作った画像・作りかけのポップ
 
 import * as store from '../store.js';
 import { createPop, popFromRegular, popTitle, sortByUpdated } from '../model.js';
 import { confirmBox, h, toast } from '../ui.js';
 import { onOutboxChange, outboxStatus } from '../sender.js';
+import { historySection } from './history.js';
 
 const RECENT_MAX = 30;
 
@@ -62,10 +63,17 @@ export async function showHome(root, app) {
   showOutbox();
   const dispose = onOutboxChange(() => { showOutbox(); });
 
+  const history = await historySection(app);
+
+  // 開いてすぐ「1枚を作るのか・何枚かを1枚にまとめるのか」を選べるように、入口を2つ並べる
   root.replaceChildren(
     outboxNote,
-    h('button', { class: 'primary big', onclick: openNew }, '＋ 新しく作る'),
-    h('button', { class: 'big', onclick: () => app.go('#/history') }, '🖼 作った画像・🧩 広告を作る'),
+    h('div', { class: 'start-row' },
+      h('button', { class: 'primary start', onclick: openNew },
+        h('span', { class: 'start-icon', text: '＋' }), h('b', { text: '1枚作る' }), h('small', { text: '写真からポップを1枚' })),
+      h('button', { class: 'start', onclick: () => app.go('#/ad') },
+        h('span', { class: 'start-icon', text: '🧩' }), h('b', { text: 'まとめて1枚' }), h('small', { text: '作った画像をフレームに並べる（広告）' })),
+    ),
     isStandalone() ? null : h('p', { class: 'hint' },
       'ホーム画面に追加すると、アプリのように開けて保存も消えにくくなります',
       h('br'), '（iPhone: 共有ボタン →「ホーム画面に追加」／Android: メニュー →「ホーム画面に追加」）'),
@@ -79,7 +87,8 @@ export async function showHome(root, app) {
         ],
       })))
       : h('p', { class: 'empty' }, '良いポップができたら、編集画面の「★ レギュラーに登録」で、ここから何度でも呼び出せます。'),
-    h('h2', {}, '最近作ったもの'),
+    ...history,
+    h('h2', {}, '✏ 作りかけ・最近のポップ', h('small', { text: ' タップで続きを直す' })),
     recent.length
       ? h('div', { class: 'grid' }, recent.map(p => card(p, {
         onOpen: () => app.go(`#/edit/${p.id}`),

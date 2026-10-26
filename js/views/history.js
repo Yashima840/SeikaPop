@@ -1,4 +1,4 @@
-// 作った画像の履歴: ピン（最上段に固定・消えない）・出し直し・削除。ここから広告を作る。
+// 作った画像の履歴: ピン（最上段に固定・消えない）・出し直し・削除。はじめの画面の一区画として出す。
 
 import * as store from '../store.js';
 import { formatShotTime, HISTORY_MAX, historyOverflow, setPinned, shotFileName, sortHistory } from '../model.js';
@@ -39,8 +39,8 @@ async function reshare(shot) {
   }
 }
 
-export async function showHistory(root, app) {
-  app.setTitle('作った画像', { back: true });
+/** はじめの画面に置く「作った画像」の区画（見出し・説明・一覧）。 */
+export async function historySection(app) {
   const shots = sortHistory(await store.listShots());
 
   const togglePin = async shot => {
@@ -68,10 +68,10 @@ export async function showHistory(root, app) {
     app.refresh();
   };
 
-  root.replaceChildren(
-    h('button', { class: 'primary big', onclick: () => app.go('#/ad') }, '🧩 フレームで広告を作る'),
+  return [
+    h('h2', {}, '🖼 作った画像', h('small', { text: ' タップでもう一度共有' })),
     h('p', { class: 'hint' },
-      `画像をタップすると、もう一度共有できます。📌 ピンを付けた画像は一番上に固定され、自動では消えません。ピンの無い画像は新しい${HISTORY_MAX}枚まで残ります。`),
+      `📌 ピンを付けた画像は一番上に固定され、自動では消えません。ピンの無い画像は新しい${HISTORY_MAX}枚まで残ります。`),
     shots.length
       ? h('div', { class: 'grid' }, shots.map(shot => shotCard(shot, {
         onOpen: () => reshare(shot),
@@ -83,6 +83,5 @@ export async function showHistory(root, app) {
       })))
       : h('p', { class: 'empty' },
         'まだありません。ポップの編集画面で「共有する」「画像を保存」「履歴に残すだけ」を押すと、ここに並びます。'),
-  );
-  return null;
+  ];
 }

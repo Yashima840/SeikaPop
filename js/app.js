@@ -1,4 +1,5 @@
-// 起動と画面の切り替え（#/ ・ #/edit/<id> ・ #/settings ・ #/history ・ #/ad ・ #/setup?…）
+// 起動と画面の切り替え（#/ ・ #/edit/<id> ・ #/settings ・ #/ad ・ #/setup?…）
+// 作った画像の一覧は、はじめの画面に入った（前の #/history は、はじめの画面として開く）
 
 import { installCrashHandlers, recordError } from './crash.js';
 import { toast } from './ui.js';
@@ -6,7 +7,6 @@ import { showHome } from './views/home.js';
 import { showEditor } from './views/editor.js';
 import { showSettings, showSetup } from './views/settings.js';
 import { flushOutbox } from './sender.js';
-import { showHistory } from './views/history.js';
 import { showAd } from './views/ad.js';
 
 const report = installCrashHandlers(msg => toast(msg, { error: true }));
@@ -46,7 +46,6 @@ function route() {
       if (m) leaveCurrent = await showEditor(root, app, decodeURIComponent(m[1]));
       else if (hash === '#/settings') leaveCurrent = await showSettings(root, app);
       else if (hash.startsWith('#/setup?')) leaveCurrent = await showSetup(root, app, location.href);
-      else if (hash === '#/history') leaveCurrent = await showHistory(root, app);
       else if (hash === '#/ad') leaveCurrent = await showAd(root, app);
       else leaveCurrent = await showHome(root, app);
     } catch (err) {

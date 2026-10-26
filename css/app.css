@@ -46,6 +46,12 @@ button.primary { background: var(--green); border-color: var(--green-dark); colo
 button.danger { color: var(--red); }
 button.ok.danger { background: var(--red); color: #fff; border-color: var(--red); }
 button.big { width: 100%; min-height: 56px; font-size: 18px; margin: 4px 0 8px; }
+/* はじめの画面の入口2つ（1枚作る／まとめて1枚） */
+.start-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 8px; }
+button.start { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 112px; padding: 12px 8px; }
+button.start .start-icon { font-size: 28px; line-height: 1.1; }
+button.start b { font-size: 18px; }
+button.start small { font-size: 12px; opacity: 0.85; line-height: 1.35; }
 button.mini { min-height: 34px; padding: 4px 10px; font-size: 13px; }
 /* はじめの画面の「事務所へ送れていないもの」のお知らせ */
 button.notice {

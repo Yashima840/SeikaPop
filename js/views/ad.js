@@ -27,7 +27,7 @@ function loadOverlay(src) {
 }
 
 export async function showAd(root, app) {
-  app.setTitle('広告を作る', { back: '#/history' });
+  app.setTitle('広告を作る', { back: true });
   const settings = await store.getSettings();
   const shots = sortHistory(await store.listShots());
 
