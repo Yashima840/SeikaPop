@@ -36,16 +36,42 @@ export function roundRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-/** 写真を枠いっぱいに敷く。写真が無ければ false（呼び出し側が代わりを描く）。 */
-function drawPhoto(ctx, photo, box, crop, radius = 0) {
+/**
+ * 写真を枠いっぱいに敷く。写真が無ければ false（呼び出し側が代わりを描く）。
+ * fade＝外周フェードの色（[r, g, b]。写真のまわりの下地の色）。null ならぼかさない。
+ */
+function drawPhoto(ctx, photo, box, crop, radius = 0, fade = null) {
   if (!photo) return false;
   const s = coverSource(photo.width, photo.height, box.w, box.h, crop);
   ctx.save();
   if (radius) { roundRectPath(ctx, box.x, box.y, box.w, box.h, radius); ctx.clip(); }
   ctx.drawImage(photo, s.sx, s.sy, s.sw, s.sh, box.x, box.y, box.w, box.h);
+  if (fade) drawFade(ctx, box, fade);
   ctx.restore();
   return true;
 }
+
+/**
+ * 枠の外周を色へぼかす。枠の形に合わせた楕円で、中央はそのまま・辺の近くから色が乗り、角はほぼ下地の色になる。
+ * 楕円は「半径1の円」を枠の半分の幅・高さへ引き伸ばして作る（1＝辺の中央、√2＝角）。
+ */
+function drawFade(ctx, box, [r, g, b]) {
+  const inner = 0.78, outer = Math.SQRT2;
+  const at = v => (v - inner) / (outer - inner);
+  const grad = ctx.createRadialGradient(0, 0, inner, 0, 0, outer);
+  grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+  grad.addColorStop(at(1), `rgba(${r},${g},${b},0.6)`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},1)`);
+  ctx.save();
+  ctx.translate(box.x + box.w / 2, box.y + box.h / 2);
+  ctx.scale(box.w / 2, box.h / 2);
+  ctx.fillStyle = grad;
+  ctx.fillRect(-1, -1, 2, 2);
+  ctx.restore();
+}
+
+/** ポップで外周フェードを選んでいれば、その色。 */
+const fadeOf = (pop, rgb) => (pop.photoFade ? rgb : null);
 
 function drawNoPhoto(ctx, box, colors, d, radius = 0) {
   ctx.save();
@@ -171,7 +197,8 @@ const fresh = {
   draw(ctx, d) {
     const { W, H, u, pop } = d;
     const box = this.photoBox(W, H);
-    if (!drawPhoto(ctx, d.photo, box, pop.crop)) drawNoPhoto(ctx, box, ['#5fa052', '#24613a'], d);
+    // 全面に敷く写真なので、外周フェードは暗い色へ（下の文字が読めるように）
+    if (!drawPhoto(ctx, d.photo, box, pop.crop, 0, fadeOf(pop, [20, 16, 10]))) drawNoPhoto(ctx, box, ['#5fa052', '#24613a'], d);
 
     let g = ctx.createLinearGradient(0, 0, 0, 260 * u);
     g.addColorStop(0, 'rgba(0,0,0,0.45)');
@@ -352,7 +379,7 @@ const marche = {
       ctx.fillStyle = '#fbf8f1';
       ctx.fillRect(box.x - 20 * u, box.y - 20 * u, box.w + 40 * u, box.h + 40 * u);
     });
-    if (!drawPhoto(ctx, d.photo, box, pop.crop, PHOTO_RADIUS * u)) drawNoPhoto(ctx, box, ['#8fbf6a', '#4d8a3c'], d, PHOTO_RADIUS * u);
+    if (!drawPhoto(ctx, d.photo, box, pop.crop, PHOTO_RADIUS * u, fadeOf(pop, [251, 248, 241]))) drawNoPhoto(ctx, box, ['#8fbf6a', '#4d8a3c'], d, PHOTO_RADIUS * u);
     ctx.fillStyle = 'rgba(255,248,220,0.6)';
     for (const [tx, rot] of [[box.x + 30 * u, -0.5], [box.x + box.w - 150 * u, 0.45]]) {
       ctx.save();
@@ -429,7 +456,7 @@ const simple = {
     ctx.fillStyle = '#f7f3ea';
     ctx.fillRect(0, 0, W, H);
     const box = this.photoBox(W, H);
-    if (!drawPhoto(ctx, d.photo, box, pop.crop)) drawNoPhoto(ctx, box, ['#cfd8c4', '#8fa585'], d);
+    if (!drawPhoto(ctx, d.photo, box, pop.crop, 0, fadeOf(pop, [247, 243, 234]))) drawNoPhoto(ctx, box, ['#cfd8c4', '#8fa585'], d);
     ctx.textBaseline = 'alphabetic';
 
     const left = 64 * u, maxW = W - 128 * u;
@@ -525,7 +552,7 @@ const bold = {
     ctx.textBaseline = 'alphabetic';
 
     const box = this.photoBox(W, H, pop, canvasMeasure(ctx));
-    if (!drawPhoto(ctx, d.photo, box, pop.crop, PHOTO_RADIUS * u)) drawNoPhoto(ctx, box, ['#ffcf6b', '#f08a24'], d, PHOTO_RADIUS * u);
+    if (!drawPhoto(ctx, d.photo, box, pop.crop, PHOTO_RADIUS * u, fadeOf(pop, [255, 255, 255]))) drawNoPhoto(ctx, box, ['#ffcf6b', '#f08a24'], d, PHOTO_RADIUS * u);
     // 産地・商品名・数量と単位（置き場所と見た目は label-design.js）
     drawLabels(ctx, box, pop, u, labelDesignFor(pop));
     // 金額キャッチは写真の右下に乗せる。写真の丸めた角からはみ出さないよう、同じ形で切る（中身は price-design.js）

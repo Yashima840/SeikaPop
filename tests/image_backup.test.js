@@ -1,7 +1,7 @@
 // 写真の補正と、バックアップ・写真の後片付けの判定
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { adjustPixels, autoAdjust } from '../js/image.js';
+import { adjustPixels, autoAdjust, sepiaPixels } from '../js/image.js';
 import { BACKUP_FORMAT, mergePops, unreferencedPhotoIds, validateBackup } from '../js/backup.js';
 
 const px = (...rgb) => new Uint8ClampedArray(rgb.flatMap(c => [...c, 255]));
@@ -25,6 +25,17 @@ test('鮮やかさ -100 で灰色になる', () => {
   adjustPixels(d, { saturation: -100 });
   assert.equal(d[0], d[1]);
   assert.equal(d[1], d[2]);
+});
+
+test('セピアは少しだけ寄せる（灰色は茶色がかる・赤>緑>青）。0 なら変えない。透明度は触らない', () => {
+  const d = px([128, 128, 128]);
+  sepiaPixels(d);
+  assert.ok(d[0] > d[1] && d[1] > d[2], `茶色がかる: ${[...d]}`);
+  assert.ok(d[2] > 80, '完全なセピアにはしない');
+  assert.equal(d[3], 255);
+  const e = px([10, 200, 30]);
+  sepiaPixels(e, 0);
+  assert.deepEqual([...e], [10, 200, 30, 255]);
 });
 
 test('暗くくすんだ写真は明るく・鮮やかに寄せる。明るい写真は暗くしすぎない', () => {

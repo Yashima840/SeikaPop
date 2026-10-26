@@ -1,5 +1,5 @@
 // 写真の読み込みと色の補正。
-// adjustPixels / autoAdjust は画素の配列だけを扱う純粋な関数（テスト対象）。
+// adjustPixels / sepiaPixels / autoAdjust は画素の配列だけを扱う純粋な関数（テスト対象）。
 // それ以外はブラウザでだけ動く（呼ばれたときに document を使う）。
 
 import { clamp } from './layout.js';
@@ -22,6 +22,21 @@ export function adjustPixels(data, adj) {
     data[i] = r;          // Uint8ClampedArray なので 0〜255 に自動で収まる
     data[i + 1] = g;
     data[i + 2] = bl;
+  }
+  return data;
+}
+
+// セピアの強さ（0＝元のまま、1＝完全なセピア）。「少し」なので半分弱だけ寄せる
+export const SEPIA_AMOUNT = 0.4;
+
+/** 画素を少しセピア色へ寄せる（amount の割合だけ混ぜる）。 */
+export function sepiaPixels(data, amount = SEPIA_AMOUNT) {
+  if (!amount) return data;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    data[i] = r + (Math.min(255, 0.393 * r + 0.769 * g + 0.189 * b) - r) * amount;
+    data[i + 1] = g + (Math.min(255, 0.349 * r + 0.686 * g + 0.168 * b) - g) * amount;
+    data[i + 2] = b + (Math.min(255, 0.272 * r + 0.534 * g + 0.131 * b) - b) * amount;
   }
   return data;
 }
@@ -104,9 +119,9 @@ export function autoAdjustFor(img) {
   return autoAdjust(ctx.getImageData(0, 0, cv.width, cv.height).data);
 }
 
-/** 補正を当てた写真（Canvas）を作る。補正が無ければ元の画像をそのまま返す。 */
-export function adjustedCopy(img, adj) {
-  const noop = !adj.brightness && !adj.contrast && !adj.saturation && !adj.warmth;
+/** 補正（と sepia＝セピア）を当てた写真（Canvas）を作る。どちらも無ければ元の画像をそのまま返す。 */
+export function adjustedCopy(img, adj, { sepia = false } = {}) {
+  const noop = !adj.brightness && !adj.contrast && !adj.saturation && !adj.warmth && !sepia;
   if (noop) return img;
   const cv = document.createElement('canvas');
   cv.width = img.naturalWidth || img.width;
@@ -115,6 +130,7 @@ export function adjustedCopy(img, adj) {
   ctx.drawImage(img, 0, 0);
   const data = ctx.getImageData(0, 0, cv.width, cv.height);
   adjustPixels(data.data, adj);
+  if (sepia) sepiaPixels(data.data);
   ctx.putImageData(data, 0, 0);
   return cv;
 }

@@ -37,7 +37,7 @@ export async function showEditor(root, app, popId) {
     if (blob) photoImg = await blobToImage(blob);
     else toast('写真が見つかりませんでした（撮り直してください）', { error: true });
   }
-  const refreshAdjusted = () => { photoShown = photoImg ? adjustedCopy(photoImg, pop.adjust) : null; };
+  const refreshAdjusted = () => { photoShown = photoImg ? adjustedCopy(photoImg, pop.adjust, { sepia: !!pop.photoSepia }) : null; };
   refreshAdjusted();
 
   // ---- プレビュー ----
@@ -207,6 +207,15 @@ export async function showEditor(root, app, popId) {
           h('button', { class: 'primary', onclick: () => pickPhoto(true) }, '📷 撮影'),
           h('button', { onclick: () => pickPhoto(false) }, '🖼 写真から選ぶ'),
         ),
+        // お洒落に見せる仕上げ（補正の「自動補正」「補正なし」では外れない）
+        photoImg ? h('div', { class: 'row effects' },
+          h('label', { class: 'each-box' },
+            h('input', { type: 'checkbox', checked: !!pop.photoFade, onchange: ev => { pop.photoFade = ev.target.checked; changed(); } }),
+            'まわりをぼかす'),
+          h('label', { class: 'each-box' },
+            h('input', { type: 'checkbox', checked: !!pop.photoSepia, onchange: ev => { pop.photoSepia = ev.target.checked; refreshAdjusted(); changed(); } }),
+            'セピア調'),
+        ) : null,
         photoImg ? h('details', { class: 'adjust' },
           h('summary', {}, '写真の調整（位置は上の見本を指で動かす・2本指で拡大）'),
           field('拡大', zoomInput),
