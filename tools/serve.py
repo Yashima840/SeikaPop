@@ -2,6 +2,7 @@
 
     python tools/serve.py          # 起動してブラウザで作業場（PC の作業の入口）を開く
     python tools/serve.py --lan    # 同じ Wi-Fi のスマホからも見られるようにする
+    pythonw tools/serve.py         # 黒い窓を出さずに動かす（start.bat はこれ。止めるのは作業場の「終了」）
 
 python -m http.server と違い、ブラウザにファイルを控えさせない（Cache-Control: no-store）。
 控えられると、JS やデザインを直してもブラウザが古いまま表示し、直したのに変わらないように見える。
@@ -40,6 +41,9 @@ BACKUP_DIR = ROOT / "tools" / "designer-backup"
 SAVE_PATH = "/api/catch-design"
 LABEL_JS = ROOT / "js" / "label-design.js"
 LABEL_SAVE_PATH = "/api/label-design"
+STOP_PATH = "/api/stop"
+# 窓が無いとき（pythonw）の出力先。保存の控えや失敗の理由を後から読めるように
+LOG = ROOT / "tools" / "serve.log"
 LABEL_HEADER = """// 「金額主役」の 産地・商品名・数量と単位 の3行のデザイン（tools/designer.html の「保存」で書き換わる。手で直してもよい）
 // 座標は、写真の枠の左下を (0, 0) とした「デザイン単位」（幅1080pxの画像で 1 単位＝1px）。右・下がプラス。
 // x, y は1行目の文字の基準点（align の位置・文字の下端の線）。
@@ -138,13 +142,19 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         savers = {SAVE_PATH: save_catch_design, LABEL_SAVE_PATH: save_label_design}
-        if self.path not in savers:
+        if self.path not in savers and self.path != STOP_PATH:
             self.send_json(404, {"ok": False, "message": "ありません"})
             return
-        # 書き換えはこの PC のブラウザから、編集画面を通したときだけ。
+        # 書き換え・終了はこの PC のブラウザから、編集画面・作業場を通したときだけ。
         # 独自の見出しを必須にすると、他のサイトからは（ブラウザの決まりで）送れない
-        if self.client_address[0] not in ("127.0.0.1", "::1") or self.headers.get("X-SeikaPop") != "designer":
-            self.send_json(403, {"ok": False, "message": "この PC の編集画面からだけ保存できます"})
+        if self.client_address[0] not in ("127.0.0.1", "::1") or self.headers.get("X-SeikaPop") not in ("designer", "hub"):
+            self.send_json(403, {"ok": False, "message": "この PC の編集画面・作業場からだけ操作できます"})
+            return
+        if self.path == STOP_PATH:
+            self.send_json(200, {"ok": True})
+            print("作業場の「終了」で止めました。", flush=True)
+            # serve_forever の中から shutdown を呼ぶと待ち合って止まらないので、別のスレッドで呼ぶ
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
             return
         length = int(self.headers.get("Content-Length") or 0)
         if not 0 < length <= MAX_BODY:
@@ -193,6 +203,10 @@ def main():
     ap.add_argument("--lan", action="store_true", help="同じ Wi-Fi のスマホからも見られるようにする")
     ap.add_argument("--no-browser", action="store_true", help="ブラウザを開かない")
     args = ap.parse_args()
+    if sys.stdout is None:
+        # pythonw で窓無しに起動した。print やアクセスの記録（標準エラー）の行き先が無いと落ちるので、ファイルへ
+        sys.stdout = sys.stderr = open(LOG, "w", encoding="utf-8", buffering=1)  # 止まるまで開いておく
+        print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S 窓無しで起動"))
 
     base = f"http://127.0.0.1:{PORT}"
     handler = functools.partial(NoCacheHandler, directory=str(ROOT))
@@ -206,7 +220,8 @@ def main():
             webbrowser.open(base + HUB)
         return 1
 
-    print("SeikaPop を起動しました。この窓を閉じると止まります。\n")
+    how = "この窓を閉じると止まります" if sys.stdout.isatty() else "作業場の「終了」で止まります"
+    print(f"SeikaPop を起動しました。{how}。\n")
     for label, path in PAGES.items():
         print(f"  {label:<16} {base}{path}")
     if args.lan:
