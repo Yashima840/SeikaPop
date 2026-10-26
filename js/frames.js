@@ -51,7 +51,7 @@ export const CUSTOM_ID = 'custom';
 export const CUSTOM_ROWS = 6;
 export const CUSTOM_MAX_PER_ROW = 3;
 const CUSTOM = {
-  w: 1080, minH: 1080, maxH: 1920, margin: 36, gap: 24,
+  w: 1080, minH: 1080, maxH: 1920, margin: 36, gap: 6,   // 写真どうしの隙間はほぼ無し
   bg: '#fdf6e3', header: { h: 200, bg: '#2f7d43', color: '#ffffff' }, footer: { h: 110, color: '#22603a' },
 };
 
@@ -69,7 +69,8 @@ export const usedRows = rows => normalizeRows(rows).filter(n => n > 0);
 /**
  * 行ごとの枚数からフレームを作る。使う行が無ければ null。
  * 各行は横幅いっぱいに n 枚を並べ、枠は正方形（ポップは正方形が多い）。
- * 縦は中身に合わせて伸ばし（縦長 9:16 まで）、入り切らないときは行の高さを同じ割合で縮める。
+ * 縦は中身に合わせて伸ばし（縦長 9:16 まで）、入り切らないときは全部の枠を同じ割合で縮めて左右の真ん中へ寄せる
+ * （正方形のまま縮めるので、写真どうしの間に余白が出ない）。
  */
 export function customFrame(rows) {
   const used = usedRows(rows);
@@ -83,15 +84,20 @@ export function customFrame(rows) {
   const H = Math.round(Math.min(CUSTOM.maxH, Math.max(CUSTOM.minH, top + natural + bottomBand)));
   const avail = H - top - bottomBand;
   const k = natural > avail ? (avail - gaps) / (natural - gaps) : 1;
-  const rowH = cellW.map(cw => cw * k);
-  const contentH = rowH.reduce((a, b) => a + b, 0) + gaps;
+  const size = cellW.map(cw => cw * k);   // 枠の一辺（正方形）
+  const contentH = size.reduce((a, b) => a + b, 0) + gaps;
   let y = top + (avail - contentH) / 2;   // 中身が少ないときは上下の真ん中へ
   const slots = [];
   used.forEach((n, r) => {
+    const rowW = n * size[r] + (n - 1) * gap;
+    const x0 = m + (innerW - rowW) / 2;
+    // 端は丸めてから幅を決める（行ごとに 1px ずれて見えないように）
+    const y0 = Math.round(y), y1 = Math.floor(y + size[r]);
     for (let i = 0; i < n; i++) {
-      slots.push({ x: Math.round(m + i * (cellW[r] + gap)), y: Math.round(y), w: Math.floor(cellW[r]), h: Math.floor(rowH[r]) });
+      const xa = Math.round(x0 + i * (size[r] + gap)), xb = Math.floor(x0 + i * (size[r] + gap) + size[r]);
+      slots.push({ x: xa, y: y0, w: xb - xa, h: y1 - y0 });
     }
-    y += rowH[r] + gap;
+    y += size[r] + gap;
   });
   const count = slots.length;
   return {
