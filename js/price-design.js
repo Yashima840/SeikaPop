@@ -95,9 +95,15 @@ const TEXT_PARTS = {
   tax: { text: price => (price.incl ? `(税込${price.incl}円)` : '(税込)'), align: 'center', fit: true },
 };
 
+/**
+ * ギザギザを描く。写真の枠の右・下の端に掛かる頂点（端から縁取りの幅ほどの内側まで）は枠の外へ押し出す。
+ * 端の手前で止まると、そこに白い縁取りと写真の細い筋が残り、写真の丸めた角から黒い四角がのぞくため。
+ */
 function drawBurst(ctx, b) {
+  const edge = b.lineWidth + 4;
+  const out = v => (v > -edge ? Math.max(v, edge) : v);
   ctx.beginPath();
-  b.points.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  b.points.map(([x, y]) => [out(x), out(y)]).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
   ctx.closePath();
   ctx.fillStyle = b.fill;
   ctx.fill();

@@ -166,7 +166,8 @@ function renderAll() {
       const area = drawCell(ctx, W, H, cs.twoLines);
       const cap = document.createElement('figcaption');
       try {
-        ctx.save();
+        ctx.save();   // アプリと同じく、金額キャッチも写真の丸めた角で切る
+        ctx.beginPath(); ctx.roundRect(area.x, area.y, area.w, area.h, 24 * W / 1080); ctx.clip();
         drawPrice(ctx, area, cs.price, W / 1080);
         ctx.restore();
         const n = overflowPixels(W, H, area, cs.price);
