@@ -1,8 +1,8 @@
 // 写真の読み込みと色の補正。
-// adjustPixels / sepiaPixels / autoAdjust は画素の配列だけを扱う純粋な関数（テスト対象）。
+// adjustPixels / vintagePixels / sepiaPixels / autoAdjust は画素の配列だけを扱う純粋な関数（テスト対象）。
 // それ以外はブラウザでだけ動く（呼ばれたときに document を使う）。
 
-import { clamp } from './layout.js';
+import { clamp, seededRandom } from './layout.js';
 
 /** 明るさ・コントラスト・鮮やかさ・色味（いずれも -100〜100）を画素へ当てる。 */
 export function adjustPixels(data, adj) {
@@ -37,6 +37,43 @@ export function sepiaPixels(data, amount = SEPIA_AMOUNT) {
     data[i] = r + (Math.min(255, 0.393 * r + 0.769 * g + 0.189 * b) - r) * amount;
     data[i + 1] = g + (Math.min(255, 0.349 * r + 0.686 * g + 0.168 * b) - g) * amount;
     data[i + 2] = b + (Math.min(255, 0.272 * r + 0.534 * g + 0.131 * b) - b) * amount;
+  }
+  return data;
+}
+
+/**
+ * 「ヴィンテージ（フィルム風）」の補正値（基準 0、-100〜100）。フェードの項目は無いので黒レベルとシャドウで出す。
+ * 周辺減光（vignette）だけは写真を枠に収めた後で描く（templates.js。切り取った後の四隅を暗くするため）。
+ */
+export const VINTAGE = Object.freeze({
+  contrast: -25, blacks: 20, shadows: 25, highlights: -15, saturation: -20, warmth: 20, grain: 40, vignette: -15,
+});
+
+/** 画素をフィルム風にする。粒子は毎回同じ模様（描き直すたびにざらつきが変わらないように）。 */
+export function vintagePixels(data, v = VINTAGE) {
+  const c = 1 + v.contrast / 100;
+  const lift = v.blacks * 1.0;          // 黒の底上げ（+20 で 0 → 20）
+  const sh = v.shadows * 0.6, hi = v.highlights * 0.6;
+  const s = 1 + v.saturation / 100;
+  const w = v.warmth * 0.3;
+  const grain = v.grain * 0.3;          // ±この幅で明るさを揺らす
+  const rnd = seededRandom(19700101);
+  const tone = x => {
+    let y = (x - 128) * c + 128;
+    y = lift + y * (1 - lift / 255);
+    const t = Math.min(1, Math.max(0, y / 255));
+    return y + sh * (1 - t) * (1 - t) + hi * t * t;
+  };
+  for (let i = 0; i < data.length; i += 4) {
+    let r = tone(data[i]), g = tone(data[i + 1]), b = tone(data[i + 2]);
+    const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+    const n = (rnd() - 0.5) * 2 * grain;
+    r = gray + (r - gray) * s + w + n;
+    g = gray + (g - gray) * s + w * 0.3 + n;
+    b = gray + (b - gray) * s - w + n;
+    data[i] = r;          // Uint8ClampedArray なので 0〜255 に自動で収まる
+    data[i + 1] = g;
+    data[i + 2] = b;
   }
   return data;
 }
@@ -119,9 +156,9 @@ export function autoAdjustFor(img) {
   return autoAdjust(ctx.getImageData(0, 0, cv.width, cv.height).data);
 }
 
-/** 補正（と sepia＝セピア）を当てた写真（Canvas）を作る。どちらも無ければ元の画像をそのまま返す。 */
-export function adjustedCopy(img, adj, { sepia = false } = {}) {
-  const noop = !adj.brightness && !adj.contrast && !adj.saturation && !adj.warmth && !sepia;
+/** 補正（と vintage＝フィルム風・sepia＝セピア）を当てた写真（Canvas）を作る。何も無ければ元の画像をそのまま返す。 */
+export function adjustedCopy(img, adj, { sepia = false, vintage = false } = {}) {
+  const noop = !adj.brightness && !adj.contrast && !adj.saturation && !adj.warmth && !sepia && !vintage;
   if (noop) return img;
   const cv = document.createElement('canvas');
   cv.width = img.naturalWidth || img.width;
@@ -130,6 +167,7 @@ export function adjustedCopy(img, adj, { sepia = false } = {}) {
   ctx.drawImage(img, 0, 0);
   const data = ctx.getImageData(0, 0, cv.width, cv.height);
   adjustPixels(data.data, adj);
+  if (vintage) vintagePixels(data.data);
   if (sepia) sepiaPixels(data.data);
   ctx.putImageData(data, 0, 0);
   return cv;

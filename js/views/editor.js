@@ -37,7 +37,7 @@ export async function showEditor(root, app, popId) {
     if (blob) photoImg = await blobToImage(blob);
     else toast('写真が見つかりませんでした（撮り直してください）', { error: true });
   }
-  const refreshAdjusted = () => { photoShown = photoImg ? adjustedCopy(photoImg, pop.adjust, { sepia: !!pop.photoSepia }) : null; };
+  const refreshAdjusted = () => { photoShown = photoImg ? adjustedCopy(photoImg, pop.adjust, { sepia: !!pop.photoSepia, vintage: !!pop.photoVintage }) : null; };
   refreshAdjusted();
 
   // ---- プレビュー ----
@@ -215,6 +215,9 @@ export async function showEditor(root, app, popId) {
           h('label', { class: 'each-box' },
             h('input', { type: 'checkbox', checked: !!pop.photoSepia, onchange: ev => { pop.photoSepia = ev.target.checked; refreshAdjusted(); changed(); } }),
             'セピア調'),
+          h('label', { class: 'each-box' },
+            h('input', { type: 'checkbox', checked: !!pop.photoVintage, onchange: ev => { pop.photoVintage = ev.target.checked; refreshAdjusted(); changed(); } }),
+            'フィルム風'),
         ) : null,
         photoImg ? h('details', { class: 'adjust' },
           h('summary', {}, '写真の調整（位置は上の見本を指で動かす・2本指で拡大）'),

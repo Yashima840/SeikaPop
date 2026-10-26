@@ -14,7 +14,7 @@ export const DEFAULT_ADJUST = Object.freeze({ brightness: 0, contrast: 0, satura
 // id・日時・レギュラーかどうか・確認済みかどうかは引き継がない。
 const CONTENT_FIELDS = [
   'name', 'catch', 'price', 'priceTax', 'unit', 'origin', 'badge',
-  'template', 'size', 'photoId', 'crop', 'adjust', 'thumb', 'each', 'nameFont', 'photoFade', 'photoSepia',
+  'template', 'size', 'photoId', 'crop', 'adjust', 'thumb', 'each', 'nameFont', 'photoFade', 'photoSepia', 'photoVintage',
 ];
 
 export function newId() {
@@ -43,6 +43,7 @@ export function createPop(now = new Date()) {
     adjust: { ...DEFAULT_ADJUST },
     photoFade: false,     // 写真のまわりを下地の色へぼかす（外周フェード）
     photoSepia: false,    // 写真を少しセピア色に寄せる
+    photoVintage: false,  // 写真をフィルム風に（image.js の VINTAGE）
     thumb: null,
     isRegular: false,
     fromRegularId: null,  // レギュラーから作ったときの元

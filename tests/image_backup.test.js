@@ -1,7 +1,7 @@
 // 写真の補正と、バックアップ・写真の後片付けの判定
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { adjustPixels, autoAdjust, sepiaPixels } from '../js/image.js';
+import { adjustPixels, autoAdjust, sepiaPixels, vintagePixels } from '../js/image.js';
 import { BACKUP_FORMAT, mergePops, unreferencedPhotoIds, validateBackup } from '../js/backup.js';
 
 const px = (...rgb) => new Uint8ClampedArray(rgb.flatMap(c => [...c, 255]));
@@ -36,6 +36,16 @@ test('セピアは少しだけ寄せる（灰色は茶色がかる・赤>緑>青
   const e = px([10, 200, 30]);
   sepiaPixels(e, 0);
   assert.deepEqual([...e], [10, 200, 30, 255]);
+});
+
+test('フィルム風: 黒は浮かせ、白は抑え、色は少し褪せて暖色へ。粒子は毎回同じ。透明度は触らない', () => {
+  const run = () => vintagePixels(px([0, 0, 0], [255, 255, 255], [200, 60, 60], [128, 128, 128]));
+  const d = run();
+  assert.ok(d[0] > 15 && d[1] > 15, `黒が浮く: ${d[0]}`);
+  assert.ok(d[4] < 240, `白を抑える: ${d[4]}`);
+  assert.ok(d[8] - d[9] < 140, '彩度を下げる（元の差は 140）');
+  assert.deepEqual([...run()], [...d], '粒子の模様は同じ');
+  assert.equal(d[3], 255);
 });
 
 test('暗くくすんだ写真は明るく・鮮やかに寄せる。明るい写真は暗くしすぎない', () => {
