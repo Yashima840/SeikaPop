@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>補正の確認（端末ごとの違い）</title>
+<style>
+  :root { --green: #2f7d43; --line: #dcd8cc; --muted: #6b726b; --red: #c62828; color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f4f2ec; color: #1f2a22; font: 15px/1.6 system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 12px 16px 40px; }
+  a.back { color: var(--green); font-weight: 700; text-decoration: none; }
+  h1 { font-size: 19px; margin: 8px 0 4px; }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 6px 4px; border-top: 1px dashed var(--line); vertical-align: middle; }
+  tr:first-child td { border-top: none; }
+  td.code { font: 700 20px/1.2 ui-monospace, "SFMono-Regular", Consolas, monospace; letter-spacing: 0.05em; text-align: right; white-space: nowrap; }
+  canvas { width: 100%; max-width: 256px; image-rendering: pixelated; border-radius: 6px; display: block; }
+  .ok { color: var(--green); font-weight: 700; }
+  .ng { color: var(--red); font-weight: 700; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .grid figure { margin: 0; font-size: 13px; }
+  ul { margin: 4px 0; padding-left: 1.2em; }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="./">← 作業場</a>
+  <h1>補正の確認（PC・iPhone・Android で比べる）</h1>
+  <p class="note">同じ見本の絵に、アプリと同じ補正をかけた結果の「指紋」（8文字）を出します。
+    PC・iPhone・Android でこのページを開き、指紋が全部同じなら、補正の計算はどの端末でも同じです（違って見えるのは画面のせい）。</p>
+
+  <div class="card">
+    <table id="codes"></table>
+    <p id="canvasCheck" class="note"></p>
+    <p class="note" id="device"></p>
+  </div>
+
+  <div class="card">
+    <b>補正をかけた見本（画面ごとの見え方を比べる用）</b>
+    <div class="grid" id="previews"></div>
+  </div>
+
+  <div class="card">
+    <b>指紋が同じなのに違って見えるとき（画面の設定）</b>
+    <ul class="note">
+      <li>iPhone の <b>Night Shift</b>・<b>True Tone</b>（設定 →画面表示と明るさ）は画面全体を暖色に寄せます。セピア・フィルム風が濃く見えやすい</li>
+      <li>Android の <b>目の保護・ブルーライトカット・色の鮮やかさ</b>（ディスプレイの設定）も同じく色を変えます</li>
+      <li>画面の明るさ（自動調整）でも、暗い部分の見え方が大きく変わります</li>
+      <li>比べるときは、<b>同じ画像ファイル</b>（PC で作った画像を LINE などで送ったもの）を並べて見ると、画面の違いだけが分かります</li>
+    </ul>
+  </div>
+</main>
+<script type="module">
+  import { adjustPixels, sepiaPixels, vintagePixels } from '../js/image.js';
+
+  // 見本の絵: 描画（Canvas の線や塗り）は端末で少しずつ違うので使わず、画素を計算だけで作る
+  const W = 256, H = 160;
+  function testPixels() {
+    const d = new Uint8ClampedArray(W * H * 4);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4, t = x / (W - 1);
+        let r, g, b;
+        if (y < 40) { r = g = b = t * 255; }                       // 黒〜白
+        else if (y < 80) {                                           // 色相の帯
+          const h = t * 6, k = h - Math.floor(h), s = Math.floor(h) % 6;
+          [r, g, b] = [[1, k, 0], [1 - k, 1, 0], [0, 1, k], [0, 1 - k, 1], [k, 0, 1], [1, 0, 1 - k]][s].map(v => v * 230 + 12);
+        } else {                                                     // 青果の色: トマト・葉・バナナ・なす・肌・影
+          const p = [[214, 48, 38], [72, 140, 52], [238, 206, 72], [86, 46, 92], [226, 182, 150], [30, 28, 24]][Math.min(5, Math.floor(t * 6))];
+          const shade = 0.55 + 0.45 * (1 - (y - 80) / 80);
+          [r, g, b] = p.map(v => v * shade);
+        }
+        d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255;
+      }
+    }
+    return d;
+  }
+
+  /** 画素の指紋（FNV-1a 32bit）。1画素でも違えば変わる。 */
+  function fingerprint(d) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < d.length; i++) { h ^= d[i]; h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(16).toUpperCase().padStart(8, '0');
+  }
+
+  // アプリの編集画面と同じ順（補正 → フィルム風 → セピア）
+  const AUTO = { brightness: 12, contrast: 8, saturation: 25, warmth: 5 };   // 自動補正でよく出る値の例
+  const CASES = [
+    ['補正なし', d => d],
+    ['自動補正の例', d => adjustPixels(d, AUTO)],
+    ['セピア調', d => sepiaPixels(adjustPixels(d, AUTO))],
+    ['フィルム風', d => vintagePixels(adjustPixels(d, AUTO))],
+    ['フィルム風＋セピア', d => sepiaPixels(vintagePixels(adjustPixels(d, AUTO)))],
+  ];
+
+  const codes = document.getElementById('codes'), previews = document.getElementById('previews');
+  for (const [label, fn] of CASES) {
+    const d = fn(testPixels());
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${label}</td><td class="code">${fingerprint(d)}</td>`;
+    codes.append(tr);
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    cv.getContext('2d').putImageData(new ImageData(d, W, H), 0, 0);
+    const fig = document.createElement('figure');
+    fig.append(cv, label);
+    previews.append(fig);
+  }
+
+  // Canvas に置いて読み戻しても画素が変わらないか（端末が色を勝手に変換していないか）
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const src = testPixels();
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(src), W, H), 0, 0);
+  const same = fingerprint(ctx.getImageData(0, 0, W, H).data) === fingerprint(src);
+  document.getElementById('canvasCheck').innerHTML = same
+    ? '<span class="ok">✓ Canvas の読み書きで色は変わりません</span>'
+    : '<span class="ng">⚠ この端末は Canvas の読み書きで色が変わります（補正の結果が他の端末と違うことがあります）</span>';
+  document.getElementById('device').textContent = `この端末: ${navigator.userAgent}`;
+</script>
+</body>
+</html>
