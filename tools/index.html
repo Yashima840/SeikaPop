@@ -124,7 +124,14 @@
         </div>
         <div>
           <h3>Google（事務所へ集める）</h3>
-          <p class="note">法人の Google アカウントで開くこと（別のアカウントで開いたら右上で切り替える）</p>
+          <p class="note" id="accountNote">法人のアカウントを登録するまでは、Chrome のいつものアカウント（個人用のことが多い）で開きます</p>
+          <details data-reg="account">
+            <summary>法人の Google アカウントを登録する（この PC のブラウザだけに覚える）</summary>
+            登録すると、下の2つはそのアカウントで開く（この Chrome でそのアカウントにもログインしておくこと）
+            <input type="email" spellcheck="false" placeholder="you@会社のドメイン">
+            <button type="button" data-save>登録</button> <button type="button" data-clear>登録を消す</button>
+            <div class="err" data-msg></div>
+          </details>
           <ol class="plain">
             <li><a class="ext" data-ext="script" href="https://script.google.com/home" target="_blank" rel="noopener">受け取り口（Apps Script）</a>
               <span class="note">Code.gs の差し替え・合言葉（PASSCODE）・デプロイの管理</span>
@@ -151,38 +158,56 @@
   </div>
 </main>
 <script>
-  // Apps Script・ドライブの直接の行き先は法人ごとに違い、リポジトリ（公開）には書かないので、この PC のブラウザに覚える
-  const EXT = {
-    script: { prefix: 'https://script.google.com/', what: 'Apps Script のアドレス（https://script.google.com/ で始まる）' },
-    drive: { prefix: 'https://drive.google.com/', what: 'ドライブのアドレス（https://drive.google.com/ で始まる）' },
+  // Apps Script・ドライブの直接の行き先と法人のアカウントは店ごとに違い、リポジトリ（公開）には書かないので、この PC のブラウザに覚える
+  const REG = {
+    script: { ok: v => v.startsWith('https://script.google.com/'), what: 'Apps Script のアドレス（https://script.google.com/ で始まる）' },
+    drive: { ok: v => v.startsWith('https://drive.google.com/'), what: 'ドライブのアドレス（https://drive.google.com/ で始まる）' },
+    account: { ok: v => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), what: 'メールアドレス' },
   };
-  const extKey = name => `seikapop.hub.ext.${name}`;
-  for (const [name, spec] of Object.entries(EXT)) {
-    const links = document.querySelectorAll(`[data-ext="${name}"]`);
-    for (const a of links) a.dataset.fallback = a.href;
+  const regKey = name => `seikapop.hub.ext.${name}`;
+  const saved = {};
+  for (const name of Object.keys(REG)) {
+    try { saved[name] = localStorage.getItem(regKey(name)) || ''; } catch { saved[name] = ''; /* 読めない設定（シークレット等）は未登録として扱う */ }
+  }
+  for (const a of document.querySelectorAll('[data-ext]')) a.dataset.fallback = a.href;
+
+  /** Google は authuser=メールアドレス でそのアカウントを選ぶ。/u/0/ のような番号はログインの順で変わるので外す。 */
+  function withAccount(url) {
+    if (!saved.account) return url;
+    const u = new URL(url);
+    u.pathname = u.pathname.replace(/\/u\/\d+(?=\/)/, '');
+    u.searchParams.set('authuser', saved.account);
+    return u.href;
+  }
+  function refresh() {
+    for (const a of document.querySelectorAll('[data-ext]')) a.href = withAccount(saved[a.dataset.ext] || a.dataset.fallback);
+    document.getElementById('accountNote').textContent = saved.account
+      ? `${saved.account} で開きます`
+      : '法人のアカウントを登録するまでは、Chrome のいつものアカウント（個人用のことが多い）で開きます';
+  }
+
+  for (const [name, spec] of Object.entries(REG)) {
     const box = document.querySelector(`[data-reg="${name}"]`);
     const input = box.querySelector('input'), msg = box.querySelector('[data-msg]');
-    const apply = url => {
-      for (const a of links) a.href = url || a.dataset.fallback;
-      input.value = url || '';
-    };
-    let saved = '';
-    try { saved = localStorage.getItem(extKey(name)) || ''; } catch { /* 読めない設定（シークレット等）は未登録として扱う */ }
-    apply(saved);
+    input.value = saved[name];
     box.querySelector('[data-save]').addEventListener('click', () => {
-      const url = input.value.trim();
-      if (!url.startsWith(spec.prefix)) { msg.textContent = `登録できません: ${spec.what}を貼ってください`; return; }
-      try { localStorage.setItem(extKey(name), url); } catch (err) { msg.textContent = `覚えられませんでした（${err.message}）`; return; }
-      apply(url);
+      const value = input.value.trim();
+      if (!spec.ok(value)) { msg.textContent = `登録できません: ${spec.what}を入れてください`; return; }
+      try { localStorage.setItem(regKey(name), value); } catch (err) { msg.textContent = `覚えられませんでした（${err.message}）`; return; }
+      saved[name] = value;
+      refresh();
       msg.textContent = '';
       box.open = false;
     });
     box.querySelector('[data-clear]').addEventListener('click', () => {
-      try { localStorage.removeItem(extKey(name)); } catch (err) { msg.textContent = `消せませんでした（${err.message}）`; return; }
-      apply('');
+      try { localStorage.removeItem(regKey(name)); } catch (err) { msg.textContent = `消せませんでした（${err.message}）`; return; }
+      saved[name] = '';
+      input.value = '';
+      refresh();
       msg.textContent = '';
     });
   }
+  refresh();
 
   // file:// で開くと、他の画面の部品（js/*.js）を読めず何も動かない
   if (location.protocol === 'file:') document.getElementById('fileWarn').style.display = 'block';
