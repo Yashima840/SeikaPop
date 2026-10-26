@@ -42,6 +42,7 @@ SAVE_PATH = "/api/catch-design"
 LABEL_JS = ROOT / "js" / "label-design.js"
 LABEL_SAVE_PATH = "/api/label-design"
 STOP_PATH = "/api/stop"
+INFO_PATH = "/api/info"
 # 窓が無いとき（pythonw）の出力先。保存の控えや失敗の理由を後から読めるように
 LOG = ROOT / "tools" / "serve.log"
 LABEL_HEADER = """// 「金額主役」の 産地・商品名・数量と単位 の3行のデザイン（tools/designer.html の「保存」で書き換わる。手で直してもよい）
@@ -140,6 +141,14 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_GET(self):
+        # 作業場が「スマホで開くアドレス」を出すのに使う（同じ Wi-Fi 向けに起動したか・この PC のアドレス）
+        if self.path == INFO_PATH:
+            lan = self.server.lan
+            self.send_json(200, {"lan": lan, "ip": lan_address() if lan else None, "port": PORT})
+            return
+        super().do_GET()
+
     def do_POST(self):
         savers = {SAVE_PATH: save_catch_design, LABEL_SAVE_PATH: save_label_design}
         if self.path not in savers and self.path != STOP_PATH:
@@ -181,6 +190,7 @@ class Server(http.server.ThreadingHTTPServer):
     # 標準は同じポートの使い回しを許す設定で、Windows ではこれだと2回起動したときに
     # 同じポートを二重に取れてしまい、どちらが応えるか分からなくなる。使用中なら失敗させる
     allow_reuse_address = False
+    lan = False   # 同じ Wi-Fi のスマホにも見せているか（--lan）
 
     def server_bind(self):
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):  # Windows だけにある
@@ -212,6 +222,7 @@ def main():
     handler = functools.partial(NoCacheHandler, directory=str(ROOT))
     try:
         server = Server(("0.0.0.0" if args.lan else "127.0.0.1", PORT), handler)
+        server.lan = args.lan
     except OSError:
         # もう起動している（前の窓が開いたまま）なら、ブラウザだけ開く
         print(f"ポート {PORT} は使用中です。起動済みとみなしてブラウザだけ開きます。")

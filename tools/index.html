@@ -39,6 +39,15 @@
   details button { font: inherit; padding: 3px 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; }
   .err { color: var(--red); font-size: 13px; }
   code { background: #f0eee6; padding: 0 4px; border-radius: 4px; font-size: 13px; }
+  .urls { display: grid; gap: 10px; }
+  .url-row { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; }
+  .url-row > b { grid-column: 1 / -1; font-size: 14px; }
+  .url-row > .note { grid-column: 1 / -1; }
+  .url-row code.url { grid-column: 1 / 3; font-size: 16px; padding: 6px 10px; user-select: all; overflow-wrap: anywhere; }
+  .url-row code.url:empty { display: none; }
+  .url-row button { font: inherit; font-weight: 700; padding: 6px 16px; border-radius: 6px; border: none; background: var(--green); color: #fff; cursor: pointer; min-width: 110px; }
+  .url-row button:hover { background: var(--dark); }
+  .url-row button.done { background: #5b8a45; }
 </style>
 </head>
 <body>
@@ -57,6 +66,25 @@
     <code>start.bat</code> をダブルクリックして開き直してください。</p>
 
   <div class="grid">
+    <section class="wide">
+      <h2>スマホで開くアドレス（iPhone・Android）</h2>
+      <p class="when">店員さんへ LINE などで送るとき・自分のスマホで開くときに。「コピー」を押して貼り付ける</p>
+      <div class="urls">
+        <div class="url-row">
+          <b>公開版（ふだん使うのはこちら）</b>
+          <code class="url" data-url>https://yashima840.github.io/SeikaPop/</code>
+          <button type="button" data-copy>コピー</button>
+          <span class="note">どこからでも開ける。共有ボタン・ホーム画面への追加も使える（Safari・Chrome の「ホーム画面に追加」でアプリのように使える）</span>
+        </div>
+        <div class="url-row">
+          <b>この PC のお試し版（同じ Wi-Fi のときだけ）</b>
+          <code class="url" data-url id="lanUrl"></code>
+          <button type="button" data-copy id="lanCopy" hidden>コピー</button>
+          <span class="note" id="lanNote">直したものを公開する前にスマホで見るとき。<code>start-lan.bat</code> で起動するとここにアドレスが出ます</span>
+        </div>
+      </div>
+    </section>
+
     <section>
       <h2>ポップを作る・試す</h2>
       <p class="when">売り場でスマホから使うアプリ本体。PCでは動きの確認に</p>
@@ -65,7 +93,7 @@
       <ol class="plain">
         <li><a class="go" href="../" target="seikapop-app">アプリを開く ↗</a>
           <span class="note">スマホの大きさで見たいときは F12 →「デバイスのツールバー」</span></li>
-        <li>スマホで試す: <code>start-lan.bat</code> で起動し、黒い窓に出るアドレスを同じ Wi-Fi のスマホで開く
+        <li>スマホで試す: <code>start-lan.bat</code> で起動し、上の「この PC のお試し版」のアドレスを同じ Wi-Fi のスマホで開く
           <span class="note">共有ボタン・ホーム画面への追加は HTTPS の公開版でだけ動く</span></li>
       </ol>
     </section>
@@ -211,6 +239,51 @@
     });
   }
   refresh();
+
+  // ---- スマホで開くアドレスのコピー ----
+  /** 文字をクリップボードへ。navigator.clipboard は https と 127.0.0.1 でしか使えないので、無ければ選択してコピーする。 */
+  async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+      try { await navigator.clipboard.writeText(text); return; } catch { /* 許可されないときは下の古いやり方で試す */ }
+    }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    if (!ok) throw new Error('この開き方ではコピーできません');
+  }
+  for (const btn of document.querySelectorAll('[data-copy]')) {
+    btn.addEventListener('click', async () => {
+      const text = btn.parentElement.querySelector('[data-url]').textContent.trim();
+      try {
+        await copyText(text);
+        btn.textContent = 'コピーしました';
+        btn.classList.add('done');
+      } catch (err) {
+        btn.textContent = 'コピーできません';
+        btn.title = `${err.message}。アドレスを選んで Ctrl+C でコピーしてください`;
+      }
+      setTimeout(() => { btn.textContent = 'コピー'; btn.classList.remove('done'); }, 1800);
+    });
+  }
+  // お試し版のアドレスは、start-lan.bat（--lan）で起動したときだけ tools/serve.py が教えてくれる
+  (async () => {
+    if (location.protocol === 'file:') return;
+    const note = document.getElementById('lanNote');
+    try {
+      const res = await fetch('/api/info');
+      if (!res.ok) return;   // 公開版など、serve.py 以外で開いている
+      const info = await res.json();
+      if (!info.lan) return;
+      if (!info.ip) { note.textContent = 'この PC の IP アドレスが分かりませんでした（Wi-Fi につながっているか確かめてください）'; return; }
+      document.getElementById('lanUrl').textContent = `http://${info.ip}:${info.port}/`;
+      document.getElementById('lanCopy').hidden = false;
+      note.textContent = 'スマホが同じ Wi-Fi につながっているときだけ開けます。http なので共有ボタン・ホーム画面への追加は動きません（画像の保存で代わりになります）。PC を止めると開けなくなります';
+    } catch { /* 答えが無い＝serve.py 以外で開いている。案内のまま残す */ }
+  })();
 
   // file:// で開くと、他の画面の部品（js/*.js）を読めず何も動かない
   if (location.protocol === 'file:') document.getElementById('fileWarn').style.display = 'block';
