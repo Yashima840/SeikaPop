@@ -12,6 +12,7 @@
     header { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
       padding: 8px 14px; background: #24412d; color: #fff; }
     header h1 { font-size: 16px; margin: 0 12px 0 0; }
+    header a.home { color: #fff; text-decoration: none; font-size: 13px; padding: 4px 8px; border-radius: 6px; border: 1px solid #fff4; }
     header button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #fff4; background: #fff1; color: #fff; cursor: pointer; }
     header button.primary { background: #f6c945; color: #222; border-color: #f6c945; font-weight: 700; }
     header button:disabled { opacity: 0.45; cursor: default; }
@@ -57,6 +58,7 @@
 </head>
 <body>
   <header>
+    <a class="home" href="./">← 作業場</a>
     <h1>金額主役のデザイン</h1>
     <button id="saveBtn" class="primary" title="Ctrl+S">保存してアプリに反映</button>
     <button id="undoBtn" title="Ctrl+Z">元に戻す</button>

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SeikaPop 作業場（PC）</title>
+<style>
+  :root { --green: #2f7d43; --dark: #24412d; --line: #dcd8cc; --muted: #6b726b; --red: #c62828; color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f4f2ec; color: #1f2a22; font: 15px/1.6 system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; }
+  header { background: var(--dark); color: #fff; padding: 14px 20px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 2px 0 0; font-size: 13px; opacity: 0.85; }
+  main { max-width: 1080px; margin: 0 auto; padding: 16px 20px 40px; }
+  .warn { display: none; background: #fde8e8; color: var(--red); padding: 10px 14px; border-radius: 8px; font-weight: 700; margin-bottom: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+  section { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  section h2 { margin: 0 0 2px; font-size: 17px; color: var(--green); }
+  section .when { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+  ol { margin: 0; padding: 0; list-style: none; counter-reset: step; }
+  li { counter-increment: step; position: relative; padding: 8px 0 8px 34px; border-top: 1px dashed var(--line); }
+  li:first-child { border-top: none; }
+  li::before { content: counter(step); position: absolute; left: 0; top: 9px; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--green); color: #fff; font-size: 13px; font-weight: 700; text-align: center; line-height: 24px; }
+  ol.plain li::before { content: "・"; background: none; color: var(--muted); }
+  a.go { display: inline-block; font-weight: 700; color: #fff; background: var(--green); padding: 4px 12px; border-radius: 6px; text-decoration: none; }
+  a.go:hover { background: var(--dark); }
+  .note { display: block; color: var(--muted); font-size: 13px; }
+  .note.local { color: var(--red); }
+  code { background: #f0eee6; padding: 0 4px; border-radius: 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SeikaPop 作業場（PC）</h1>
+  <p>PCでする作業の入口です。やりたいことの箱から順に進めてください。各画面の左上「← 作業場」でここへ戻れます。</p>
+</header>
+<main>
+  <!-- 他の画面へ移れない開き方のときだけ、下の script が出す -->
+  <p id="fileWarn" class="warn">ファイルをダブルクリックで直接開いています。この開き方では各画面が動きません。
+    <code>start.bat</code> をダブルクリックして開き直してください。</p>
+
+  <div class="grid">
+    <section>
+      <h2>ポップを作る・試す</h2>
+      <p class="when">売り場でスマホから使うアプリ本体。PCでは動きの確認に</p>
+      <ol class="plain">
+        <li><a class="go" href="../">アプリを開く</a>
+          <span class="note">スマホの大きさで見たいときは F12 →「デバイスのツールバー」</span></li>
+        <li>スマホで試す: <code>start-lan.bat</code> で起動し、黒い窓に出るアドレスを同じ Wi-Fi のスマホで開く
+          <span class="note">共有ボタン・ホーム画面への追加は HTTPS の公開版でだけ動く</span></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>「金額主役」の見た目を直す</h2>
+      <p class="when">金額キャッチ・産地・商品名・数量と単位の、色・大きさ・置き場所を変えたいとき</p>
+      <ol>
+        <li><a class="go" href="designer.html">デザインを編集する</a>
+          <span class="note">マウスで動かして「保存してアプリに反映」</span>
+          <span class="note local" data-local>保存は start.bat で開いた PC でだけできます</span></li>
+        <li><a class="go" href="gallery.html">見本帳で崩れを確かめる</a>
+          <span class="note">全デザイン×全サイズ×長い名前。はみ出し・重なりが無いか見る</span></li>
+        <li><a class="go" href="../">アプリで実物を見る</a></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>価格の描き方を外部AIに頼む</h2>
+      <p class="when">色や大きさでは足りず、金額キャッチの形そのものを作り替えたいとき</p>
+      <ol>
+        <li><a class="go" href="price-kit/price-kit.html">試作キットを見る</a>
+          <span class="note">このファイルと <code>tools/price-kit/PROMPT.md</code> を外部AIに渡す</span></li>
+        <li>返ってきた案を <code>tools/price-kit/candidates/</code> に <code>gemini.html</code>・<code>chatgpt.html</code> として置く</li>
+        <li><a class="go" href="price-kit/compare.html">案を並べて比べる</a></li>
+        <li>採用する案を <code>node tools/price-kit/adopt.mjs &lt;ファイル&gt;</code> で取り込み、上の「見本帳」で確かめる</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>事務所へ集める準備（事務所で1回だけ）</h2>
+      <p class="when">店員さんのスマホで作ったポップを、法人の Google ドライブへ自動で集めたいとき</p>
+      <ol>
+        <li><a class="go" href="collector/link.html">設定用リンクを作る</a>
+          <span class="note">画面の ① で合言葉を作る。<b>この画面は閉じずに</b>次へ（閉じると合言葉が消える）</span></li>
+        <li>Google の画面で受け取り口を作る（<code>tools/collector/README.md</code> の 1〜3）
+          <span class="note">合言葉は PASSCODE に貼る。<code>Code.gs</code> には書かない</span></li>
+        <li>設定用リンクの画面に戻り、② に受け取り口の URL を貼る → できたリンクを店員さんへ LINE などで送る</li>
+      </ol>
+    </section>
+  </div>
+</main>
+<script>
+  // file:// で開くと、他の画面の部品（js/*.js）を読めず何も動かない
+  if (location.protocol === 'file:') document.getElementById('fileWarn').style.display = 'block';
+  // デザインの保存は tools/serve.py が受ける。この PC で start.bat から開いたときは注意を出さない
+  if (['127.0.0.1', 'localhost'].includes(location.hostname)) {
+    for (const el of document.querySelectorAll('[data-local]')) el.remove();
+  }
+</script>
+</body>
+</html>

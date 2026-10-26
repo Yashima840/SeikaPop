@@ -1,6 +1,6 @@
 """PC で SeikaPop を開く（デザイン作業用のローカルサーバー）。
 
-    python tools/serve.py          # 起動してブラウザでデザイン編集とアプリを開く
+    python tools/serve.py          # 起動してブラウザで作業場（PC の作業の入口）を開く
     python tools/serve.py --lan    # 同じ Wi-Fi のスマホからも見られるようにする
 
 python -m http.server と違い、ブラウザにファイルを控えさせない（Cache-Control: no-store）。
@@ -24,12 +24,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 8765
+# 開くのは作業場だけ（各画面はそこから辿る。何枚もタブが開くと、どれで何をするのか分からなくなる）
+HUB = "/tools/"
 PAGES = {
+    "作業場（ここから始める）": HUB,
     "デザイン編集（金額主役）": "/tools/designer.html",
     "アプリ": "/",
     "見本帳（全デザイン×全サイズ）": "/tools/gallery.html",
     "金額キャッチの試作キット": "/tools/price-kit/price-kit.html",
     "外部AI案の比較": "/tools/price-kit/compare.html",
+    "設定用リンクを作る": "/tools/collector/link.html",
 }
 CATCH_JS = ROOT / "js" / "catch-design.js"
 BACKUP_DIR = ROOT / "tools" / "designer-backup"
@@ -199,7 +203,7 @@ def main():
         print(f"ポート {PORT} は使用中です。起動済みとみなしてブラウザだけ開きます。")
         print("（別のソフトが使っている場合は、そちらを止めてからやり直してください）")
         if not args.no_browser:
-            webbrowser.open(base + PAGES["デザイン編集（金額主役）"])
+            webbrowser.open(base + HUB)
         return 1
 
     print("SeikaPop を起動しました。この窓を閉じると止まります。\n")
@@ -212,7 +216,7 @@ def main():
     print("\n直したら、ブラウザで再読み込み（F5）すれば反映されます。")
 
     if not args.no_browser:
-        threading.Timer(0.5, lambda: [webbrowser.open(base + PAGES[k]) for k in ("デザイン編集（金額主役）", "アプリ")]).start()
+        threading.Timer(0.5, lambda: webbrowser.open(base + HUB)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
