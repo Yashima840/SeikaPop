@@ -5,12 +5,12 @@
 import * as store from '../store.js';
 import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
-  AD_TITLES, adProblems, createAd, CUSTOM_ID, CUSTOM_MAX_PER_ROW, customFrame, dropMissing, fitSlots, frameFor,
-  FRAME_ORDER, FRAMES, normalizeRows, shotFromAd, toggleShot, usedRows,
+  AD_TITLES, adProblems, createAd, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrame, customFrameProblems,
+  dropMissing, fitSlots, frameFor, FRAME_ORDER, FRAMES, normalizeRows, saveCustomFrame, shotFromAd, toggleShot, usedRows,
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
 import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../render.js';
-import { debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
+import { confirmBox, debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
 import { queueAd } from '../sender.js';
 
 function chips(items, onPick, current) {
@@ -60,8 +60,12 @@ export async function showAd(root, app) {
   const listed = [...groups.regulars, ...groups.recent];
   const popById = new Map(listed.map(p => [p.id, p]));
 
+  let saved = await store.listCustomFrames();   // 名前を付けて保存したカスタムフレーム
   let ad = { ...createAd(), ...await store.getAdDraft() };
   ad.customRows = normalizeRows(ad.customRows);
+  // 選んでいた保存済みのカスタムが直されていたら、その形に合わせる（消されていたら形だけ残す）
+  const savedNow = saved.find(f => f.id === ad.customId);
+  if (savedNow) { ad.customRows = savedNow.rows; ad.customName = savedNow.name; } else ad.customId = null;
   if (!frameFor(ad)) ad.frameId = FRAME_ORDER[0];
   const frameOf = () => frameFor(ad);
   ad.slots = fitSlots(slotsToPopIds(ad.slots, await store.listShots()), frameOf().slots.length).slots;
@@ -138,24 +142,54 @@ export async function showAd(root, app) {
     value: ad.title, placeholder: '例: 本日のおすすめ', enterkeyhint: 'done',
     oninput: () => { ad.title = titleInput.value; statusEl.textContent = '保存中…'; draw(); save(); },
   });
-  const pickFrame = id => {
-    if (id === CUSTOM_ID && !customFrame(ad.customRows)) { openBuilder(); return; }   // まだ作っていない
+  /** フレームを替える。custom＝カスタムのとき { id, name, rows }（保存済みのもの）。 */
+  const pickFrame = (id, custom = null) => {
     builder = null;
-    const r = fitSlots(ad.slots, frameFor({ ...ad, frameId: id }).slots.length);
-    ad.frameId = id;
-    ad.slots = r.slots;
+    const next = custom ? { ...ad, frameId: CUSTOM_ID, customId: custom.id, customName: custom.name, customRows: custom.rows } : { ...ad, frameId: id };
+    const r = fitSlots(ad.slots, frameFor(next).slots.length);
+    ad = { ...next, slots: r.slots };
     if (r.dropped) toast(`枠が足りないので、後から選んだ ${r.dropped} 枚を外しました`);
     changed();
   };
 
-  // ---- カスタムフレームを組む（6行のボタン。押した行に 1〜3 枚、押さない行は使わない）----
-  let builder = null;   // 組んでいる途中: { rows, picking＝枚数を選んでいる行（無ければ -1）}
-  const openBuilder = () => { builder = { rows: [...ad.customRows], picking: -1 }; rebuild(); };
+  // ---- カスタムフレームを組む（6行のボタン。押した行に 1〜3 枚、押さない行は使わない）と、名前を付けて保存 ----
+  // 組んでいる途中: { id＝直している保存済みのもの（新しく作るときは null）, name, rows, picking＝枚数を選んでいる行（無ければ -1）}
+  let builder = null;
+  const openBuilder = (from = null) => {
+    builder = from
+      ? { id: from.id, name: from.name, rows: [...from.rows], picking: -1 }
+      : { id: null, name: `カスタム${saved.length + 1}`, rows: normalizeRows([]), picking: -1 };
+    rebuild();
+  };
   const setRow = (i, n) => { builder.rows[i] = n; builder.picking = -1; rebuild(); };
-  const finishBuilder = () => {
-    if (!customFrame(builder.rows)) { toast('写真を入れる行を1つ以上選んでください', { error: true }); return; }
-    ad.customRows = normalizeRows(builder.rows);
-    pickFrame(CUSTOM_ID);
+  /** 保存して、そのフレームを使う。asNew＝直している途中でも新しい1件として保存する。 */
+  const saveBuilder = async (asNew = false) => {
+    const target = { id: asNew ? null : builder.id, name: builder.name, rows: builder.rows };
+    const p = customFrameProblems(target, saved);
+    if (p.length) { toast(p.join('・'), { error: true }); return; }
+    const r = saveCustomFrame(saved, target);
+    try {
+      await store.putCustomFrames(r.list);
+    } catch (err) {
+      toast(`カスタムを保存できませんでした: ${err.message}`, { error: true });
+      return;
+    }
+    saved = r.list;
+    toast(`「${r.entry.name}」を保存しました`);
+    pickFrame(CUSTOM_ID, r.entry);
+  };
+  const deleteSaved = async f => {
+    if (!await confirmBox(`カスタム「${f.name}」を削除します。元に戻せません。`, '削除する')) return;
+    const list = saved.filter(x => x.id !== f.id);
+    try {
+      await store.putCustomFrames(list);
+    } catch (err) {
+      toast(`削除できませんでした: ${err.message}`, { error: true });
+      return;
+    }
+    saved = list;
+    toast(`「${f.name}」を削除しました`);
+    if (ad.customId === f.id) pickFrame(FRAME_ORDER[0]); else { builder = null; rebuild(); }
   };
   function builderView() {
     const used = usedRows(builder.rows), count = used.reduce((a, b) => a + b, 0);
@@ -171,17 +205,43 @@ export async function showAd(root, app) {
           n ? h('span', { class: 'b-cells' }, Array.from({ length: n }, () => h('span', { class: 'b-cell' })))
             : h('span', { class: 'b-empty', text: '＋ 押して写真の枚数を選ぶ' }),
           n ? h('span', { class: 'b-count', text: `${n}枚` }) : null));
+    const shape = count ? `（${used.length}行 ${count}枚）` : '';
+    // 行のボタンを押すたびに作り直すので、名前は打つたびに builder へ控える
+    const nameInput = h('input', {
+      value: builder.name, maxlength: CUSTOM_NAME_MAX, placeholder: '例: 週末の特売', enterkeyhint: 'done',
+      oninput: () => { builder.name = nameInput.value; },
+    });
     return h('div', { class: 'builder' },
       h('p', { class: 'hint' }, '写真を入れたい行のボタンを押して、1行に何枚（1〜3枚）入れるかを選びます。押さなかった行は使いません。'),
       h('div', { class: 'b-frame' },
         h('div', { class: 'b-head', text: '見出し' }),
         ...builder.rows.map(row),
         h('div', { class: 'b-foot', text: '店名・日付' })),
+      h('label', { class: 'field' }, h('span', { class: 'label', text: '名前（保存して何度でも使えます）' }), nameInput),
       h('div', { class: 'row' },
-        h('button', { class: 'primary', disabled: !count, onclick: finishBuilder },
-          count ? `作成（${used.length}行 ${count}枚）` : '作成'),
+        h('button', { class: 'primary', disabled: !count, onclick: () => saveBuilder(false) },
+          builder.id ? `上書き保存して使う${shape}` : `保存して使う${shape}`),
+        builder.id ? h('button', { disabled: !count, onclick: () => saveBuilder(true) }, '新しく保存') : null,
         h('button', { onclick: () => { builder = null; rebuild(); } }, 'やめる')));
   }
+  /** フレームの候補: 決まったもの → 保存したカスタム → 新しく作る。 */
+  function frameChips() {
+    const current = ad.frameId !== CUSTOM_ID ? ad.frameId : ad.customId ? `saved:${ad.customId}` : 'unsaved';
+    const items = [
+      ...FRAME_ORDER.map(id => [id, `${FRAMES[id].label}（${FRAMES[id].note}）`]),
+      ...saved.map(f => [`saved:${f.id}`, `★ ${customFrame(f.rows, f.name).label}`]),
+      // 前の版で作った名前の無いカスタムを使っている作りかけ（保存を促す）
+      ...(current === 'unsaved' ? [['unsaved', `${frameOf().label}（未保存）`]] : []),
+      ['new', '＋ カスタムを作る'],
+    ];
+    return chips(items, v => {
+      if (v === 'new') openBuilder();
+      else if (v === 'unsaved') openBuilder({ id: null, name: `カスタム${saved.length + 1}`, rows: ad.customRows });
+      else if (v.startsWith('saved:')) pickFrame(CUSTOM_ID, saved.find(f => `saved:${f.id}` === v));
+      else pickFrame(v);
+    }, current);
+  }
+  const savedNowFor = () => saved.find(f => f.id === ad.customId);
   const pickPop = id => {
     const p = exportProblems(popById.get(id));
     // 枠に入っているものは外せるようにする（入れるときだけ止める）
@@ -208,12 +268,12 @@ export async function showAd(root, app) {
     form.replaceChildren(
       h('section', {},
         h('h3', {}, '① フレーム'),
-        chips([
-          ...FRAME_ORDER.map(id => [id, `${FRAMES[id].label}（${FRAMES[id].note}）`]),
-          [CUSTOM_ID, customFrame(ad.customRows) ? `${customFrame(ad.customRows).label}` : '＋ カスタム'],
-        ], pickFrame, ad.frameId),
+        frameChips(),
         builder ? builderView()
-          : ad.frameId === CUSTOM_ID ? h('div', { class: 'row' }, h('button', { onclick: openBuilder }, 'カスタムの行を作り直す')) : null,
+          : savedNowFor() ? h('div', { class: 'row' },
+            h('button', { onclick: () => openBuilder(savedNowFor()) }, `「${savedNowFor().name}」を直す`),
+            h('button', { class: 'danger', onclick: () => deleteSaved(savedNowFor()) }, '削除'))
+            : null,
       ),
       h('section', {},
         h('h3', {}, `② ポップを選ぶ（${filled}/${n}）`),

@@ -51,9 +51,10 @@ export const CUSTOM_ID = 'custom';
 export const CUSTOM_ROWS = 6;
 export const CUSTOM_MAX_PER_ROW = 3;
 const CUSTOM = {
-  w: 1080, minH: 1080, maxH: 1920, margin: 36, gap: 6,   // 写真どうしの隙間はほぼ無し
+  w: 1080, gap: 5,   // 写真どうし・左右の端・上下の帯との隙間は、どれもほぼ無し（5px）
   bg: '#fdf6e3', header: { h: 200, bg: '#2f7d43', color: '#ffffff' }, footer: { h: 110, color: '#22603a' },
 };
+export const CUSTOM_NAME_MAX = 20;
 
 /** 行ごとの枚数を 0〜3 の整数 6 個にそろえる（壊れた保存データでも落ちないように）。 */
 export function normalizeRows(rows) {
@@ -67,48 +68,78 @@ export function normalizeRows(rows) {
 export const usedRows = rows => normalizeRows(rows).filter(n => n > 0);
 
 /**
- * 行ごとの枚数からフレームを作る。使う行が無ければ null。
- * 各行は横幅いっぱいに n 枚を並べ、枠は正方形（ポップは正方形が多い）。
- * 縦は中身に合わせて伸ばし（縦長 9:16 まで）、入り切らないときは全部の枠を同じ割合で縮めて左右の真ん中へ寄せる
- * （正方形のまま縮めるので、写真どうしの間に余白が出ない）。
+ * 行ごとの枚数からフレームを作る。使う行が無ければ null。name を渡すと名前入りの label にする。
+ * 各行は横幅いっぱい（左右の端も 5px）に n 枚を並べ、枠は正方形（ポップは正方形が多い）。
+ * 縦は中身に合わせて伸ばす（行が多いと縦長になる。枠を縮めて左右に余白を作ることはしない）。
  */
-export function customFrame(rows) {
+export function customFrame(rows, name = '') {
   const used = usedRows(rows);
   if (!used.length) return null;
-  const { w: W, margin: m, gap } = CUSTOM;
-  const innerW = W - 2 * m;
-  const cellW = used.map(n => (innerW - (n - 1) * gap) / n);
-  const top = CUSTOM.header.h + gap, bottomBand = CUSTOM.footer.h + gap;
-  const gaps = (used.length - 1) * gap;
-  const natural = cellW.reduce((a, b) => a + b, 0) + gaps;
-  const H = Math.round(Math.min(CUSTOM.maxH, Math.max(CUSTOM.minH, top + natural + bottomBand)));
-  const avail = H - top - bottomBand;
-  const k = natural > avail ? (avail - gaps) / (natural - gaps) : 1;
-  const size = cellW.map(cw => cw * k);   // 枠の一辺（正方形）
-  const contentH = size.reduce((a, b) => a + b, 0) + gaps;
-  let y = top + (avail - contentH) / 2;   // 中身が少ないときは上下の真ん中へ
+  const { w: W, gap } = CUSTOM;
+  const innerW = W - 2 * gap;
+  const size = used.map(n => (innerW - (n - 1) * gap) / n);   // 枠の一辺（正方形）
+  const H = Math.round(CUSTOM.header.h + gap + size.reduce((a, b) => a + b, 0) + (used.length - 1) * gap + gap + CUSTOM.footer.h);
+  let y = CUSTOM.header.h + gap;
   const slots = [];
   used.forEach((n, r) => {
-    const rowW = n * size[r] + (n - 1) * gap;
-    const x0 = m + (innerW - rowW) / 2;
     // 端は丸めてから幅を決める（行ごとに 1px ずれて見えないように）
-    const y0 = Math.round(y), y1 = Math.floor(y + size[r]);
+    const y0 = Math.round(y), y1 = Math.round(y + size[r]);
     for (let i = 0; i < n; i++) {
-      const xa = Math.round(x0 + i * (size[r] + gap)), xb = Math.floor(x0 + i * (size[r] + gap) + size[r]);
+      const xa = Math.round(gap + i * (size[r] + gap)), xb = Math.round(gap + i * (size[r] + gap) + size[r]);
       slots.push({ x: xa, y: y0, w: xb - xa, h: y1 - y0 });
     }
     y += size[r] + gap;
   });
-  const count = slots.length;
+  const shape = `${used.length}行 ${slots.length}枚`;
   return {
-    label: `カスタム（${used.length}行 ${count}枚）`, note: `${used.join('・')}枚`, w: W, h: H,
+    label: name ? `${name}（${shape}）` : `カスタム（${shape}）`, note: `${used.join('・')}枚`, w: W, h: H,
     bg: CUSTOM.bg, header: CUSTOM.header, footer: CUSTOM.footer, slots,
   };
 }
 
 /** 広告で使うフレーム（カスタムなら行の指定から作る）。無ければ null。 */
 export function frameFor(ad) {
-  return ad.frameId === CUSTOM_ID ? customFrame(ad.customRows) : FRAMES[ad.frameId] || null;
+  return ad.frameId === CUSTOM_ID ? customFrame(ad.customRows, ad.customName || '') : FRAMES[ad.frameId] || null;
+}
+
+// ---- 名前を付けて保存したカスタムフレーム（{ id, name, rows, updatedAt } の一覧）----
+
+/** 保存データを読める形にそろえる（壊れたものは捨てずに直せる所だけ直し、行が無いものは外す）。 */
+export function cleanCustomFrames(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter(f => f && typeof f.id === 'string' && usedRows(f.rows).length)
+    .map(f => ({ id: f.id, name: String(f.name || '').trim() || 'カスタム', rows: normalizeRows(f.rows), updatedAt: String(f.updatedAt || '') }));
+}
+
+/** 保存を止める理由（空なら保存できる）。同じ名前は別のもの（id 違い）に使わせない（選ぶときに見分けられないため）。 */
+export function customFrameProblems({ id = null, name, rows }, list) {
+  const out = [];
+  const n = String(name || '').trim();
+  if (!n) out.push('名前を入れてください');
+  else if (n.length > CUSTOM_NAME_MAX) out.push(`名前は ${CUSTOM_NAME_MAX} 文字までにしてください`);
+  else if (list.some(f => f.name === n && f.id !== id)) out.push(`「${n}」という名前のカスタムはもうあります`);
+  if (!usedRows(rows).length) out.push('写真を入れる行を1つ以上選んでください');
+  return out;
+}
+
+/** 保存する（同じ id なら上書き、無ければ足す）。保存したものと新しい一覧を返す。 */
+export function saveCustomFrame(list, { id = null, name, rows }, now = new Date()) {
+  const entry = { id: id || newId(), name: String(name).trim(), rows: normalizeRows(rows), updatedAt: now.toISOString() };
+  const has = list.some(f => f.id === entry.id);
+  return { entry, list: has ? list.map(f => (f.id === entry.id ? entry : f)) : [...list, entry] };
+}
+
+/** バックアップを重ねる: 無いものは足し、同じ id は更新日時が新しい方を残す。 */
+export function mergeCustomFrames(existing, incoming) {
+  const byId = new Map(existing.map(f => [f.id, f]));
+  let added = 0;
+  for (const f of cleanCustomFrames(incoming)) {
+    const cur = byId.get(f.id);
+    if (!cur) added += 1;
+    if (!cur || f.updatedAt > cur.updatedAt) byId.set(f.id, f);
+  }
+  return { list: [...byId.values()], added };
 }
 
 export const AD_TITLES =['本日のおすすめ', '今週の特売', '朝採れ入荷', '旬の味覚', '数量限定'];
@@ -132,7 +163,9 @@ export function frameProblems(frame) {
 
 export function createAd(now = new Date()) {
   return {
-    frameId: FRAME_ORDER[0], customRows: normalizeRows([]), title: AD_TITLES[0], showDate: true, slots: [],
+    // カスタムのときは、使っている保存済みのもの（customId・customName）と形（customRows）を持つ
+    frameId: FRAME_ORDER[0], customId: null, customName: '', customRows: normalizeRows([]),
+    title: AD_TITLES[0], showDate: true, slots: [],
     updatedAt: now.toISOString(),
   };
 }

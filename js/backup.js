@@ -23,6 +23,10 @@ export function validateBackup(obj) {
     const badShot = obj.shots.find(s => !s || typeof s.id !== 'string' || typeof s.data !== 'string');
     if (badShot !== undefined) return { ok: false, message: '画像の欠けた履歴が含まれています' };
   }
+  // customFrames（名前を付けたカスタムフレーム）も後から足した欄
+  if (obj.customFrames != null && !Array.isArray(obj.customFrames)) {
+    return { ok: false, message: 'バックアップの形が壊れています（customFrames が一覧になっていません）' };
+  }
   return { ok: true };
 }
 

@@ -209,7 +209,7 @@ export async function showSettings(root, app) {
       if (!file) return;
       try {
         const r = await store.importBackup(JSON.parse(await file.text()));
-        toast(`読み込みました（追加 ${r.added} 件・更新 ${r.updated} 件・こちらが新しいので残した ${r.skipped} 件・作った画像 ${r.shotsAdded} 枚）`);
+        toast(`読み込みました（追加 ${r.added} 件・更新 ${r.updated} 件・こちらが新しいので残した ${r.skipped} 件・作った画像 ${r.shotsAdded} 枚・カスタムフレーム ${r.framesAdded} 件）`);
       } catch (err) {
         toast(`読み込めませんでした: ${err.message}`, { error: true });
       }

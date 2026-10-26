@@ -97,6 +97,8 @@ test('履歴の無い古いバックアップも読める。履歴があれば�
   assert.equal(validateBackup({ ...base, shots: [{ id: 'a', data: 'xx' }] }).ok, true);
   assert.equal(validateBackup({ ...base, shots: [{ id: 'a' }] }).ok, false);
   assert.equal(validateBackup({ ...base, shots: 'x' }).ok, false);
+  assert.equal(validateBackup({ ...base, customFrames: [] }).ok, true);
+  assert.equal(validateBackup({ ...base, customFrames: 'x' }).ok, false);
 });
 
 test('履歴を重ねると無いものだけ足す', () => {

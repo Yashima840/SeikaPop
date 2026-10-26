@@ -5,6 +5,7 @@
 import { BACKUP_FORMAT, BACKUP_VERSION, mergePops, mergeShots, unreferencedPhotoIds, validateBackup } from './backup.js';
 import { outboxReplaced, sortOutbox } from './collect.js';
 import { DEFAULT_TAX_RATE, historyOverflow, newId } from './model.js';
+import { cleanCustomFrames, mergeCustomFrames } from './frames.js';
 
 const DB_NAME = 'seikapop';
 const DB_VERSION = 3;   // 2: 作った画像の履歴（shots・shotImages）を追加／3: 事務所へ送る控え（outbox）を追加
@@ -148,6 +149,16 @@ export async function putAdDraft(value) {
   await run(['meta'], 'readwrite', tx => reqDone(tx.objectStore('meta').put({ key: 'adDraft', value })));
 }
 
+// 名前を付けて保存したカスタムフレーム（frames.js の saveCustomFrame で作った一覧をまるごと持つ）
+export async function listCustomFrames() {
+  const rec = await run(['meta'], 'readonly', tx => reqDone(tx.objectStore('meta').get('customFrames')));
+  return cleanCustomFrames(rec?.value);
+}
+
+export async function putCustomFrames(list) {
+  await run(['meta'], 'readwrite', tx => reqDone(tx.objectStore('meta').put({ key: 'customFrames', value: list })));
+}
+
 // ---- 事務所へ送る控え ----
 // 送り終わるまで画像（と写真）を端末に持つ。届いたら消す。
 
@@ -222,6 +233,7 @@ export async function exportBackup() {
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     settings: await getSettings(),
+    customFrames: await listCustomFrames(),
     pops,
     photos,
     shots,
@@ -253,5 +265,8 @@ export async function importBackup(obj) {
     const pops = await reqDone(tx.objectStore('pops').getAll());
     for (const id of historyOverflow(all, pops)) { tx.objectStore('shots').delete(id); tx.objectStore('shotImages').delete(id); }
   });
-  return { ...merged, shotsAdded: shotMerge.added };
+  // カスタムフレーム（後から足した欄。無い古いバックアップでは何もしない）
+  const frames = mergeCustomFrames(await listCustomFrames(), obj.customFrames || []);
+  if (frames.added || obj.customFrames?.length) await putCustomFrames(frames.list);
+  return { ...merged, shotsAdded: shotMerge.added, framesAdded: frames.added };
 }
