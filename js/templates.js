@@ -71,8 +71,10 @@ function fillLines(ctx, lines, x, y, lineH) {
 
 // 税込の小数（".84"）は、ほかの文字より2段小さく描く
 const DECIMAL_SMALL = 0.7;
-// 「各」は数字の4分の1の大きさで、数字の左下に重ねる（数字より手前）
-const EACH_SMALL = 0.25;
+// 「各」は「円」の8割の大きさで、数字の左下に重ねる（数字より手前）
+const EACH_OF_YEN = 0.8;
+// 写真の角の丸み（1080幅のとき）。写真が画像の端まである「写真主役」「シンプル上品」は角を丸めない
+const PHOTO_RADIUS = 24;
 
 /**
  * 小数の部分だけ小さくして1行を描く。paint(text, x, y, f, size) は左揃えで1つ描く関数。
@@ -145,7 +147,7 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
   };
   ctx.fillStyle = st.color;
   paint(num, left, base, st.font, size);
-  if (d.price.each) paintEach(ctx, left, base, st.font, size * EACH_SMALL, st.color, st.halo || '#fff');
+  if (d.price.each) paintEach(ctx, left, base, st.font, size * yenK * EACH_OF_YEN, st.color, st.halo || '#fff');
   paint('円', left + wNum + size * 0.04, base, st.font, size * yenK);
   ctx.textAlign = 'center';
   ctx.fillStyle = st.subColor || st.color;
@@ -348,7 +350,7 @@ const marche = {
       ctx.fillStyle = '#fbf8f1';
       ctx.fillRect(box.x - 20 * u, box.y - 20 * u, box.w + 40 * u, box.h + 40 * u);
     });
-    if (!drawPhoto(ctx, d.photo, box, pop.crop)) drawNoPhoto(ctx, box, ['#8fbf6a', '#4d8a3c'], d);
+    if (!drawPhoto(ctx, d.photo, box, pop.crop, PHOTO_RADIUS * u)) drawNoPhoto(ctx, box, ['#8fbf6a', '#4d8a3c'], d, PHOTO_RADIUS * u);
     ctx.fillStyle = 'rgba(255,248,220,0.6)';
     for (const [tx, rot] of [[box.x + 30 * u, -0.5], [box.x + box.w - 150 * u, 0.45]]) {
       ctx.save();
@@ -486,7 +488,7 @@ const simple = {
       const yenW = m('円', size * 0.4) + 6 * u;
       ctx.font = font(FONTS.mincho, size);
       ctx.fillText(num, W - left - yenW, by);
-      if (d.price.each) paintEach(ctx, W - left - yenW - m(num, size), by, FONTS.mincho, size * EACH_SMALL, '#22261f', '#f7f3ea');
+      if (d.price.each) paintEach(ctx, W - left - yenW - m(num, size), by, FONTS.mincho, size * 0.4 * EACH_OF_YEN, '#22261f', '#f7f3ea');
       ctx.fillStyle = '#5c5f58';
       paintMixed(ctx, [pop.unit, taxNote(d.price)].filter(Boolean).join('　'), W - left, by - size + 4 * u, FONTS.round, 34 * u, 'right',
         (s, x, y, f, sz) => { ctx.font = font(f, sz); ctx.fillText(s, x, y); });
@@ -521,11 +523,17 @@ const bold = {
     ctx.textBaseline = 'alphabetic';
 
     const box = this.photoBox(W, H, pop, canvasMeasure(ctx));
-    if (!drawPhoto(ctx, d.photo, box, pop.crop)) drawNoPhoto(ctx, box, ['#ffcf6b', '#f08a24'], d);
+    if (!drawPhoto(ctx, d.photo, box, pop.crop, PHOTO_RADIUS * u)) drawNoPhoto(ctx, box, ['#ffcf6b', '#f08a24'], d, PHOTO_RADIUS * u);
     // 産地・商品名・数量と単位（置き場所と見た目は label-design.js）
     drawLabels(ctx, box, pop, u, labelDesignFor(pop));
-    // 金額キャッチは写真の右下に乗せる（中身は price-design.js）
-    if (d.price) drawPrice(ctx, box, d.price, u);
+    // 金額キャッチは写真の右下に乗せる。写真の丸めた角からはみ出さないよう、同じ形で切る（中身は price-design.js）
+    if (d.price) {
+      ctx.save();
+      roundRectPath(ctx, box.x, box.y, box.w, box.h, PHOTO_RADIUS * u);
+      ctx.clip();
+      drawPrice(ctx, box, d.price, u);
+      ctx.restore();
+    }
   },
 };
 

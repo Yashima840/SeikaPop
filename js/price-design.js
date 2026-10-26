@@ -21,8 +21,8 @@ function catchFrame(area, design = CATCH_DESIGN) {
   return { x: area.x + area.w, y: area.y + area.h, k };
 }
 
-// 税込の小数（".84"）は2段小さく。「各」は数字の4分の1の大きさで、数字の左下に重ねる（数字より手前）
-const DECIMAL_SMALL = 0.7, EACH_SMALL = 0.25;
+// 税込の小数（".84"）は2段小さく。「各」は「円」の8割の大きさで、数字の左下に重ねる（数字より手前）
+const DECIMAL_SMALL = 0.7, EACH_OF_YEN = 0.8;
 
 /** 小数の部分（".84"）だけ小さくするための分け方。[{ text, k }]（k＝大きさの倍率）。 */
 function splitSmall(text) {
@@ -60,12 +60,12 @@ function layeredText(ctx, text, t, align, scale = 1) {
   ctx.restore();
 }
 
-/** 「各」を、数字（右揃え）の左端の下に、数字の4分の1の大きさで重ねる。 */
+/** 「各」を、数字（右揃え）の左端の下に、「円」の8割の大きさで重ねる（縁取りも同じ割合で細くする）。 */
 function drawEach(ctx, price, design) {
   const t = design.num, text = TEXT_PARTS.num.text(price), scale = fitScale(ctx, text, t);
   ctx.font = `${t.weight} ${t.size * scale}px "${t.font}", "Hiragino Sans", sans-serif`;
   const left = t.x - ctx.measureText(text).width;
-  layeredText(ctx, '各', { ...t, x: left }, 'left', scale * EACH_SMALL);
+  layeredText(ctx, '各', { ...t, x: left }, 'left', design.yen.size * EACH_OF_YEN / t.size);
 }
 
 /** maxW に収まる倍率（収まるなら 1）。 */
@@ -135,7 +135,7 @@ function partBounds(ctx, key, design, price) {
  * 金額キャッチを area（写真の枠）の右下に描く。はみ出す分は枠で切る（ギザギザは枠の端に掛かる形）。
  * price.main … 大きく出す数字（"298" "1,980" などカンマ入り）
  * price.incl … 税抜で入れたときの税込額（"321.84"）。税込で入れたときは ""。小数（".84"）は小さく描く
- * price.each … true なら数字の左下に「各」を重ねる（数字の4分の1の大きさ）
+ * price.each … true なら数字の左下に「各」を重ねる（「円」の8割の大きさ）
  * u          … 倍率（幅1080pxの画像で 1）。このデザインは枠の大きさに比例させるので使わない
  * design     … 省略時は catch-design.js（編集画面は編集中のものを渡す）
  */

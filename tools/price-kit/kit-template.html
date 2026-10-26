@@ -84,7 +84,10 @@ function drawCell(ctx, W, H, twoLines) {
   const box = { x: 40 * u, y: 40 * u, w: W - 80 * u, h: H - 120 * u - below };
   const k = Math.max(box.w / PHOTO.width, box.h / PHOTO.height);
   const sw = box.w / k, sh = box.h / k;
+  ctx.save();   // アプリと同じく写真の角を少し丸める（金額キャッチもアプリでは同じ丸みで切られる）
+  ctx.beginPath(); ctx.roundRect(box.x, box.y, box.w, box.h, 24 * u); ctx.clip();
   ctx.drawImage(PHOTO, (PHOTO.width - sw) / 2, (PHOTO.height - sh) / 2, sw, sh, box.x, box.y, box.w, box.h);
+  ctx.restore();
   const left = 50 * u, base = box.y + box.h + 108 * u;
   ctx.textAlign = 'left';
   ctx.fillStyle = '#1a1a1a';

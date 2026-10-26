@@ -185,6 +185,18 @@ export const NAME_FONTS = [
   { id: 'pop', label: 'ポップ', family: 'Mochiy Pop One', weight: '400' },
   { id: 'rock', label: 'ロックンロール', family: 'RocknRoll One', weight: '400' },
   { id: 'kiwi', label: 'やさしい丸', family: 'Kiwi Maru', weight: '500' },
+  { id: 'mplus', label: '太丸ゴシック', family: 'M PLUS Rounded 1c', weight: '800' },
+  { id: 'murecho', label: '太ゴシック', family: 'Murecho', weight: '900' },
+  { id: 'reggae', label: 'カクカク', family: 'Reggae One', weight: '400' },
+  { id: 'potta', label: '筆ポップ', family: 'Potta One', weight: '400' },
+  { id: 'brush', label: '筆文字', family: 'Yuji Syuku', weight: '400' },
+  { id: 'daruma', label: 'ぽってり', family: 'Darumadrop One', weight: '400' },
+  { id: 'hachi', label: 'まる文字', family: 'Hachi Maru Pop', weight: '400' },
+  { id: 'klee', label: '手書き', family: 'Klee One', weight: '600' },
+  { id: 'yomogi', label: 'ペン字', family: 'Yomogi', weight: '400' },
+  { id: 'shippori', label: '太明朝', family: 'Shippori Mincho B1', weight: '800' },
+  { id: 'decol', label: '飾り明朝', family: 'Kaisei Decol', weight: '700' },
+  { id: 'dot', label: 'ドット', family: 'DotGothic16', weight: '400' },
 ];
 
 /** ポップの商品名の書体 { family, weight }。デザインのまま（または知らない id）なら null。 */
