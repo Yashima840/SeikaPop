@@ -121,6 +121,11 @@ input[type=text], input:not([type]), textarea {
 }
 textarea { resize: vertical; }
 input[type=range] { width: 100%; height: 32px; accent-color: var(--green); }
+/* 価格の欄: 左に「各」のチェック */
+.price-row { display: flex; align-items: center; gap: 8px; }
+.price-row input[type="text"] { flex: 1; min-width: 0; }
+.each-box { display: flex; align-items: center; gap: 4px; font-weight: 700; font-size: 16px; white-space: nowrap; }
+.each-box input { width: 22px; height: 22px; accent-color: var(--green); }
 .field-error { display: block; color: var(--red); font-size: 13px; min-height: 0; }
 .field-note { display: block; color: var(--green-dark); font-size: 13px; font-weight: 700; }
 

@@ -14,7 +14,7 @@ export const DEFAULT_ADJUST = Object.freeze({ brightness: 0, contrast: 0, satura
 // id・日時・レギュラーかどうか・確認済みかどうかは引き継がない。
 const CONTENT_FIELDS = [
   'name', 'catch', 'price', 'priceTax', 'unit', 'origin', 'badge',
-  'template', 'size', 'photoId', 'crop', 'adjust', 'thumb',
+  'template', 'size', 'photoId', 'crop', 'adjust', 'thumb', 'each', 'nameFont',
 ];
 
 export function newId() {
@@ -31,6 +31,8 @@ export function createPop(now = new Date()) {
     catch: '',
     price: null,          // 円。未入力は null。税抜か税込かは priceTax
     priceTax: 'excl',     // 'excl'＝税抜で入れた（税込を計算して併記）／'incl'＝税込で入れた
+    each: false,          // 価格の頭に「各」を付ける（同じ値段の品をまとめて出すとき）
+    nameFont: '',         // 商品名の書体（NAME_FONTS の id。'' はデザインのまま）
     unit: '',
     origin: '',
     badge: '',           // 見出し。画像には入れない（フレームで入れる）。古いデータとの互換のため残す
@@ -153,12 +155,44 @@ export function formatTaxIncluded(price, rate, rounding = 'decimal') {
  */
 export function priceTexts(pop, settings) {
   if (pop.price == null) return null;
-  const main = formatPrice(pop.price);
-  if (!isTaxExcluded(pop)) return { main, incl: '' };
-  return { main, incl: formatTaxIncluded(pop.price, taxRateOf(settings), settings?.taxRounding) };
+  const main = formatPrice(pop.price), each = !!pop.each;
+  if (!isTaxExcluded(pop)) return { main, incl: '', each };
+  return { main, incl: formatTaxIncluded(pop.price, taxRateOf(settings), settings?.taxRounding), each };
 }
 
 /** 数字に添える税の文字（「税込」または「税込 117.72円」）。 */
+/**
+ * 税込の小数（".84" など）を小さく描くための分け方。[{ text, small }] を返す（小数が無ければ1つだけ）。
+ * 「金額主役」の price-design.js は外部の案と入れ替える範囲に同じ分け方を持つ（その範囲は他を読み込めないため）。
+ */
+export function splitDecimal(text) {
+  const m = /\.\d+/.exec(text);
+  if (!m) return [{ text, small: false }];
+  return [
+    { text: text.slice(0, m.index), small: false },
+    { text: m[0], small: true },
+    { text: text.slice(m.index + m[0].length), small: false },
+  ].filter(s => s.text);
+}
+
+// 商品名に選べる書体（Google Fonts）。'' はデザインごとの書体のまま
+export const NAME_FONTS = [
+  { id: '', label: 'デザインのまま' },
+  { id: 'dela', label: '極太ゴシック', family: 'Dela Gothic One', weight: '400' },
+  { id: 'maru', label: '丸ゴシック', family: 'Zen Maru Gothic', weight: '700' },
+  { id: 'mincho', label: '明朝', family: 'Zen Old Mincho', weight: '700' },
+  { id: 'magic', label: 'マジック書き', family: 'Yusei Magic', weight: '400' },
+  { id: 'pop', label: 'ポップ', family: 'Mochiy Pop One', weight: '400' },
+  { id: 'rock', label: 'ロックンロール', family: 'RocknRoll One', weight: '400' },
+  { id: 'kiwi', label: 'やさしい丸', family: 'Kiwi Maru', weight: '500' },
+];
+
+/** ポップの商品名の書体 { family, weight }。デザインのまま（または知らない id）なら null。 */
+export function nameFontOf(pop) {
+  const f = NAME_FONTS.find(x => x.id && x.id === pop?.nameFont);
+  return f ? { family: f.family, weight: f.weight } : null;
+}
+
 export function taxNote(texts) {
   return texts.incl ? `税込 ${texts.incl}円` : '税込';
 }

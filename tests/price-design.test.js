@@ -68,11 +68,21 @@ test('総額表示: 税抜で入れたときは税込額を、税込で入れた
   for (const price of CASES) {
     const f = fakeContext();
     drawPrice(f.ctx, AREAS[0], price, 1);
-    const all = f.texts.join('|');
+    // 税込の小数は小さくするため「(税込321」「.84」「円)」と分けて続けて描く。続けた文字で確かめる
+    const all = f.texts.join('');
     assert.ok(all.includes(price.main), `数字 ${price.main} が描かれていない: ${all}`);
     if (price.incl) assert.ok(all.includes(price.incl) && all.includes('税込'), `税込 ${price.incl} が描かれていない: ${all}`);
     else assert.ok(all.includes('税込'), `「税込」が描かれていない: ${all}`);
   }
+});
+
+test('「各」は price.each のときだけ描く（いちばん手前＝最後に塗る）', () => {
+  const on = fakeContext();
+  drawPrice(on.ctx, AREAS[0], { main: '100', incl: '108', each: true }, 1);
+  assert.equal(on.texts.at(-1), '各');
+  const off = fakeContext();
+  drawPrice(off.ctx, AREAS[0], { main: '100', incl: '108', each: false }, 1);
+  assert.ok(!off.texts.includes('各'));
 });
 
 test('使う書体は Google Fonts の名前と太さで書く', () => {

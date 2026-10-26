@@ -4,6 +4,7 @@
 
 import { LABEL_DESIGN } from './label-design.js';
 import { layoutLines } from './layout.js';
+import { nameFontOf } from './model.js';
 
 export const LABEL_KEYS = ['origin', 'name', 'unit'];
 export const LABEL_NAMES = { origin: '産地', name: '商品名', unit: '数量と単位' };
@@ -57,6 +58,12 @@ export function layoutLabels(pop, measure, design = LABEL_DESIGN) {
     name, unit,
     bottom: ys.length ? Math.max(...ys) : null,
   };
+}
+
+/** ポップで商品名の書体を選んでいれば、その書体に差し替えたデザイン（選んでいなければ design のまま）。 */
+export function labelDesignFor(pop, design = LABEL_DESIGN) {
+  const f = nameFontOf(pop);
+  return f ? { ...design, name: { ...design.name, font: f.family, weight: f.weight } } : design;
 }
 
 /**

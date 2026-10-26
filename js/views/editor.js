@@ -2,7 +2,7 @@
 
 import * as store from '../store.js';
 import {
-  DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, parsePriceInput,
+  DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, NAME_FONTS, parsePriceInput,
   priceTexts, regularFromPop, shotFromPop, SIZES, taxRateOf, updateRegularFrom,
 } from '../model.js';
 import { dragCrop, zoomCrop, ZOOM_MAX } from '../layout.js';
@@ -231,8 +231,27 @@ export async function showEditor(root, app, popId) {
         // 画像に入るのは 産地（メーカー名）・商品名・価格・単位 だけ。見出しと日付はフレーム（広告）で入れる
         field('産地（食品はメーカー名）', originInput),
         field('商品名', nameInput),
+        h('div', { class: 'field' },
+          h('span', { class: 'label', text: '商品名の書体' }),
+          // 候補はその書体で見せる（書体の定義は ensureFonts が読み込む。読めなければ端末の字）
+          h('div', { class: 'chips' }, NAME_FONTS.map(f => h('button', {
+            type: 'button', class: (pop.nameFont || '') === f.id ? 'chip on' : 'chip',
+            style: f.family ? `font-family: "${f.family}"; font-weight: ${f.weight}` : null,
+            onclick: () => { pop.nameFont = f.id; changed({ rebuild: true }); },
+          }, f.label))),
+        ),
         h('div', { class: 'two' },
-          field(isTaxExcluded(pop) ? '価格（税抜・円）' : '価格（税込・円）', priceInput, [priceError, priceNote]),
+          // 「各」のチェックは価格の欄の左（label の中に入力を2つ入れると押した先がずれるので、div で組む）
+          h('div', { class: 'field' },
+            h('span', { class: 'label', text: isTaxExcluded(pop) ? '価格（税抜・円）' : '価格（税込・円）' }),
+            h('div', { class: 'price-row' },
+              h('label', { class: 'each-box' },
+                h('input', { type: 'checkbox', checked: !!pop.each, onchange: ev => { pop.each = ev.target.checked; changed(); } }),
+                '各'),
+              priceInput,
+            ),
+            priceError, priceNote,
+          ),
           field('単位', unitInput),
         ),
         chips([['excl', '税抜で入れる'], ['incl', '税込で入れる']],

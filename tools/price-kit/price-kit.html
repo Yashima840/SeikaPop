@@ -173,25 +173,51 @@ function catchFrame(area, design = CATCH_DESIGN) {
   return { x: area.x + area.w, y: area.y + area.h, k };
 }
 
-/** 文字を、外側の縁取りから順に重ねて描く（strokes の先頭がいちばん外）。slant は右上がりの傾き。 */
+// 税込の小数（".84"）は2段小さく。「各」は数字の4分の1の大きさで、数字の左下に重ねる（数字より手前）
+const DECIMAL_SMALL = 0.7, EACH_SMALL = 0.25;
+
+/** 小数の部分（".84"）だけ小さくするための分け方。[{ text, k }]（k＝大きさの倍率）。 */
+function splitSmall(text) {
+  const m = /\.\d+/.exec(text);
+  if (!m) return [{ text, k: 1 }];
+  return [
+    { text: text.slice(0, m.index), k: 1 },
+    { text: m[0], k: DECIMAL_SMALL },
+    { text: text.slice(m.index + m[0].length), k: 1 },
+  ].filter(s => s.text);
+}
+
+/** 文字を、外側の縁取りから順に重ねて描く（strokes の先頭がいちばん外）。slant は右上がりの傾き。小数は小さく描く。 */
 function layeredText(ctx, text, t, align, scale = 1) {
-  const size = t.size * scale;
+  const fontOf = k => `${t.weight} ${t.size * scale * k}px "${t.font}", "Hiragino Sans", sans-serif`;
   ctx.save();
   ctx.translate(t.x, t.y);
   ctx.transform(1, 0, -t.slant, 1, 0, 0);
-  ctx.font = `${t.weight} ${size}px "${t.font}", "Hiragino Sans", sans-serif`;
-  ctx.textAlign = align;
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.lineJoin = 'round';
-  for (const s of t.strokes) {
-    if (!s.width) continue;
-    ctx.strokeStyle = s.color;
-    ctx.lineWidth = s.width * scale;   // 文字を縮めたときは縁取りも同じ割合で細くする
-    ctx.strokeText(text, 0, 0);
+  const segs = splitSmall(text).map(s => { ctx.font = fontOf(s.k); return { ...s, w: ctx.measureText(s.text).width }; });
+  const total = segs.reduce((a, s) => a + s.w, 0);
+  let x = align === 'right' ? -total : align === 'center' ? -total / 2 : 0;
+  for (const s of segs) { s.x = x; x += s.w; }
+  const each = fn => segs.forEach(s => { ctx.font = fontOf(s.k); fn(s); });
+  for (const st of t.strokes) {   // 縁取りを全部の字に引いてから塗る（隣の字の塗りを縁取りで消さない）
+    if (!st.width) continue;
+    ctx.strokeStyle = st.color;
+    ctx.lineWidth = st.width * scale;   // 文字を縮めたときは縁取りも同じ割合で細くする
+    each(s => ctx.strokeText(s.text, s.x, 0));
   }
   ctx.fillStyle = t.fill;
-  ctx.fillText(text, 0, 0);
+  each(s => ctx.fillText(s.text, s.x, 0));
   ctx.restore();
+}
+
+/** 「各」を、数字（右揃え）の左端の下に、数字の4分の1の大きさで重ねる。 */
+function drawEach(ctx, price, design) {
+  const t = design.num, text = TEXT_PARTS.num.text(price), scale = fitScale(ctx, text, t);
+  ctx.font = `${t.weight} ${t.size * scale}px "${t.font}", "Hiragino Sans", sans-serif`;
+  const left = t.x - ctx.measureText(text).width;
+  layeredText(ctx, '各', { ...t, x: left }, 'left', scale * EACH_SMALL);
 }
 
 /** maxW に収まる倍率（収まるなら 1）。 */
@@ -260,7 +286,8 @@ function partBounds(ctx, key, design, price) {
 /**
  * 金額キャッチを area（写真の枠）の右下に描く。はみ出す分は枠で切る（ギザギザは枠の端に掛かる形）。
  * price.main … 大きく出す数字（"298" "1,980" などカンマ入り）
- * price.incl … 税抜で入れたときの税込額（"321.84"）。税込で入れたときは ""
+ * price.incl … 税抜で入れたときの税込額（"321.84"）。税込で入れたときは ""。小数（".84"）は小さく描く
+ * price.each … true なら数字の左下に「各」を重ねる（数字の4分の1の大きさ）
  * u          … 倍率（幅1080pxの画像で 1）。このデザインは枠の大きさに比例させるので使わない
  * design     … 省略時は catch-design.js（編集画面は編集中のものを渡す）
  */
@@ -278,6 +305,7 @@ function drawPrice(ctx, area, price, u, design = CATCH_DESIGN) {
     const spec = TEXT_PARTS[key], t = design[key], text = spec.text(price);
     layeredText(ctx, text, t, spec.align, spec.fit ? fitScale(ctx, text, t) : 1);
   }
+  if (price.each) drawEach(ctx, price, design);   // いちばん手前
   ctx.restore();
 }
 // ===== ここまで: デザイン担当が書き換える範囲 =====
@@ -290,6 +318,7 @@ const CASES = [
   { label: '税抜 1,980円・商品名が2行', price: { main: '1,980', incl: '2,138.4' }, twoLines: true },
   { label: '税抜 12,800円', price: { main: '12,800', incl: '13,824' } },
   { label: '税込で入力した 158円（税込額の併記なし。「税込」とだけ添える）', price: { main: '158', incl: '' } },
+  { label: '「各」付き 税抜 100円（数字の左下に小さく「各」）', price: { main: '100', incl: '108', each: true } },
   { label: '入力できる最大 1,234,567円', price: { main: '1,234,567', incl: '1,333,332.36' } },
 ];
 const SIZES = [['正方形', 1080, 1080], ['縦 4:5', 1080, 1350], ['縦長 9:16', 1080, 1920]];
@@ -365,7 +394,7 @@ function fontsUrl(fonts) {
 }
 
 async function loadFonts() {
-  const sample = '0123456789,.円税込抜（）()¥';
+  const sample = '0123456789,.円税込抜各（）()¥';
   const css = new Promise((resolve, reject) => {
     const link = document.createElement('link');
     link.rel = 'stylesheet'; link.href = fontsUrl(PRICE_FONTS);

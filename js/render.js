@@ -1,6 +1,6 @@
 // ポップを Canvas へ描く・画像ファイルにする。
 
-import { adFileName, exportFileName, formatDate, priceTexts, SIZES } from './model.js';
+import { adFileName, exportFileName, formatDate, NAME_FONTS, nameFontOf, priceTexts, SIZES } from './model.js';
 import { FONTS, font, measurer, roundRectPath, TEMPLATES } from './templates.js';
 import { canvasToBlob } from './image.js';
 import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.js';
@@ -27,8 +27,8 @@ export function photoBoxOf(pop) {
 let fontWarned = false;
 let priceFontCss = null;
 
-/** デザイン編集画面で選べる書体（金額キャッチと、産地・商品名・数量と単位の3行）。 */
-const designFonts = () => [...PRICE_FONTS, ...labelFontList(LABEL_DESIGN)];
+/** 定義を読み込む書体（金額キャッチ・産地・商品名・数量と単位の3行・商品名に選べる書体）。 */
+const designFonts = () => [...PRICE_FONTS, ...labelFontList(LABEL_DESIGN), ...NAME_FONTS.filter(f => f.family)];
 
 /** その書体の定義（@font-face）を読み込む。デザインで書体が変わっても index.html を直さずに済むように。 */
 function loadPriceFontCss() {
@@ -55,12 +55,12 @@ export async function ensureFonts(pop, settings, onFail) {
   if (!document.fonts?.load) return;
   const decor = Object.values(LABEL_DESIGN).flatMap(t => [t?.prefix, t?.suffix]).filter(Boolean);   // 〈〉など3行の前後の飾り
   const text = [pop.name, pop.unit, pop.origin, ...decor,
-    '0123456789,.円税込抜()（）〈〉月火水木金土日/📷写真を追加—'].join('');
+    '0123456789,.円税込抜各()（）〈〉月火水木金土日/📷写真を追加—'].join('');
   try {
     const load = f => document.fonts.load(`${f.weight} 40px "${f.family}"`, text);
     await Promise.all([
       ...Object.values(FONTS).map(load),
-      loadPriceFontCss().then(() => Promise.all(designFonts().map(load))),
+      loadPriceFontCss().then(() => Promise.all([...designFonts().filter(f => !NAME_FONTS.includes(f)), nameFontOf(pop)].filter(Boolean).map(load))),
     ]);
   } catch (err) {
     if (!fontWarned) { fontWarned = true; onFail?.(err); }
@@ -81,6 +81,7 @@ export function renderPop(canvas, pop, photo, settings, { preview = false } = {}
     W: s.w, H: s.h, u: s.w / 1080, pop: { ...pop, badge: '', catch: '' }, photo, preview,
     price: priceTexts(pop, settings),   // 価格が無ければ null
     shopName: '',   // 店名はポップに入れない（フレームの下の帯で入れる）
+    nameFont: nameFontOf(pop),   // 商品名の書体（選んでいなければ null＝デザインのまま）
   });
   ctx.restore();
 }

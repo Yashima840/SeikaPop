@@ -51,6 +51,7 @@ const CASES = [
   { label: '税抜 1,980円・商品名が2行', price: { main: '1,980', incl: '2,138.4' }, twoLines: true },
   { label: '税抜 12,800円', price: { main: '12,800', incl: '13,824' } },
   { label: '税込で入力した 158円（税込額の併記なし。「税込」とだけ添える）', price: { main: '158', incl: '' } },
+  { label: '「各」付き 税抜 100円（数字の左下に小さく「各」）', price: { main: '100', incl: '108', each: true } },
   { label: '入力できる最大 1,234,567円', price: { main: '1,234,567', incl: '1,333,332.36' } },
 ];
 const SIZES = [['正方形', 1080, 1080], ['縦 4:5', 1080, 1350], ['縦長 9:16', 1080, 1920]];
@@ -126,7 +127,7 @@ function fontsUrl(fonts) {
 }
 
 async function loadFonts() {
-  const sample = '0123456789,.円税込抜（）()¥';
+  const sample = '0123456789,.円税込抜各（）()¥';
   const css = new Promise((resolve, reject) => {
     const link = document.createElement('link');
     link.rel = 'stylesheet'; link.href = fontsUrl(PRICE_FONTS);

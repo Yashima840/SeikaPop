@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { LABEL_DESIGN } from '../js/label-design.js';
-import { LABEL_FONTS, labelBounds, labelDesignProblems, labelFontList, labelText, layoutLabels } from '../js/labels.js';
+import { LABEL_FONTS, labelBounds, labelDesignFor, labelDesignProblems, labelFontList, labelText, labelsBelow, layoutLabels } from '../js/labels.js';
+import { createPop, NAME_FONTS, nameFontOf } from '../js/model.js';
 
 const measure = (s, size) => Array.from(s).length * size;   // 1文字＝大きさ1つ分
 const pop = { name: 'にんじん', unit: '1袋', origin: '北海道産' };
@@ -87,4 +88,22 @@ test('打ち間違いを保存前に止める', () => {
   assert.match(bad(d => { d.unit.follow = 'yes'; }), /付いていく/);
   assert.match(bad(d => { delete d.origin; }), /産地の設定がありません/);
   assert.match(bad(d => { d.name.fill = '#12345'; }), /商品名の色/);
+});
+
+test('商品名の書体を選ぶと、3行のデザインの商品名だけ差し替える（選ばなければそのまま）', () => {
+  const pop = { ...createPop(), nameFont: 'mincho' };
+  const d = labelDesignFor(pop);
+  assert.equal(d.name.font, 'Zen Old Mincho');
+  assert.equal(d.origin, LABEL_DESIGN.origin);
+  assert.equal(labelDesignFor(createPop()), LABEL_DESIGN);
+  assert.equal(nameFontOf({ nameFont: 'no-such' }), null, '知らない id はデザインのまま');
+  for (const f of NAME_FONTS.filter(x => x.id)) assert.match(f.weight, /^[1-9]00$/);
+});
+
+test('写真の下に要る高さ: 商品名が2行なら1行より大きい・何も無ければ 0', () => {
+  const measure = (s, size) => Array.from(s).length * size;
+  const pop = { ...createPop(), name: 'トマト', unit: '1袋', origin: '' };
+  const one = labelsBelow(pop, measure), two = labelsBelow({ ...pop, name: 'シャインマスカット大粒種なし' }, measure);
+  assert.ok(one > 0 && two > one, `${one} / ${two}`);
+  assert.equal(labelsBelow({ ...pop, name: '', unit: '' }, measure), 0);
 });

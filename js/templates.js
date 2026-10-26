@@ -3,9 +3,9 @@
 // 大きさは幅1080px を基準にした u（W/1080）で書き、縦の長さ（H）に合わせて写真の枠を伸ばす。
 
 import { coverSource, fitFontSize, layoutLines, seededRandom } from './layout.js';
-import { taxNote } from './model.js';
+import { splitDecimal, taxNote } from './model.js';
 import { drawPrice } from './price-design.js';
-import { canvasMeasure, drawLabels, labelsBelow } from './labels.js';
+import { canvasMeasure, drawLabels, labelDesignFor, labelsBelow } from './labels.js';
 
 const FALLBACK = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif';
 export const FONTS = {
@@ -69,6 +69,42 @@ function fillLines(ctx, lines, x, y, lineH) {
   lines.forEach((ln, i) => ctx.fillText(ln, x, y + i * lineH));
 }
 
+// 税込の小数（".84"）は、ほかの文字より2段小さく描く
+const DECIMAL_SMALL = 0.7;
+// 「各」は数字の4分の1の大きさで、数字の左下に重ねる（数字より手前）
+const EACH_SMALL = 0.25;
+
+/**
+ * 小数の部分だけ小さくして1行を描く。paint(text, x, y, f, size) は左揃えで1つ描く関数。
+ * align は x をどこに合わせるか（left・center・right）。
+ */
+function paintMixed(ctx, text, x, y, f, size, align, paint) {
+  const segs = splitDecimal(text).map(s => ({ ...s, size: s.small ? size * DECIMAL_SMALL : size }));
+  const widths = segs.map(s => { ctx.font = font(f, s.size); return ctx.measureText(s.text).width; });
+  const total = widths.reduce((a, b) => a + b, 0);
+  let cx = align === 'center' ? x - total / 2 : align === 'right' ? x - total : x;
+  ctx.save();
+  ctx.textAlign = 'left';
+  segs.forEach((s, i) => { paint(s.text, cx, y, f, s.size); cx += widths[i]; });
+  ctx.restore();
+}
+
+/**
+ * 「各」を (x, y)＝数字の左端・基準の線 に重ねる。数字と同じ色なので、halo（下地の色）で縁取って数字から浮かせる。
+ */
+function paintEach(ctx, x, y, f, size, color, halo) {
+  ctx.save();
+  ctx.font = font(f, size);
+  ctx.textAlign = 'left';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = size * 0.3;
+  ctx.strokeStyle = halo;
+  ctx.strokeText('各', x, y);
+  ctx.fillStyle = color;
+  ctx.fillText('各', x, y);
+  ctx.restore();
+}
+
 function withShadow(ctx, blur, color, fn) {
   ctx.save();
   ctx.shadowColor = color;
@@ -81,6 +117,7 @@ function withShadow(ctx, blur, color, fn) {
 /**
  * 価格（数字＋「円」）と、その上の単位・下の税の文字を中心 (cx, cy) へ置く。
  * 価格は総額表示（税込）が義務なので、税込（税抜で入れたときは税込の金額）を必ず添える。
+ * st.halo＝価格の下地の色（「各」の縁取りに使う）。
  */
 function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
   const { pop, u } = d;
@@ -108,6 +145,7 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
   };
   ctx.fillStyle = st.color;
   paint(num, left, base, st.font, size);
+  if (d.price.each) paintEach(ctx, left, base, st.font, size * EACH_SMALL, st.color, st.halo || '#fff');
   paint('円', left + wNum + size * 0.04, base, st.font, size * yenK);
   ctx.textAlign = 'center';
   ctx.fillStyle = st.subColor || st.color;
@@ -115,7 +153,7 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
   if (pop.unit) paint(pop.unit, cx, cy - size * 0.55, st.subFont || FONTS.round, sub);
   const note = taxNote(d.price);
   const subFont = st.subFont || FONTS.round;
-  paint(note, cx, base + sub * 1.25, subFont, fitFontSize(note, maxW * 0.92, measurer(ctx, subFont), sub * 0.85, 18 * u));
+  paintMixed(ctx, note, cx, base + sub * 1.25, subFont, fitFontSize(note, maxW * 0.92, measurer(ctx, subFont), sub * 0.85, 18 * u), 'center', paint);
   ctx.restore();
 }
 
@@ -188,9 +226,10 @@ const fresh = {
       withShadow(ctx, 8 * u, 'rgba(0,0,0,0.6)', () => fillLines(ctx, cl.lines, left, y - (cl.lines.length - 1) * lh, lh));
       y -= cl.lines.length * lh + 14 * u;
     }
-    const nl = layoutLines(pop.name, maxW, measurer(ctx, FONTS.impact), { maxSize: 150 * u, minSize: 72 * u, maxLines: 2 });
+    const nf = d.nameFont || FONTS.impact;
+    const nl = layoutLines(pop.name, maxW, measurer(ctx, nf), { maxSize: 150 * u, minSize: 72 * u, maxLines: 2 });
     if (nl.lines.length) {
-      ctx.font = font(FONTS.impact, nl.size);
+      ctx.font = font(nf, nl.size);
       ctx.fillStyle = '#fff';
       const lh = nl.size * 1.12;
       withShadow(ctx, 14 * u, 'rgba(0,0,0,0.55)', () => fillLines(ctx, nl.lines, left, y - (nl.lines.length - 1) * lh, lh));
@@ -213,7 +252,7 @@ const fresh = {
       ctx.beginPath();
       ctx.arc(0, 0, r - 14 * u, 0, Math.PI * 2);
       ctx.stroke();
-      drawPriceBlock(ctx, d, 0, 4 * u, r * 1.55, { font: FONTS.impact, maxSize: 132 * u, color: '#d32f2f', subColor: '#5d3a00' });
+      drawPriceBlock(ctx, d, 0, 4 * u, r * 1.55, { font: FONTS.impact, maxSize: 132 * u, color: '#d32f2f', subColor: '#5d3a00', halo: '#ffd23f' });
       ctx.restore();
     }
   },
@@ -323,11 +362,12 @@ const marche = {
     const rowTop = box.y + box.h + 40 * u;
     const hasPrice = !!d.price;
     const textW = W - 140 * u - (hasPrice ? 380 * u : 0);
-    const nl = layoutLines(pop.name, textW, measurer(ctx, FONTS.marker), { maxSize: 116 * u, minSize: 60 * u, maxLines: 2 });
+    const nf = d.nameFont || FONTS.marker;
+    const nl = layoutLines(pop.name, textW, measurer(ctx, nf), { maxSize: 116 * u, minSize: 60 * u, maxLines: 2 });
     let y = rowTop;
     ctx.textAlign = 'left';
     if (nl.lines.length) {
-      ctx.font = font(FONTS.marker, nl.size);
+      ctx.font = font(nf, nl.size);
       ctx.fillStyle = '#231509';
       const lh = nl.size * 1.1;
       fillLines(ctx, nl.lines, 70 * u, y + nl.size * 0.9, lh);
@@ -352,7 +392,7 @@ const marche = {
       });
       // 税込の併記が入るときは、赤丸が併記に掛からないよう数字を上げて丸を平たくする
       const note = !!d.price.incl;
-      drawPriceBlock(ctx, d, 0, (note ? -18 : -4) * u, 290 * u, { font: FONTS.marker, maxSize: 120 * u, color: '#c62828', subColor: '#3b2410', subFont: FONTS.marker });
+      drawPriceBlock(ctx, d, 0, (note ? -18 : -4) * u, 290 * u, { font: FONTS.marker, maxSize: 120 * u, color: '#c62828', subColor: '#3b2410', subFont: FONTS.marker, halo: '#fffdf6' });
       markerCircle(ctx, 0, (note ? -14 : -6) * u, 160 * u, (note ? 64 : 78) * u, u);
       ctx.restore();
     }
@@ -398,10 +438,11 @@ const simple = {
       y += 20 * u;
     }
     const tall = H / W > 1.2;
-    const nl = layoutLines(pop.name, maxW, measurer(ctx, FONTS.mincho),
+    const nf = d.nameFont || FONTS.mincho;
+    const nl = layoutLines(pop.name, maxW, measurer(ctx, nf),
       { maxSize: 118 * u, minSize: 60 * u, maxLines: tall ? 2 : 1 });
     if (nl.lines.length) {
-      ctx.font = font(FONTS.mincho, nl.size);
+      ctx.font = font(nf, nl.size);
       ctx.fillStyle = '#22261f';
       const lh = nl.size * 1.15;
       fillLines(ctx, nl.lines, left, y + nl.size, lh);
@@ -445,9 +486,10 @@ const simple = {
       const yenW = m('円', size * 0.4) + 6 * u;
       ctx.font = font(FONTS.mincho, size);
       ctx.fillText(num, W - left - yenW, by);
-      ctx.font = font(FONTS.round, 34 * u);
+      if (d.price.each) paintEach(ctx, W - left - yenW - m(num, size), by, FONTS.mincho, size * EACH_SMALL, '#22261f', '#f7f3ea');
       ctx.fillStyle = '#5c5f58';
-      ctx.fillText([pop.unit, taxNote(d.price)].filter(Boolean).join('　'), W - left, by - size + 4 * u);
+      paintMixed(ctx, [pop.unit, taxNote(d.price)].filter(Boolean).join('　'), W - left, by - size + 4 * u, FONTS.round, 34 * u, 'right',
+        (s, x, y, f, sz) => { ctx.font = font(f, sz); ctx.fillText(s, x, y); });
     }
   },
 };
@@ -466,7 +508,7 @@ const bold = {
   // measure＝文字の幅の測り方（labels.js の canvasMeasure）。商品名と単位が写真の下に要る高さを測って写真を縮める
   photoBox: (W, H, pop, measure) => {
     const u = W / 1080, m = BOLD_MARGIN * u;
-    const below = labelsBelow(pop, measure) * u;
+    const below = labelsBelow(pop, measure, labelDesignFor(pop)) * u;
     return { x: m, y: m, w: W - 2 * m, h: H - 2 * m - below - (below ? m : 0) };
   },
   draw(ctx, d) {
@@ -481,7 +523,7 @@ const bold = {
     const box = this.photoBox(W, H, pop, canvasMeasure(ctx));
     if (!drawPhoto(ctx, d.photo, box, pop.crop)) drawNoPhoto(ctx, box, ['#ffcf6b', '#f08a24'], d);
     // 産地・商品名・数量と単位（置き場所と見た目は label-design.js）
-    drawLabels(ctx, box, pop, u);
+    drawLabels(ctx, box, pop, u, labelDesignFor(pop));
     // 金額キャッチは写真の右下に乗せる（中身は price-design.js）
     if (d.price) drawPrice(ctx, box, d.price, u);
   },
