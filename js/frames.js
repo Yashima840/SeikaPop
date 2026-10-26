@@ -108,6 +108,6 @@ export function adShotKey(ad, now = new Date()) {
 export function shotFromAd(ad, frame, { thumb }, now = new Date()) {
   return {
     id: newId(), kind: 'ad', title: `広告（${frame.label}）`, key: adShotKey(ad, now), w: frame.w, h: frame.h,
-    thumb, createdAt: now.toISOString(), pinnedAt: null,
+    thumb, createdAt: now.toISOString(),
   };
 }

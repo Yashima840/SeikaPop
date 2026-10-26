@@ -42,17 +42,14 @@ export function mergePops(existing, incoming) {
   return { toPut, added, updated, skipped };
 }
 
-/**
- * 作った画像の履歴を重ねる。履歴の画像は後から変わらないので、無いものだけ足す。
- * ピンだけは「どちらかで付けていれば付ける」（重ねてピンが外れる、を起こさない）。
- */
+/** 作った画像の履歴を重ねる。履歴の画像は後から変わらないので、無いものだけ足す。 */
 export function mergeShots(existing, incoming) {
   const byId = new Map(existing.map(s => [s.id, s]));
   const toPut = [];
   let added = 0;
   for (const s of incoming) {
     const cur = byId.get(s.id);
-    if (!cur) { toPut.push(s); added += 1; } else if (s.pinnedAt && !cur.pinnedAt) toPut.push({ ...cur, pinnedAt: s.pinnedAt });
+    if (!cur) { toPut.push(s); added += 1; }
   }
   return { toPut, added };
 }

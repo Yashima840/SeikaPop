@@ -68,6 +68,14 @@ export function regularFromPop(pop, now = new Date()) {
   return { ...createPop(now), ...contentOf(pop), isRegular: true };
 }
 
+/**
+ * 履歴のポップをそのままレギュラーへ移す（はじめの画面の「★ レギュラーにする」）。
+ * 同じ id のまま移すので、このポップから出した画像は、そのままレギュラーの画像として広告に並ぶ。
+ */
+export function moveToRegular(pop, now = new Date()) {
+  return { ...pop, isRegular: true, fromRegularId: null, confirmed: false, updatedAt: now.toISOString() };
+}
+
 /** レギュラーの中身を今のポップで上書きする（id・作成日は残す）。 */
 export function updateRegularFrom(regular, pop, now = new Date()) {
   return { ...regular, ...contentOf(pop), updatedAt: now.toISOString() };
@@ -198,7 +206,7 @@ export function adFileName(now = new Date()) {
 // 出した（共有・保存・「履歴に残す」）画像そのものを控える。ポップのデータとは別に持つ
 // （ポップを後で直しても、その日に出した画像は残る）。
 
-/** ピンの無い画像を残す枚数。超えた古い分から消す（スマホの容量を食い尽くさないため）。ピン付きは数えず消さない。 */
+/** 画像を残す枚数。超えた古い分から消す（スマホの容量を食い尽くさないため）。各レギュラーの最新の1枚は数えず消さない。 */
 export const HISTORY_MAX = 60;
 
 /**
@@ -213,26 +221,58 @@ export function popShotKey(pop, now = new Date()) {
 export function shotFromPop(pop, { w, h, thumb }, now = new Date()) {
   return {
     id: newId(), kind: 'pop', title: popTitle(pop), key: popShotKey(pop, now),
-    w, h, thumb, createdAt: now.toISOString(), pinnedAt: null,
+    w, h, thumb, createdAt: now.toISOString(),
   };
 }
 
-/** 並び順: ピン付きが最上段（後からピンを付けたものほど上）、その下に新しい順。 */
+/** 新しい順。 */
 export function sortHistory(shots) {
-  return [...shots].sort((a, b) => {
-    if (!!a.pinnedAt !== !!b.pinnedAt) return a.pinnedAt ? -1 : 1;
-    if (a.pinnedAt) return String(b.pinnedAt).localeCompare(String(a.pinnedAt));
-    return String(b.createdAt).localeCompare(String(a.createdAt));
-  });
+  return [...shots].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
 
-/** 上限を超えた、消してよい画像の id（ピンの無いものの古い方から）。 */
-export function historyOverflow(shots, max = HISTORY_MAX) {
-  return sortHistory(shots).filter(s => !s.pinnedAt).slice(max).map(s => s.id);
+/** 画像を出したポップの id（印 popShotKey から読む）。広告の画像などポップから出していないものは null。 */
+export function popIdOfShot(shot) {
+  const m = /^pop:(.+?)@/.exec(String(shot.key || ''));
+  return m ? m[1] : null;
 }
 
-export function setPinned(shot, pinned, now = new Date()) {
-  return { ...shot, pinnedAt: pinned ? now.toISOString() : null };
+/**
+ * 画像がどのレギュラーのものか（レギュラーそのもの、またはレギュラーから作った今日のポップから出した）。
+ * 元のポップやレギュラーが消されていれば null。
+ */
+export function regularIdOfShot(shot, popsById) {
+  const pop = popsById.get(popIdOfShot(shot));
+  if (!pop) return null;
+  const regId = pop.isRegular ? pop.id : pop.fromRegularId;
+  return regId && popsById.get(regId)?.isRegular ? regId : null;
+}
+
+/** 広告の画面の並び: レギュラーの画像（新しい順）→ ほかの履歴（新しい順）。 */
+export function shotsForAd(shots, pops) {
+  const byId = new Map(pops.map(p => [p.id, p]));
+  const regular = [], others = [];
+  for (const s of sortHistory(shots)) (regularIdOfShot(s, byId) ? regular : others).push(s);
+  return { regular, others };
+}
+
+/**
+ * 上限で消さずに残す画像の id（各レギュラーの最新の1枚。広告にレギュラーを並べられるように）。
+ * ピンの仕組みは廃止したが、以前ピン（pinnedAt）を付けて残した画像は黙って消さない。
+ */
+export function keptShotIds(shots, pops) {
+  const byId = new Map(pops.map(p => [p.id, p]));
+  const seen = new Set(), keep = new Set(shots.filter(s => s.pinnedAt).map(s => s.id));
+  for (const s of sortHistory(shots)) {
+    const regId = regularIdOfShot(s, byId);
+    if (regId && !seen.has(regId)) { seen.add(regId); keep.add(s.id); }
+  }
+  return keep;
+}
+
+/** 上限を超えた、消してよい画像の id（残す画像は数えず、それ以外の古い方から）。 */
+export function historyOverflow(shots, pops = [], max = HISTORY_MAX) {
+  const keep = keptShotIds(shots, pops);
+  return sortHistory(shots).filter(s => !keep.has(s.id)).slice(max).map(s => s.id);
 }
 
 /** 履歴から出し直すときのファイル名（作った日時。端末の時刻で）。 */

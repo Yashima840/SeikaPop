@@ -1,20 +1,31 @@
-// 広告を作る画面: ①フレームを選ぶ ②作った画像の一覧からタップした順に枠へ入れる ③共有・保存。
+// 広告を作る画面: ①フレームを選ぶ ②作った画像（レギュラーの画像が先、ほかの履歴が後）からタップした順に枠へ入れる ③共有・保存。
 // 作りかけ（フレーム・選んだ画像・見出し）は自動で保存し、次に開いたときに続きから。
 
 import * as store from '../store.js';
-import { sortHistory } from '../model.js';
+import { formatShotTime, shotsForAd } from '../model.js';
 import {
   AD_TITLES, adProblems, createAd, dropMissing, fitSlots, FRAME_ORDER, FRAMES, shotFromAd, toggleShot,
 } from '../frames.js';
 import { blobToImage } from '../image.js';
 import { adToFile, ensureAdFonts, renderAd } from '../render.js';
 import { debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
-import { shotCard } from './history.js';
 import { queueAd } from '../sender.js';
 
 function chips(items, onPick, current) {
   return h('div', { class: 'chips' }, items.map(([value, label]) =>
     h('button', { type: 'button', class: value === current ? 'chip on' : 'chip', onclick: () => onPick(value) }, label)));
+}
+
+/** 作った画像の1枚（badge＝右上の枠の番号、selected＝枠に入れている）。 */
+function shotCard(shot, { onOpen, badge = '', selected = false }) {
+  return h('div', { class: selected ? 'card shot picked' : 'card shot' },
+    h('button', { class: 'card-main', onclick: onOpen, 'aria-label': shot.title, 'aria-pressed': selected ? 'true' : 'false' },
+      h('img', { src: shot.thumb, alt: '', loading: 'lazy' }),
+      badge ? h('span', { class: 'pick-num', text: badge }) : null,
+      h('span', { class: 'card-title', text: shot.title }),
+      h('span', { class: 'card-sub', text: formatShotTime(shot.createdAt) }),
+    ),
+  );
 }
 
 function loadOverlay(src) {
@@ -29,7 +40,8 @@ function loadOverlay(src) {
 export async function showAd(root, app) {
   app.setTitle('広告を作る', { back: true });
   const settings = await store.getSettings();
-  const shots = sortHistory(await store.listShots());
+  const groups = shotsForAd(await store.listShots(), await store.listPops());
+  const shots = [...groups.regular, ...groups.others];
 
   let ad = { ...createAd(), ...await store.getAdDraft() };
   if (!FRAMES[ad.frameId]) ad.frameId = FRAME_ORDER[0];
@@ -125,6 +137,14 @@ export async function showAd(root, app) {
     changed();
   };
 
+  const groupGrid = (label, list) => (list.length ? [
+    h('h4', { class: 'group', text: label }),
+    h('div', { class: 'grid' }, list.map(shot => {
+      const at = ad.slots.indexOf(shot.id);
+      return shotCard(shot, { onOpen: () => pickShot(shot.id), badge: at >= 0 ? String(at + 1) : '', selected: at >= 0 });
+    })),
+  ] : []);
+
   function rebuild() {
     const n = ad.slots.length, filled = ad.slots.filter(Boolean).length;
     form.replaceChildren(
@@ -134,14 +154,12 @@ export async function showAd(root, app) {
       ),
       h('section', {},
         h('h3', {}, `② 画像を選ぶ（${filled}/${n}）`),
-        h('p', { class: 'hint' }, 'タップした順に 1, 2, … の枠へ入ります。もう一度タップで外します。📌 ピンの画像が上に並びます。'),
-        shots.length
-          ? h('div', { class: 'grid' }, shots.map(shot => {
-            const at = ad.slots.indexOf(shot.id);
-            return shotCard(shot, { onOpen: () => pickShot(shot.id), badge: at >= 0 ? String(at + 1) : '', selected: at >= 0 });
-          }))
-          : h('p', { class: 'empty' },
-            'まだ作った画像がありません。ポップの編集画面で「共有する」「画像を保存」「履歴に残すだけ」を押すと、ここに並びます。'),
+        h('p', { class: 'hint' }, 'タップした順に 1, 2, … の枠へ入ります。もう一度タップで外します。日付は画像を出した日です（価格はその日のもの）。'),
+        shots.length ? [
+          ...groupGrid('★ レギュラー', groups.regular),
+          ...groupGrid('履歴', groups.others),
+        ] : h('p', { class: 'empty' },
+          'まだ作った画像がありません。ポップの編集画面で「共有する」「画像を保存」「履歴に残すだけ」を押すと、ここに並びます。'),
       ),
       h('section', {},
         h('h3', {}, '③ 文字'),

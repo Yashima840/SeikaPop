@@ -1,18 +1,18 @@
-// はじめの画面: 1枚作る／まとめて1枚（広告）の入口・レギュラー・作った画像・作りかけのポップ
+// はじめの画面: 1枚作る／まとめて1枚（広告）の入口と、レギュラー・履歴の2つの欄
 
 import * as store from '../store.js';
-import { createPop, popFromRegular, popTitle, sortByUpdated } from '../model.js';
+import { createPop, formatShotTime, moveToRegular, popFromRegular, popTitle, sortByUpdated } from '../model.js';
 import { confirmBox, h, toast } from '../ui.js';
 import { onOutboxChange, outboxStatus } from '../sender.js';
-import { historySection } from './history.js';
 
 const RECENT_MAX = 30;
 
-function card(pop, { onOpen, actions }) {
+function card(pop, { onOpen, actions, sub = '' }) {
   return h('div', { class: 'card' },
     h('button', { class: 'card-main', onclick: onOpen, 'aria-label': popTitle(pop) },
       pop.thumb ? h('img', { src: pop.thumb, alt: '', loading: 'lazy' }) : h('div', { class: 'thumb-empty', text: '📷' }),
       h('span', { class: 'card-title', text: popTitle(pop) }),
+      sub ? h('span', { class: 'card-sub', text: sub }) : null,
     ),
     h('div', { class: 'card-actions' }, actions),
   );
@@ -37,6 +37,15 @@ export async function showHome(root, app) {
     const pop = popFromRegular(reg);
     await store.putPop(pop);
     app.go(`#/edit/${pop.id}`);
+  };
+  const makeRegular = async pop => {
+    try {
+      await store.putPop(moveToRegular(pop));
+      toast(`「${popTitle(pop)}」をレギュラーにしました`);
+    } catch (err) {
+      toast(`レギュラーにできませんでした: ${err.message}`, { error: true });
+    }
+    app.refresh();
   };
   const remove = async (pop, what) => {
     if (!await confirmBox(`「${popTitle(pop)}」の${what}を削除します。元に戻せません。`, '削除する')) return;
@@ -63,8 +72,6 @@ export async function showHome(root, app) {
   showOutbox();
   const dispose = onOutboxChange(() => { showOutbox(); });
 
-  const history = await historySection(app);
-
   // 開いてすぐ「1枚を作るのか・何枚かを1枚にまとめるのか」を選べるように、入口を2つ並べる
   root.replaceChildren(
     outboxNote,
@@ -86,15 +93,19 @@ export async function showHome(root, app) {
           h('button', { class: 'mini danger', onclick: () => remove(reg, 'レギュラー') }, '削除'),
         ],
       })))
-      : h('p', { class: 'empty' }, '良いポップができたら、編集画面の「★ レギュラーに登録」で、ここから何度でも呼び出せます。'),
-    ...history,
-    h('h2', {}, '✏ 作りかけ・最近のポップ', h('small', { text: ' タップで続きを直す' })),
+      : h('p', { class: 'empty' }, '良いポップができたら、下の履歴の「★ レギュラーにする」で、ここから何度でも呼び出せます。'),
+    h('h2', {}, '履歴', h('small', { text: ' タップで続きを直す・もう一度出す' })),
     recent.length
       ? h('div', { class: 'grid' }, recent.map(p => card(p, {
         onOpen: () => app.go(`#/edit/${p.id}`),
-        actions: [h('button', { class: 'mini danger', onclick: () => remove(p, 'ポップ') }, '削除')],
+        sub: formatShotTime(p.updatedAt),
+        actions: [
+          // レギュラーから作ったものは移すと同じレギュラーが2つになるので出さない（元は「元を直す」で直す）
+          p.fromRegularId ? null : h('button', { class: 'mini', onclick: () => makeRegular(p) }, '★ レギュラーにする'),
+          h('button', { class: 'mini danger', onclick: () => remove(p, 'ポップ') }, '削除'),
+        ],
       })))
-      : h('p', { class: 'empty' }, 'まだありません。'),
+      : h('p', { class: 'empty' }, 'まだありません。「＋ 1枚作る」で作ったポップがここに並びます。'),
   );
   return dispose;
 }

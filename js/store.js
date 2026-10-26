@@ -23,7 +23,7 @@ function openDb() {
       if (!db.objectStoreNames.contains('pops')) db.createObjectStore('pops', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
-      // 履歴は一覧用（名前・見本・ピン）と画像本体を分ける（一覧を開くたびに全部の画像を読まないため）
+      // 履歴は一覧用（名前・見本・日時）と画像本体を分ける（一覧を開くたびに全部の画像を読まないため）
       if (!db.objectStoreNames.contains('shots')) db.createObjectStore('shots', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('shotImages')) db.createObjectStore('shotImages', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'id' });
@@ -115,29 +115,19 @@ export async function getShotImage(id) {
 
 /**
  * 画像を履歴に足す。同じ印（key）の画像が既にあれば足さない。
- * ピンの無い画像が上限を超えたら古い方を同じトランザクションで消す。
+ * 上限を超えたら古い方を同じトランザクションで消す（各レギュラーの最新の1枚は残す）。
  * 戻り値: { added, pruned }
  */
 export async function addShot(shot, blob) {
-  return run(['shots', 'shotImages'], 'readwrite', async tx => {
+  return run(['shots', 'shotImages', 'pops'], 'readwrite', async tx => {
     const shots = await reqDone(tx.objectStore('shots').getAll());
     if (shots.some(s => s.key === shot.key)) return { added: false, pruned: 0 };
     tx.objectStore('shots').put(shot);
     tx.objectStore('shotImages').put({ id: shot.id, blob, type: blob.type });
-    const pruned = historyOverflow([...shots, shot]);
+    const pops = await reqDone(tx.objectStore('pops').getAll());
+    const pruned = historyOverflow([...shots, shot], pops);
     for (const id of pruned) { tx.objectStore('shots').delete(id); tx.objectStore('shotImages').delete(id); }
     return { added: true, pruned: pruned.length };
-  });
-}
-
-/** ピンの付け外し。外したとき上限を超えていれば古い方を消す。戻り値: 消した数 */
-export async function putShotMeta(shot) {
-  return run(['shots', 'shotImages'], 'readwrite', async tx => {
-    tx.objectStore('shots').put(shot);
-    const shots = (await reqDone(tx.objectStore('shots').getAll())).map(s => (s.id === shot.id ? shot : s));
-    const pruned = historyOverflow(shots);
-    for (const id of pruned) { tx.objectStore('shots').delete(id); tx.objectStore('shotImages').delete(id); }
-    return pruned.length;
   });
 }
 
@@ -255,13 +245,13 @@ export async function importBackup(obj) {
     for (const p of merged.toPut) tx.objectStore('pops').put(p);
     for (const r of shotRecs) {
       tx.objectStore('shots').put(r.meta);
-      // ピンだけ重ねた既存の画像は data を持たない（本体は端末にある）
       if (r.data) {
         tx.objectStore('shotImages').put({ id: r.meta.id, type: r.type, blob: base64ToBlob(r.data, r.type) });
       }
     }
     const all = await reqDone(tx.objectStore('shots').getAll());
-    for (const id of historyOverflow(all)) { tx.objectStore('shots').delete(id); tx.objectStore('shotImages').delete(id); }
+    const pops = await reqDone(tx.objectStore('pops').getAll());
+    for (const id of historyOverflow(all, pops)) { tx.objectStore('shots').delete(id); tx.objectStore('shotImages').delete(id); }
   });
   return { ...merged, shotsAdded: shotMerge.added };
 }
