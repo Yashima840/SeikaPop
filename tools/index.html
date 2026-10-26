@@ -180,6 +180,15 @@
                 <button type="button" data-save>登録</button> <button type="button" data-clear>登録を消す</button>
                 <div class="err" data-msg></div>
               </details></li>
+            <li><a class="ext" data-ext="stock" href="https://drive.google.com/drive/search?q=%E9%9D%92%E6%9E%9C%E3%83%9D%E3%83%83%E3%83%97%20%E5%86%99%E7%9C%9F%E3%82%B9%E3%83%88%E3%83%83%E3%82%AF" target="_blank" rel="noopener">写真ストック（ドライブ）</a>
+              <span class="note">ここへ写真（JPEG・PNG）をドラッグすると、どの端末の「📦 ストックから」にも出る。ファイル名が一覧の名前になる</span>
+              <details data-reg="stock">
+                <summary>直接開く先を登録する（この PC のブラウザだけに覚える）</summary>
+                フォルダを開いたときのアドレス（<code>https://drive.google.com/drive/…/folders/…</code>）を貼る
+                <input type="url" spellcheck="false" placeholder="https://drive.google.com/drive/folders/…">
+                <button type="button" data-save>登録</button> <button type="button" data-clear>登録を消す</button>
+                <div class="err" data-msg></div>
+              </details></li>
             <li><a class="ext" data-ext="drive" href="https://drive.google.com/drive/search?q=%E9%9D%92%E6%9E%9C%E3%83%9D%E3%83%83%E3%83%97%20%E6%88%90%E6%9E%9C%E7%89%A9" target="_blank" rel="noopener">集まったポップ（ドライブ）</a>
               <span class="note">「青果ポップ 成果物」フォルダ。未登録のあいだはドライブで探す</span>
               <details data-reg="drive">
@@ -200,6 +209,7 @@
   const REG = {
     script: { ok: v => v.startsWith('https://script.google.com/'), what: 'Apps Script のアドレス（https://script.google.com/ で始まる）' },
     drive: { ok: v => v.startsWith('https://drive.google.com/'), what: 'ドライブのアドレス（https://drive.google.com/ で始まる）' },
+    stock: { ok: v => v.startsWith('https://drive.google.com/'), what: 'ドライブのアドレス（https://drive.google.com/ で始まる）' },
     account: { ok: v => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), what: 'メールアドレス' },
   };
   const regKey = name => `seikapop.hub.ext.${name}`;

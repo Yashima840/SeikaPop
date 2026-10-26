@@ -10,7 +10,8 @@ import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.
 import { ensureFonts, photoBoxOf, renderPop, renderToFile, thumbnailOf } from '../render.js';
 import { TEMPLATE_ORDER, TEMPLATES } from '../templates.js';
 import { debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
-import { queuePop } from '../sender.js';
+import { queuePop, queueStockPhoto } from '../sender.js';
+import { openStockPicker } from './stock.js';
 
 // 青果と食品の両方に使う（食品は「1人前」「1本入」など）
 const UNITS = ['1袋', '1個', '1パック', '1本', '1玉', '1房', '100g', '1盛', '1人前', '1本入', '1個入'];
@@ -117,25 +118,29 @@ export async function showEditor(root, app, popId) {
   const fileCamera = h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true });
   const fileLibrary = h('input', { type: 'file', accept: 'image/*', hidden: true });
   const pickPhoto = camera => (camera ? fileCamera : fileLibrary).click();
+  /** 撮った・選んだ・ストックから呼んだ写真を、このポップの写真にする。fromStock＝ストックの写真（整え済みなので自動補正しない）。 */
+  const usePhoto = async (file, { fromStock = false } = {}) => {
+    statusEl.textContent = '写真を読み込み中…';
+    const blob = await shrinkPhoto(file);
+    const img = await blobToImage(blob);
+    const id = await store.putPhoto(blob);
+    photoImg = img;
+    pop.photoId = id;
+    pop.crop = { ...DEFAULT_CROP };
+    pop.adjust = fromStock ? { ...DEFAULT_ADJUST } : autoAdjustFor(img);   // 朝は手間をかけられないので、撮った写真はまず自動で整える
+    refreshAdjusted();
+    // 新しい写真を指していることを先に保存してから片付ける（逆だと新しい写真が消される）
+    await store.putPop(pop);
+    await store.removeUnusedPhotos();  // 差し替えた前の写真を片付ける（レギュラーが使っていれば残る）
+    changed({ rebuild: true });
+    toast(fromStock ? 'ストックの写真にしました' : '写真を自動で明るく整えました（「写真の調整」で変えられます）');
+  };
   const onFile = async ev => {
     const file = ev.target.files?.[0];
     ev.target.value = '';  // 同じ写真をもう一度選んでも反応するように
     if (!file) return;
-    statusEl.textContent = '写真を読み込み中…';
     try {
-      const blob = await shrinkPhoto(file);
-      const img = await blobToImage(blob);
-      const id = await store.putPhoto(blob);
-      photoImg = img;
-      pop.photoId = id;
-      pop.crop = { ...DEFAULT_CROP };
-      pop.adjust = autoAdjustFor(img);   // 朝は手間をかけられないので、まず自動で整える
-      refreshAdjusted();
-      // 新しい写真を指していることを先に保存してから片付ける（逆だと新しい写真が消される）
-      await store.putPop(pop);
-      await store.removeUnusedPhotos();  // 差し替えた前の写真を片付ける（レギュラーが使っていれば残る）
-      changed({ rebuild: true });
-      toast('写真を自動で明るく整えました（「写真の調整」で変えられます）');
+      await usePhoto(file);
     } catch (err) {
       statusEl.textContent = '';
       toast(`写真を読み込めませんでした: ${err.message}`, { error: true });
@@ -143,6 +148,18 @@ export async function showEditor(root, app, popId) {
   };
   fileCamera.addEventListener('change', onFile);
   fileLibrary.addEventListener('change', onFile);
+  // ストックから選ぶ（失敗はストックの画面に出して、選び直せるようにする）
+  const pickFromStock = () => openStockPicker({ onPick: blob => usePhoto(blob, { fromStock: true }) });
+  // 今の写真（補正前の元の写真）をストックに足す。送れなければ控えて送り直す
+  const addToStock = async () => {
+    try {
+      const ok = await queueStockPhoto(pop.photoId, pop.name);
+      toast(ok ? 'ストックへ送ります（届くと、どの端末の「📦 ストックから」にも出ます）'
+        : '事務所への送り先が設定されていないので送れません（⚙ 設定 →「事務所へ送る」）', { error: !ok });
+    } catch (err) {
+      toast(`ストックへ送れませんでした: ${err.message}`, { error: true });
+    }
+  };
 
   // ---- 入力欄 ----
   const zoomInput = h('input', {
@@ -206,6 +223,7 @@ export async function showEditor(root, app, popId) {
         h('div', { class: 'row' },
           h('button', { class: 'primary', onclick: () => pickPhoto(true) }, '📷 撮影'),
           h('button', { onclick: () => pickPhoto(false) }, '🖼 写真から選ぶ'),
+          h('button', { onclick: pickFromStock }, '📦 ストックから'),
         ),
         // お洒落に見せる仕上げ（補正の「自動補正」「補正なし」では外れない）
         photoImg ? h('div', { class: 'row effects' },
@@ -232,6 +250,8 @@ export async function showEditor(root, app, popId) {
             h('button', { onclick: () => { pop.crop = { ...DEFAULT_CROP }; changed({ rebuild: true }); } }, '位置を戻す'),
           ),
         ) : null,
+        // 良い写真が撮れたら、どの端末からも呼び出せるように事務所のストックへ（送るのは補正前の元の写真）
+        photoImg ? h('div', { class: 'row' }, h('button', { onclick: addToStock }, '📤 この写真をストックに入れる')) : null,
       ),
       h('section', {},
         h('h3', {}, 'デザイン'),

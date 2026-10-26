@@ -3,6 +3,8 @@
 //
 // 流れ: 共有・保存・履歴に残す → 送るものを端末に控える（outbox）→ つながっていれば送る
 //       → 届いたら控えを消す。送れなければ控えたまま、次に開いたときにまた送る。
+// 写真ストック（どの端末からでも呼び出せる写真の置き場。ドライブの「青果ポップ 写真ストック」）も同じ受け取り口を使う。
+//       足すのは控えて送る（kind: 'stock'）、読むのはその場で問い合わせる。
 
 import { contentOf, localStamp, popTitle } from './model.js';
 
@@ -83,6 +85,59 @@ export function adOutboxRecord(shot, { id, sender, now = new Date() }) {
     id, key: deliveryKey('ad', shot.key), kind: 'ad', title: shot.title,
     sender, createdAt: now.toISOString(), pop: null, tries: 0, lastError: null,
   };
+}
+
+/**
+ * 写真ストックへ足す写真の控え（写真の本体は image で送る）。同じ写真を2回入れても1枚にまとまる。
+ * title＝ストックでの名前（ふつうは商品名）。
+ */
+export function stockOutboxRecord(photoId, title, { id, sender, now = new Date() }) {
+  return {
+    id, key: deliveryKey('stock', photoId), kind: 'stock', title: String(title || '').trim() || '写真',
+    sender, createdAt: now.toISOString(), pop: null, tries: 0, lastError: null,
+  };
+}
+
+/** 写真ストックを読む本文（action: stock-list / stock-thumbs / stock-get）。 */
+export function stockRequestBody(passcode, action, extra = {}) {
+  return { format: DELIVERY_FORMAT, version: DELIVERY_VERSION, passcode, action, ...extra };
+}
+
+// 写真ストックに対応する前の受け取り口は、ストックの問い合わせを「画像の無い送信」として断る
+const OLD_COLLECTOR = '事務所の受け取り口が古い版です（事務所で Code.gs を差し替えて「新バージョン」でデプロイしてください）';
+
+/** ストックの問い合わせの返事を読む。ok なら reply をそのまま data に入れて返す。 */
+export function readStockReply(reply) {
+  const r = readReply(reply);
+  if (!r.ok) return reply && typeof reply === 'object' && !reply.stock && reply.message === '画像が入っていません' ? { ok: false, message: OLD_COLLECTOR } : r;
+  if (!reply.stock) return { ok: false, message: OLD_COLLECTOR };
+  return { ok: true, data: reply };
+}
+
+/** ストックの一覧を、画面で使う形にそろえる（名前の拡張子と、アプリが付けた日時・名前の前置きは見せない）。 */
+export function stockItems(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter(x => x && typeof x.id === 'string').map(x => ({
+    id: x.id, name: stockLabel(x.name), file: String(x.name || ''), type: String(x.type || ''),
+    size: Number(x.size) || 0, updated: String(x.updated || ''),
+  }));
+}
+
+/** 「20261027-0830_田中_トマト_1a2b3c.jpg」→「トマト（田中）」。PC で入れた名前はそのまま（拡張子だけ外す）。 */
+export function stockLabel(fileName) {
+  const base = String(fileName || '').replace(/\.[a-z0-9]{2,5}$/i, '');
+  const m = /^\d{8}-\d{4}_([^_]+)_(.+)_[\w-]{1,6}$/.exec(base);
+  if (!m) return base || '（名前なし）';
+  return m[1] === '名前なし' ? m[2] : `${m[2]}（${m[1]}）`;
+}
+
+/** ストックを名前で絞る（空なら全部）。全角・半角やカタカナ・ひらがなの違いは気にしない。 */
+export function filterStock(items, query) {
+  const norm = s => String(s).normalize('NFKC').toLowerCase().replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  const q = norm(query).trim();
+  if (!q) return items;
+  const words = q.split(/\s+/);
+  return items.filter(x => words.every(w => norm(x.name).includes(w)));
 }
 
 /** 受け取り口へ送る本文。image / photo は { type, data(base64) }。 */

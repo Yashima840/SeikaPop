@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   adOutboxRecord, collectorOf, deliveryBaseName, deliveryBody, makeSetupLink, outboxReplaced,
-  parseSetupCode, popOutboxRecord, readReply, sortOutbox, DELIVERY_FORMAT,
+  filterStock, parseSetupCode, popOutboxRecord, readReply, readStockReply, sortOutbox, stockItems, stockLabel,
+  stockOutboxRecord, stockRequestBody, DELIVERY_FORMAT,
 } from '../js/collect.js';
 import { createPop } from '../js/model.js';
 
@@ -112,4 +113,43 @@ test('受け取り口の返事: 合言葉違いは残りも送らずに止める
 test('送る順は古いものから', () => {
   const recs = [{ id: 'b', createdAt: '2026-10-26T02:00:00Z' }, { id: 'a', createdAt: '2026-10-26T01:00:00Z' }];
   assert.deepEqual(sortOutbox(recs).map(r => r.id), ['a', 'b']);
+});
+
+test('写真ストックへ足す控え: 同じ写真は同じ印（2回入れても1枚）。本文はストック用（kind: stock、作り直し用データ無し）', () => {
+  const now = new Date(2026, 9, 27, 8, 30);
+  const a = stockOutboxRecord('photo-1', ' トマト ', { id: 'r1', sender: '田中', now });
+  const b = stockOutboxRecord('photo-1', 'トマト', { id: 'r2', sender: '田中', now });
+  assert.equal(a.key, b.key);
+  assert.equal(a.kind, 'stock');
+  assert.equal(a.title, 'トマト');
+  assert.equal(stockOutboxRecord('p', '', { id: 'x', sender: '' }).title, '写真', '商品名が無くても名前を付ける');
+  const body = deliveryBody(a, PASS, { type: 'image/jpeg', data: 'AAA' }, null);
+  assert.equal(body.kind, 'stock');
+  assert.equal(body.pop, null);
+  assert.equal(body.name, '20261027-0830_田中_トマト_r1');
+});
+
+test('写真ストックの問い合わせの本文と返事: 古い受け取り口はそれと分かる理由を出す', () => {
+  const body = stockRequestBody(PASS, 'stock-get', { id: 'abc' });
+  assert.deepEqual([body.format, body.passcode, body.action, body.id], [DELIVERY_FORMAT, PASS, 'stock-get', 'abc']);
+  assert.equal(readStockReply({ ok: true, stock: 1, items: [] }).ok, true);
+  assert.match(readStockReply({ ok: true }).message, /古い版/);
+  assert.match(readStockReply({ ok: false, message: '画像が入っていません' }).message, /古い版/);
+  assert.match(readStockReply({ ok: false, code: 'passcode', message: 'x' }).message, /合言葉/);
+  assert.match(readStockReply({ ok: false, stock: 1, message: 'ストックにその写真がありません' }).message, /ありません/);
+});
+
+test('写真ストックの名前: アプリが付けた日時・印は見せず「商品名（送った人）」、PC で入れた名前はそのまま', () => {
+  assert.equal(stockLabel('20261027-0830_田中_完熟トマト_1a2b3c.jpg'), '完熟トマト（田中）');
+  assert.equal(stockLabel('20261027-0830_名前なし_トマト_1a2b3c.jpg'), 'トマト');
+  assert.equal(stockLabel('シャインマスカット 箱.JPG'), 'シャインマスカット 箱');
+  assert.equal(stockLabel(''), '（名前なし）');
+  assert.deepEqual(stockItems([{ id: 'x', name: 'a.png', size: '10' }, null, { name: 'no-id' }]).map(i => [i.id, i.name, i.size]), [['x', 'a', 10]]);
+});
+
+test('写真ストックを名前で探す: 全角半角・カタカナひらがなの違いは気にしない。言葉はすべて含むもの', () => {
+  const items = stockItems([{ id: '1', name: 'トマト 大玉.jpg' }, { id: '2', name: 'ﾄﾏﾄ ミニ.jpg' }, { id: '3', name: 'きゅうり.jpg' }]);
+  assert.deepEqual(filterStock(items, 'とまと').map(i => i.id), ['1', '2']);
+  assert.deepEqual(filterStock(items, 'トマト みに').map(i => i.id), ['2']);
+  assert.equal(filterStock(items, '  ').length, 3);
 });

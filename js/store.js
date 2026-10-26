@@ -159,6 +159,16 @@ export async function putCustomFrames(list) {
   await run(['meta'], 'readwrite', tx => reqDone(tx.objectStore('meta').put({ key: 'customFrames', value: list })));
 }
 
+// 写真ストックの一覧と小さい見本の控え（次に開いたとき、電波が弱くてもすぐ並べるため）。{ items, thumbs, fetchedAt }
+export async function getStockCache() {
+  const rec = await run(['meta'], 'readonly', tx => reqDone(tx.objectStore('meta').get('stockCache')));
+  return rec?.value || { items: [], thumbs: {}, fetchedAt: null };
+}
+
+export async function putStockCache(value) {
+  await run(['meta'], 'readwrite', tx => reqDone(tx.objectStore('meta').put({ key: 'stockCache', value })));
+}
+
 // ---- 事務所へ送る控え ----
 // 送り終わるまで画像（と写真）を端末に持つ。届いたら消す。
 

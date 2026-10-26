@@ -1,8 +1,11 @@
-// 作ったポップを事務所（法人の Google ドライブ）へ送る。判定は collect.js、控えは store.js。
+// 作ったポップを事務所（法人の Google ドライブ）へ送る。写真ストックの読み書きもここ。判定は collect.js、控えは store.js。
 // 送れないときは控えたまま、次の機会（アプリを開いた・電波が戻った・表へ戻った）に送り直す。
 
 import * as store from './store.js';
-import { adOutboxRecord, collectorOf, deliveryBody, pingBody, popOutboxRecord, readReply } from './collect.js';
+import {
+  adOutboxRecord, collectorOf, deliveryBody, pingBody, popOutboxRecord, readReply, readStockReply, stockItems,
+  stockOutboxRecord, stockRequestBody,
+} from './collect.js';
 import { newId } from './model.js';
 import { recordError } from './crash.js';
 
@@ -22,7 +25,7 @@ function notify() {
   }
 }
 
-async function post(url, body) {
+async function post(url, body, read = readReply) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
@@ -34,11 +37,11 @@ async function post(url, body) {
     let reply = null;
     try { reply = await res.json(); } catch { /* 読めない返事は下の readReply が理由付きで失敗にする */ }
     if (!reply && !res.ok) return { ok: false, message: `送り先が応答しません（${res.status}）` };
-    return readReply(reply);
+    return read(reply);
   } catch (err) {
     const message = err?.name === 'AbortError'
       ? '送るのに時間がかかりすぎました（電波を確かめてください）'
-      : '送れませんでした（電波が無いか、送り先に届きません）';
+      : '事務所につながりませんでした（電波が無いか、送り先に届きません）';
     return { ok: false, offline: true, message };
   } finally {
     clearTimeout(timer);
@@ -67,6 +70,56 @@ export async function queueAd(shot, image) {
   notify();
   flushOutbox();
   return true;
+}
+
+// ---- 写真ストック（どの端末からでも呼び出せる写真の置き場）----
+
+/** 写真をストックに足す控えを作って、送り始める。送り先が未設定なら false。 */
+export async function queueStockPhoto(photoId, title) {
+  const c = collectorOf(await store.getSettings());
+  if (!c.ready) return false;
+  const photo = await store.getPhoto(photoId);
+  if (!photo) throw new Error('写真の本体が見つかりません');
+  await store.queueDelivery(stockOutboxRecord(photoId, title, { id: newId(), sender: c.sender }), photo, null);
+  notify();
+  flushOutbox();
+  return true;
+}
+
+/** ストックに問い合わせる（読むだけなので控えない）。{ ok, data } か { ok:false, message }。 */
+async function askStock(action, extra) {
+  const c = collectorOf(await store.getSettings());
+  if (!c.ready) return { ok: false, notSet: true, message: '事務所への送り先が設定されていません（⚙ 設定 →「事務所へ送る」）' };
+  return post(c.url, stockRequestBody(c.passcode, action, extra), readStockReply);
+}
+
+/** ストックの一覧。{ ok, items, skipped（一覧に出せない形の写真の数）} */
+export async function fetchStockList() {
+  const r = await askStock('stock-list');
+  return r.ok ? { ok: true, items: stockItems(r.data.items), skipped: Number(r.data.skipped) || 0 } : r;
+}
+
+/** 小さい見本（id → data URL）。無いものは入らない。 */
+export async function fetchStockThumbs(ids) {
+  const r = await askStock('stock-thumbs', { ids });
+  if (!r.ok) return r;
+  const thumbs = {};
+  for (const [id, t] of Object.entries(r.data.thumbs || {})) {
+    if (t?.data) thumbs[id] = `data:${t.type || 'image/png'};base64,${t.data}`;
+  }
+  return { ok: true, thumbs };
+}
+
+/** 写真の本体（Blob）。 */
+export async function fetchStockImage(id) {
+  const r = await askStock('stock-get', { id });
+  if (!r.ok) return r;
+  const img = r.data.image;
+  if (!img?.data) return { ok: false, message: '写真の中身が届きませんでした' };
+  const bin = atob(img.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { ok: true, blob: new Blob([bytes], { type: img.type || 'image/jpeg' }) };
 }
 
 async function asData(blob) {
