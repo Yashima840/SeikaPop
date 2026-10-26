@@ -1,4 +1,4 @@
-// はじめの画面: 1枚作る／まとめて1枚（広告）の入口と、レギュラー・履歴の2つの欄
+// はじめの画面: 1枚作る／フレームにまとめる（広告）の入口と、レギュラー・履歴の2つの欄
 
 import * as store from '../store.js';
 import { createPop, formatShotTime, moveToRegular, popFromRegular, popLists, popTitle } from '../model.js';
@@ -76,7 +76,7 @@ export async function showHome(root, app) {
       h('button', { class: 'primary start', onclick: openNew },
         h('span', { class: 'start-icon', text: '＋' }), h('b', { text: '1枚作る' }), h('small', { text: '写真からポップを1枚' })),
       h('button', { class: 'start', onclick: () => app.go('#/ad') },
-        h('span', { class: 'start-icon', text: '🧩' }), h('b', { text: 'まとめて1枚' }), h('small', { text: '作った画像をフレームに並べる（広告）' })),
+        h('span', { class: 'start-icon', text: '🧩' }), h('b', { text: 'フレームにまとめる' }), h('small', { text: '作った画像を並べて1枚' })),
     ),
     isStandalone() ? null : h('p', { class: 'hint' },
       'ホーム画面に追加すると、アプリのように開けて保存も消えにくくなります',

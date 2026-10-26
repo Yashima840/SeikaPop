@@ -1,11 +1,11 @@
-// 広告を作る画面: ①フレームを選ぶ ②はじめの画面と同じポップ（レギュラー・履歴）からタップした順に枠へ入れる ③共有・保存。
+// フレームにまとめる画面（広告）:①フレームを選ぶ ②はじめの画面と同じポップ（レギュラー・履歴）からタップした順に枠へ入れる ③共有・保存。
 // 枠に入る画像は、選んだポップの今の中身からその場で作る（はじめの画面で直したものがそのまま入る）。
 // 作りかけ（フレーム・選んだポップ・見出し）は自動で保存し、次に開いたときに続きから。
 
 import * as store from '../store.js';
 import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
-  AD_TITLES, adProblems, createAd, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrame, customFrameProblems,
+  AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrame, customFrameProblems,
   dropMissing, fitSlots, frameFor, FRAME_ORDER, FRAMES, normalizeRows, saveCustomFrame, shotFromAd, toggleShot, usedRows,
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
@@ -54,7 +54,7 @@ function loadOverlay(src) {
 }
 
 export async function showAd(root, app) {
-  app.setTitle('広告を作る', { back: true });
+  app.setTitle('フレームにまとめる', { back: true });
   const settings = await store.getSettings();
   const groups = popLists(await store.listPops());
   const listed = [...groups.regulars, ...groups.recent];
@@ -65,7 +65,7 @@ export async function showAd(root, app) {
   ad.customRows = normalizeRows(ad.customRows);
   // 選んでいた保存済みのカスタムが直されていたら、その形に合わせる（消されていたら形だけ残す）
   const savedNow = saved.find(f => f.id === ad.customId);
-  if (savedNow) { ad.customRows = savedNow.rows; ad.customName = savedNow.name; } else ad.customId = null;
+  if (savedNow) { ad.customRows = savedNow.rows; ad.customName = savedNow.name; ad.customColor = savedNow.color; } else ad.customId = null;
   if (!frameFor(ad)) ad.frameId = FRAME_ORDER[0];
   const frameOf = () => frameFor(ad);
   ad.slots = fitSlots(slotsToPopIds(ad.slots, await store.listShots()), frameOf().slots.length).slots;
@@ -145,7 +145,7 @@ export async function showAd(root, app) {
   /** フレームを替える。custom＝カスタムのとき { id, name, rows }（保存済みのもの）。 */
   const pickFrame = (id, custom = null) => {
     builder = null;
-    const next = custom ? { ...ad, frameId: CUSTOM_ID, customId: custom.id, customName: custom.name, customRows: custom.rows } : { ...ad, frameId: id };
+    const next = custom ? { ...ad, frameId: CUSTOM_ID, customId: custom.id, customName: custom.name, customRows: custom.rows, customColor: custom.color } : { ...ad, frameId: id };
     const r = fitSlots(ad.slots, frameFor(next).slots.length);
     ad = { ...next, slots: r.slots };
     if (r.dropped) toast(`枠が足りないので、後から選んだ ${r.dropped} 枚を外しました`);
@@ -153,18 +153,19 @@ export async function showAd(root, app) {
   };
 
   // ---- カスタムフレームを組む（6行のボタン。押した行に 1〜3 枚、押さない行は使わない）と、名前を付けて保存 ----
-  // 組んでいる途中: { id＝直している保存済みのもの（新しく作るときは null）, name, rows, picking＝枚数を選んでいる行（無ければ -1）}
+  // 組んでいる途中: { id＝直している保存済みのもの（新しく作るときは null）, name, rows, color＝見出しの色,
+  //   picking＝選んでいる行（0〜5）か見出し（'head'）。無ければ -1 }
   let builder = null;
   const openBuilder = (from = null) => {
     builder = from
-      ? { id: from.id, name: from.name, rows: [...from.rows], picking: -1 }
-      : { id: null, name: `カスタム${saved.length + 1}`, rows: normalizeRows([]), picking: -1 };
+      ? { id: from.id, name: from.name, rows: [...from.rows], color: from.color, picking: -1 }
+      : { id: null, name: `カスタム${saved.length + 1}`, rows: normalizeRows([]), color: CUSTOM_COLOR_DEFAULT, picking: -1 };
     rebuild();
   };
   const setRow = (i, n) => { builder.rows[i] = n; builder.picking = -1; rebuild(); };
   /** 保存して、そのフレームを使う。asNew＝直している途中でも新しい1件として保存する。 */
   const saveBuilder = async (asNew = false) => {
-    const target = { id: asNew ? null : builder.id, name: builder.name, rows: builder.rows };
+    const target = { id: asNew ? null : builder.id, name: builder.name, rows: builder.rows, color: builder.color };
     const p = customFrameProblems(target, saved);
     if (p.length) { toast(p.join('・'), { error: true }); return; }
     const r = saveCustomFrame(saved, target);
@@ -214,7 +215,18 @@ export async function showAd(root, app) {
     return h('div', { class: 'builder' },
       h('p', { class: 'hint' }, '写真を入れたい行のボタンを押して、1行に何枚（1〜3枚）入れるかを選びます。押さなかった行は使いません。'),
       h('div', { class: 'b-frame' },
-        h('div', { class: 'b-head', text: '見出し' }),
+        builder.picking === 'head'
+          ? h('div', { class: 'b-pick b-colors' },
+            h('span', { class: 'b-label', text: '見出しの色' }),
+            ...CUSTOM_COLORS.map(c => h('button', {
+              type: 'button', class: builder.color === c.id ? 'chip on' : 'chip',
+              style: `background:${c.bg};color:#fff;border-color:${c.bg}`,
+              onclick: () => { builder.color = c.id; builder.picking = -1; rebuild(); },
+            }, builder.color === c.id ? `✓ ${c.label}` : c.label)))
+          : h('button', {
+            type: 'button', class: 'b-head', style: `background:${customColorOf(builder.color).bg}`,
+            onclick: () => { builder.picking = 'head'; rebuild(); },
+          }, `見出し（${customColorOf(builder.color).label}）▼ 押して色を選ぶ`),
         ...builder.rows.map(row),
         h('div', { class: 'b-foot', text: '店名・日付' })),
       h('label', { class: 'field' }, h('span', { class: 'label', text: '名前（保存して何度でも使えます）' }), nameInput),
@@ -236,7 +248,7 @@ export async function showAd(root, app) {
     ];
     return chips(items, v => {
       if (v === 'new') openBuilder();
-      else if (v === 'unsaved') openBuilder({ id: null, name: `カスタム${saved.length + 1}`, rows: ad.customRows });
+      else if (v === 'unsaved') openBuilder({ id: null, name: `カスタム${saved.length + 1}`, rows: ad.customRows, color: ad.customColor });
       else if (v.startsWith('saved:')) pickFrame(CUSTOM_ID, saved.find(f => `saved:${f.id}` === v));
       else pickFrame(v);
     }, current);

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  adProblems, adShotKey, cleanCustomFrames, createAd, CUSTOM_ID, customFrame, customFrameProblems, dropMissing, fitSlots,
+  adProblems, adShotKey, cleanCustomFrames, createAd, CUSTOM_COLORS, CUSTOM_ID, customFrame, customFrameProblems, dropMissing, fitSlots,
   frameFor, frameProblems, FRAME_ORDER, FRAMES, mergeCustomFrames, normalizeRows, saveCustomFrame, toggleShot,
 } from '../js/frames.js';
 import { containRect } from '../js/layout.js';
@@ -49,6 +49,18 @@ test('カスタムの保存: 名前は必須・20文字まで・別のものと�
   assert.equal(b.list.length, 1);
   assert.deepEqual(b.list[0].rows, [3, 3, 0, 0, 0, 0]);
   assert.match(customFrame(b.entry.rows, b.entry.name).label, /^週末（2行 6枚）$/);
+});
+
+test('カスタムの見出しの色: 濃い青・黒・赤・緑・オレンジ。保存すると残り、知らない色・色の無い古い保存は緑', () => {
+  assert.deepEqual(CUSTOM_COLORS.map(c => c.label), ['濃い青', '黒', '赤', '緑', 'オレンジ']);
+  assert.equal(customFrame([1], '', 'navy').header.bg, CUSTOM_COLORS[0].bg);
+  assert.equal(customFrame([1], '', 'no-such').header.bg, customFrame([1]).header.bg);
+  const s = saveCustomFrame([], { name: 'a', rows: [1], color: 'red' });
+  assert.equal(s.entry.color, 'red');
+  assert.equal(cleanCustomFrames([{ id: 'x', name: 'b', rows: [1] }])[0].color, 'green');
+  const ad = { ...createAd(), frameId: CUSTOM_ID, customRows: [1], customColor: 'black', slots: ['p'] };
+  assert.equal(frameFor(ad).header.bg, '#1a1a1a');
+  assert.notEqual(adShotKey(ad), adShotKey({ ...ad, customColor: 'red' }), '色が違えば別の広告');
 });
 
 test('カスタムのバックアップ: 無いものは足し、同じ id は新しい方を残す。壊れたものは読まない', () => {

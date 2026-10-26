@@ -52,9 +52,20 @@ export const CUSTOM_ROWS = 6;
 export const CUSTOM_MAX_PER_ROW = 3;
 const CUSTOM = {
   w: 1080, gap: 5,   // 写真どうし・左右の端・上下の帯との隙間は、どれもほぼ無し（5px）
-  bg: '#fdf6e3', header: { h: 200, bg: '#2f7d43', color: '#ffffff' }, footer: { h: 110, color: '#22603a' },
+  bg: '#fdf6e3', headerH: 200, footerH: 110,
 };
 export const CUSTOM_NAME_MAX = 20;
+// 見出しの帯の色（選ぶ順）。foot＝下の帯の文字（店名・日付）の色。帯の文字は白
+export const CUSTOM_COLORS = [
+  { id: 'navy', label: '濃い青', bg: '#1d3f8a', foot: '#1d3f8a' },
+  { id: 'black', label: '黒', bg: '#1a1a1a', foot: '#1a1a1a' },
+  { id: 'red', label: '赤', bg: '#c62828', foot: '#8e1c1c' },
+  { id: 'green', label: '緑', bg: '#2f7d43', foot: '#22603a' },
+  { id: 'orange', label: 'オレンジ', bg: '#e65100', foot: '#a33a00' },
+];
+export const CUSTOM_COLOR_DEFAULT = 'green';
+/** 見出しの色（知らない id は緑）。 */
+export const customColorOf = id => CUSTOM_COLORS.find(c => c.id === id) || CUSTOM_COLORS.find(c => c.id === CUSTOM_COLOR_DEFAULT);
 
 /** 行ごとの枚数を 0〜3 の整数 6 個にそろえる（壊れた保存データでも落ちないように）。 */
 export function normalizeRows(rows) {
@@ -68,18 +79,19 @@ export function normalizeRows(rows) {
 export const usedRows = rows => normalizeRows(rows).filter(n => n > 0);
 
 /**
- * 行ごとの枚数からフレームを作る。使う行が無ければ null。name を渡すと名前入りの label にする。
+ * 行ごとの枚数からフレームを作る。使う行が無ければ null。name を渡すと名前入りの label にする。color＝見出しの色の id。
  * 各行は横幅いっぱい（左右の端も 5px）に n 枚を並べ、枠は正方形（ポップは正方形が多い）。
  * 縦は中身に合わせて伸ばす（行が多いと縦長になる。枠を縮めて左右に余白を作ることはしない）。
  */
-export function customFrame(rows, name = '') {
+export function customFrame(rows, name = '', color = CUSTOM_COLOR_DEFAULT) {
   const used = usedRows(rows);
   if (!used.length) return null;
-  const { w: W, gap } = CUSTOM;
+  const { w: W, gap, headerH, footerH } = CUSTOM;
+  const c = customColorOf(color);
   const innerW = W - 2 * gap;
   const size = used.map(n => (innerW - (n - 1) * gap) / n);   // 枠の一辺（正方形）
-  const H = Math.round(CUSTOM.header.h + gap + size.reduce((a, b) => a + b, 0) + (used.length - 1) * gap + gap + CUSTOM.footer.h);
-  let y = CUSTOM.header.h + gap;
+  const H = Math.round(headerH + gap + size.reduce((a, b) => a + b, 0) + (used.length - 1) * gap + gap + footerH);
+  let y = headerH + gap;
   const slots = [];
   used.forEach((n, r) => {
     // 端は丸めてから幅を決める（行ごとに 1px ずれて見えないように）
@@ -93,23 +105,26 @@ export function customFrame(rows, name = '') {
   const shape = `${used.length}行 ${slots.length}枚`;
   return {
     label: name ? `${name}（${shape}）` : `カスタム（${shape}）`, note: `${used.join('・')}枚`, w: W, h: H,
-    bg: CUSTOM.bg, header: CUSTOM.header, footer: CUSTOM.footer, slots,
+    bg: CUSTOM.bg, header: { h: headerH, bg: c.bg, color: '#ffffff' }, footer: { h: footerH, color: c.foot }, slots,
   };
 }
 
 /** 広告で使うフレーム（カスタムなら行の指定から作る）。無ければ null。 */
 export function frameFor(ad) {
-  return ad.frameId === CUSTOM_ID ? customFrame(ad.customRows, ad.customName || '') : FRAMES[ad.frameId] || null;
+  return ad.frameId === CUSTOM_ID ? customFrame(ad.customRows, ad.customName || '', ad.customColor) : FRAMES[ad.frameId] || null;
 }
 
-// ---- 名前を付けて保存したカスタムフレーム（{ id, name, rows, updatedAt } の一覧）----
+// ---- 名前を付けて保存したカスタムフレーム（{ id, name, rows, color, updatedAt } の一覧）----
 
 /** 保存データを読める形にそろえる（壊れたものは捨てずに直せる所だけ直し、行が無いものは外す）。 */
 export function cleanCustomFrames(list) {
   if (!Array.isArray(list)) return [];
   return list
     .filter(f => f && typeof f.id === 'string' && usedRows(f.rows).length)
-    .map(f => ({ id: f.id, name: String(f.name || '').trim() || 'カスタム', rows: normalizeRows(f.rows), updatedAt: String(f.updatedAt || '') }));
+    .map(f => ({
+      id: f.id, name: String(f.name || '').trim() || 'カスタム', rows: normalizeRows(f.rows),
+      color: customColorOf(f.color).id, updatedAt: String(f.updatedAt || ''),   // 色の無い（色を選べる前の）ものは緑
+    }));
 }
 
 /** 保存を止める理由（空なら保存できる）。同じ名前は別のもの（id 違い）に使わせない（選ぶときに見分けられないため）。 */
@@ -124,8 +139,11 @@ export function customFrameProblems({ id = null, name, rows }, list) {
 }
 
 /** 保存する（同じ id なら上書き、無ければ足す）。保存したものと新しい一覧を返す。 */
-export function saveCustomFrame(list, { id = null, name, rows }, now = new Date()) {
-  const entry = { id: id || newId(), name: String(name).trim(), rows: normalizeRows(rows), updatedAt: now.toISOString() };
+export function saveCustomFrame(list, { id = null, name, rows, color }, now = new Date()) {
+  const entry = {
+    id: id || newId(), name: String(name).trim(), rows: normalizeRows(rows), color: customColorOf(color).id,
+    updatedAt: now.toISOString(),
+  };
   const has = list.some(f => f.id === entry.id);
   return { entry, list: has ? list.map(f => (f.id === entry.id ? entry : f)) : [...list, entry] };
 }
@@ -164,7 +182,7 @@ export function frameProblems(frame) {
 export function createAd(now = new Date()) {
   return {
     // カスタムのときは、使っている保存済みのもの（customId・customName）と形（customRows）を持つ
-    frameId: FRAME_ORDER[0], customId: null, customName: '', customRows: normalizeRows([]),
+    frameId: FRAME_ORDER[0], customId: null, customName: '', customRows: normalizeRows([]), customColor: CUSTOM_COLOR_DEFAULT,
     title: AD_TITLES[0], showDate: true, slots: [],
     updatedAt: now.toISOString(),
   };
@@ -210,7 +228,8 @@ export function adProblems(ad, frame) {
 /** 同じ組み合わせを2回残さないための印。日付を入れる日は、日が変われば別の画像になる。 */
 export function adShotKey(ad, now = new Date()) {
   const day = ad.showDate ? `@${localStamp(now)}` : '';
-  const frame = ad.frameId === CUSTOM_ID ? `${CUSTOM_ID}:${usedRows(ad.customRows).join('-')}` : ad.frameId;
+  const frame = ad.frameId === CUSTOM_ID
+    ? `${CUSTOM_ID}:${usedRows(ad.customRows).join('-')}:${customColorOf(ad.customColor).id}` : ad.frameId;
   return `ad:${frame}|${ad.slots.join(',')}|${ad.title}${day}`;
 }
 
