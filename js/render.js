@@ -51,7 +51,7 @@ function loadPriceFontCss() {
 export async function ensureFonts(pop, settings, onFail) {
   if (!document.fonts?.load) return;
   const decor = Object.values(LABEL_DESIGN).flatMap(t => [t?.prefix, t?.suffix]).filter(Boolean);   // 〈〉など3行の前後の飾り
-  const text = [pop.name, pop.catch, pop.badge, pop.unit, pop.origin, settings?.shopName, ...decor,
+  const text = [pop.name, pop.unit, pop.origin, settings?.shopName, ...decor,
     '0123456789,.円税込抜()（）〈〉月火水木金土日/📷写真を追加—'].join('');
   try {
     const load = f => document.fonts.load(`${f.weight} 40px "${f.family}"`, text);
@@ -72,8 +72,10 @@ export function renderPop(canvas, pop, photo, settings, { preview = false } = {}
   const ctx = canvas.getContext('2d');
   ctx.save();
   ctx.clearRect(0, 0, s.w, s.h);
+  // 見出し（badge）とひとこと（catch＝今はメモ）は画像に入れない。見出しはフレーム（広告）で入れる。
+  // デザインはどれも空なら描かない作りなので、ここで空にして渡す（古いポップに残っている文字も出さない）
   templateOf(pop).draw(ctx, {
-    W: s.w, H: s.h, u: s.w / 1080, pop, photo, preview,
+    W: s.w, H: s.h, u: s.w / 1080, pop: { ...pop, badge: '', catch: '' }, photo, preview,
     price: priceTexts(pop, settings),   // 価格が無ければ null
     shopName: String(settings?.shopName || '').trim(),
   });

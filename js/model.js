@@ -33,7 +33,7 @@ export function createPop(now = new Date()) {
     priceTax: 'excl',     // 'excl'＝税抜で入れた（税込を計算して併記）／'incl'＝税込で入れた
     unit: '',
     origin: '',
-    badge: '本日のおすすめ',
+    badge: '',           // 見出し。画像には入れない（フレームで入れる）。古いデータとの互換のため残す
     template: 'fresh',
     size: 'square',
     photoId: null,

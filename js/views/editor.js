@@ -12,9 +12,8 @@ import { TEMPLATE_ORDER, TEMPLATES } from '../templates.js';
 import { debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
 import { queuePop } from '../sender.js';
 
-const BADGES = ['本日のおすすめ', '朝採れ', '入荷しました', '本日の特価', '旬の味', '数量限定'];
-const UNITS = ['1袋', '1個', '1パック', '1本', '1玉', '1房', '100g', '1盛'];
-const PHRASES = ['甘さ自慢！', 'みずみずしい', '今が旬！', '朝採れ新鮮', '数量限定です', 'お料理にどうぞ', '香りが違います', 'まとめ買いに'];
+// 青果と食品の両方に使う（食品は「1人前」「1本入」など）
+const UNITS = ['1袋', '1個', '1パック', '1本', '1玉', '1房', '100g', '1盛', '1人前', '1本入', '1個入'];
 
 function chips(items, onPick, current) {
   return h('div', { class: 'chips' }, items.map(([value, label]) =>
@@ -196,10 +195,9 @@ export async function showEditor(root, app, popId) {
 
   function rebuildForm() {
     const nameInput = textInput('name', '例: 完熟トマト');
-    const catchInput = textInput('catch', '例: 甘さ自慢！サラダにどうぞ', { multiline: true });
-    const badgeInput = textInput('badge', '例: 本日のおすすめ');
+    const memoInput = textInput('catch', '例: 入荷数・仕入れ先への連絡など', { multiline: true });
     const unitInput = textInput('unit', '例: 1袋');
-    const originInput = textInput('origin', '例: 熊本県産');
+    const originInput = textInput('origin', '例: 熊本県産／○○食品');
     const setText = (key, input, value) => { pop[key] = value; input.value = value; changed(); };
 
     form.replaceChildren(
@@ -230,10 +228,9 @@ export async function showEditor(root, app, popId) {
       ),
       h('section', {},
         h('h3', {}, '文字'),
-        field('見出し', badgeInput, chips(BADGES.map(b => [b, b]), v => setText('badge', badgeInput, v), pop.badge)),
+        // 画像に入るのは 産地（メーカー名）・商品名・価格・単位 だけ。見出しと日付はフレーム（広告）で入れる
+        field('産地（食品はメーカー名）', originInput),
         field('商品名', nameInput),
-        field('ひとこと', catchInput, chips(PHRASES.map(p => [p, p]),
-          v => setText('catch', catchInput, pop.catch.trim() ? `${pop.catch.trim()}\n${v}` : v))),
         h('div', { class: 'two' },
           field(isTaxExcluded(pop) ? '価格（税抜・円）' : '価格（税込・円）', priceInput, [priceError, priceNote]),
           field('単位', unitInput),
@@ -241,7 +238,7 @@ export async function showEditor(root, app, popId) {
         chips([['excl', '税抜で入れる'], ['incl', '税込で入れる']],
           v => { pop.priceTax = v; showPriceNote(); changed({ rebuild: true }); }, isTaxExcluded(pop) ? 'excl' : 'incl'),
         chips(UNITS.map(u => [u, u]), v => setText('unit', unitInput, v), pop.unit),
-        field('産地', originInput),
+        field('メモ（画像には入りません）', memoInput),
       ),
     );
   }
