@@ -1,0 +1,4 @@
+# clasp で受け取り口へ上げるのは Code.gs と設定（appsscript.json）だけ
+**/**
+!Code.gs
+!appsscript.json

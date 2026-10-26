@@ -3,3 +3,6 @@ node_modules/
 __pycache__/
 *.log
 tools/designer-backup/
+# 受け取り口（Apps Script）のスクリプト ID と取ってきた設定。店（法人アカウント）ごとに違うので公開しない
+.clasp.json
+tools/collector/appsscript.json
