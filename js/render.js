@@ -5,7 +5,7 @@ import { FONTS, font, measurer, roundRectPath, TEMPLATES } from './templates.js'
 import { canvasToBlob } from './image.js';
 import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.js';
 import { PRICE_FONTS } from './price-design.js';
-import { labelFontList } from './labels.js';
+import { canvasMeasure, labelFontList } from './labels.js';
 import { LABEL_DESIGN } from './label-design.js';
 
 export function sizeOf(pop) {
@@ -16,9 +16,12 @@ export function templateOf(pop) {
   return TEMPLATES[pop.template] || TEMPLATES.fresh;
 }
 
+let measureCtx = null;
+/** 写真を敷く枠（編集画面のドラッグにも使う）。「金額主役」は商品名の行数で写真の高さが変わるので、文字を測って渡す。 */
 export function photoBoxOf(pop) {
   const s = sizeOf(pop);
-  return templateOf(pop).photoBox(s.w, s.h);
+  measureCtx ??= document.createElement('canvas').getContext('2d');
+  return templateOf(pop).photoBox(s.w, s.h, pop, canvasMeasure(measureCtx));
 }
 
 let fontWarned = false;
@@ -51,7 +54,7 @@ function loadPriceFontCss() {
 export async function ensureFonts(pop, settings, onFail) {
   if (!document.fonts?.load) return;
   const decor = Object.values(LABEL_DESIGN).flatMap(t => [t?.prefix, t?.suffix]).filter(Boolean);   // 〈〉など3行の前後の飾り
-  const text = [pop.name, pop.unit, pop.origin, settings?.shopName, ...decor,
+  const text = [pop.name, pop.unit, pop.origin, ...decor,
     '0123456789,.円税込抜()（）〈〉月火水木金土日/📷写真を追加—'].join('');
   try {
     const load = f => document.fonts.load(`${f.weight} 40px "${f.family}"`, text);
@@ -72,12 +75,12 @@ export function renderPop(canvas, pop, photo, settings, { preview = false } = {}
   const ctx = canvas.getContext('2d');
   ctx.save();
   ctx.clearRect(0, 0, s.w, s.h);
-  // 見出し（badge）とひとこと（catch＝今はメモ）は画像に入れない。見出しはフレーム（広告）で入れる。
+  // 見出し（badge）とひとこと（catch＝今はメモ）・店名は画像に入れない。見出しはフレーム（広告）で入れる。
   // デザインはどれも空なら描かない作りなので、ここで空にして渡す（古いポップに残っている文字も出さない）
   templateOf(pop).draw(ctx, {
     W: s.w, H: s.h, u: s.w / 1080, pop: { ...pop, badge: '', catch: '' }, photo, preview,
     price: priceTexts(pop, settings),   // 価格が無ければ null
-    shopName: String(settings?.shopName || '').trim(),
+    shopName: '',   // 店名はポップに入れない（フレームの下の帯で入れる）
   });
   ctx.restore();
 }

@@ -1,11 +1,11 @@
 // ポップのデザイン（テンプレート）。
-// 各テンプレートは photoBox(W, H)＝写真を敷く枠 と draw(ctx, d)＝描画 を持つ。
+// 各テンプレートは photoBox(W, H, pop, measure)＝写真を敷く枠（pop・measure は「金額主役」だけが使う） と draw(ctx, d)＝描画 を持つ。
 // 大きさは幅1080px を基準にした u（W/1080）で書き、縦の長さ（H）に合わせて写真の枠を伸ばす。
 
 import { coverSource, fitFontSize, layoutLines, seededRandom } from './layout.js';
 import { taxNote } from './model.js';
 import { drawPrice } from './price-design.js';
-import { drawLabels } from './labels.js';
+import { canvasMeasure, drawLabels, labelsBelow } from './labels.js';
 
 const FALLBACK = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif';
 export const FONTS = {
@@ -374,120 +374,7 @@ const marche = {
 };
 
 // ------------------------------------------------------------------
-// 3. 特売チラシ: 黄色地に放射線・赤い帯・爆発マークの価格
-// ------------------------------------------------------------------
-function burstPath(ctx, cx, cy, r, n) {
-  ctx.beginPath();
-  for (let i = 0; i < n * 2; i++) {
-    const a = (Math.PI * i) / n - Math.PI / 2;
-    const rr = i % 2 ? r * 0.84 : r;
-    const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
-    if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-  }
-  ctx.closePath();
-}
-
-const chirashi = {
-  id: 'chirashi',
-  label: '特売チラシ',
-  photoBox: (W, H) => {
-    const u = W / 1080;
-    return { x: 70 * u, y: 196 * u, w: W - 140 * u, h: H - 196 * u - 330 * u - (H / W > 1.2 ? 90 * u : 0) };
-  },
-  draw(ctx, d) {
-    const { W, H, u, pop } = d;
-    ctx.fillStyle = '#ffe14d';
-    ctx.fillRect(0, 0, W, H);
-    const ox = W / 2, oy = H * 0.45, R = Math.hypot(W, H);
-    ctx.fillStyle = '#ffd21f';
-    for (let i = 0; i < 36; i += 2) {
-      const a0 = (Math.PI * 2 * i) / 36, a1 = (Math.PI * 2 * (i + 1)) / 36;
-      ctx.beginPath();
-      ctx.moveTo(ox, oy);
-      ctx.lineTo(ox + Math.cos(a0) * R, oy + Math.sin(a0) * R);
-      ctx.lineTo(ox + Math.cos(a1) * R, oy + Math.sin(a1) * R);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    ctx.fillStyle = '#e60012';
-    ctx.fillRect(0, 0, W, 156 * u);
-    ctx.textBaseline = 'alphabetic';
-    if (pop.badge) {
-      const l = layoutLines(pop.badge, W - 100 * u, measurer(ctx, FONTS.impact), { maxSize: 96 * u, minSize: 44 * u });
-      ctx.font = font(FONTS.impact, l.size);
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#fff200';
-      ctx.fillText(l.lines[0], 50 * u, 78 * u + l.size * 0.36);
-    }
-
-    const box = this.photoBox(W, H);
-    withShadow(ctx, 24 * u, 'rgba(120,60,0,0.4)', () => {
-      roundRectPath(ctx, box.x - 14 * u, box.y - 14 * u, box.w + 28 * u, box.h + 28 * u, 46 * u);
-      ctx.fillStyle = '#fff';
-      ctx.fill();
-    });
-    if (!drawPhoto(ctx, d.photo, box, pop.crop, 34 * u)) drawNoPhoto(ctx, box, ['#ffb74d', '#f57c00'], d, 34 * u);
-
-    const bottom = box.y + box.h;
-    const hasPrice = !!d.price;
-    if (hasPrice) {
-      const r = 205 * u, cx = W - 60 * u - r * 0.9, cy = bottom - 30 * u;
-      withShadow(ctx, 20 * u, 'rgba(120,0,0,0.4)', () => {
-        burstPath(ctx, cx, cy, r, 18);
-        ctx.fillStyle = '#e60012';
-        ctx.fill();
-      });
-      ctx.lineWidth = 8 * u;
-      ctx.strokeStyle = '#fff';
-      burstPath(ctx, cx, cy, r - 18 * u, 18);
-      ctx.stroke();
-      drawPriceBlock(ctx, d, cx, cy + 6 * u, r * 1.3, { font: FONTS.impact, maxSize: 128 * u, color: '#fff', subColor: '#fff200' });
-    }
-    const textW = W - 140 * u - (hasPrice ? 400 * u : 0);
-    let y = bottom + 40 * u;
-    ctx.textAlign = 'left';
-    const nl = layoutLines(pop.name, textW, measurer(ctx, FONTS.impact), { maxSize: 120 * u, minSize: 60 * u, maxLines: 2 });
-    if (nl.lines.length) {
-      ctx.font = font(FONTS.impact, nl.size);
-      ctx.fillStyle = '#1a1a1a';
-      ctx.lineJoin = 'round';
-      ctx.lineWidth = 12 * u;
-      ctx.strokeStyle = '#fff';
-      const lh = nl.size * 1.08;
-      nl.lines.forEach((ln, i) => {
-        const yy = y + nl.size * 0.88 + i * lh;
-        ctx.strokeText(ln, 70 * u, yy);
-        ctx.fillText(ln, 70 * u, yy);
-      });
-      y += nl.size * 0.88 + (nl.lines.length - 1) * lh + 18 * u;
-    }
-    const room = H - 110 * u - y;
-    const cl = layoutLines(pop.catch, textW, measurer(ctx, FONTS.round),
-      { maxSize: 42 * u, minSize: 30 * u, maxLines: room > 110 * u ? 2 : 1 });
-    if (cl.lines.length && room > 30 * u) {
-      ctx.font = font(FONTS.round, cl.size);
-      ctx.fillStyle = '#5a2a00';
-      fillLines(ctx, cl.lines, 70 * u, y + cl.size, cl.size * 1.3);
-    }
-    const by = H - 46 * u;
-    if (pop.origin) {
-      ctx.font = font(FONTS.round, 38 * u);
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#b00010';
-      ctx.fillText(pop.origin, 70 * u, by);
-    }
-    if (d.shopName) {
-      ctx.font = font(FONTS.round, 32 * u);
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#5a2a00';
-      ctx.fillText(d.shopName, W - 60 * u, by);
-    }
-  },
-};
-
-// ------------------------------------------------------------------
-// 4. シンプル上品: 生成り地・明朝の商品名・余白を広く
+// 3. シンプル上品: 生成り地・明朝の商品名・余白を広く
 // ------------------------------------------------------------------
 const simple = {
   id: 'simple',
@@ -566,20 +453,21 @@ const simple = {
 };
 
 // ------------------------------------------------------------------
-// 5. 金額主役: 写真の右下に金額キャッチ（黒いギザギザ＋価格＋税込）、写真の下に商品名
+// 4. 金額主役: 写真の右下に金額キャッチ（黒いギザギザ＋価格＋税込）、写真の下に商品名
+//    余白は上・左・右・下（商品名の下）とも同じ幅。写真の高さは商品名が何行になるかで決まる
 //    税抜で入れたときは、価格の下に税込の金額を必ず添える（中身は price-design.js）
 //    産地・商品名・数量と単位の3行は labels.js（見た目と置き場所は label-design.js）
 // ------------------------------------------------------------------
-const PRICE_RED = '#e60012';
-// 写真の下に取る、商品名の場所（1080幅のとき。縦長はひとことの分を足す）。写真の大きさは仮
-const NAME_ZONE = 230, NAME_ZONE_TALL = 300;
+const BOLD_MARGIN = 40;   // 周りの余白（1080幅のとき）
 
 const bold = {
   id: 'bold',
   label: '金額主役',
-  photoBox: (W, H) => {
-    const u = W / 1080;
-    return { x: 40 * u, y: 120 * u, w: W - 80 * u, h: H - 120 * u - (H / W > 1.2 ? NAME_ZONE_TALL : NAME_ZONE) * u };
+  // measure＝文字の幅の測り方（labels.js の canvasMeasure）。商品名と単位が写真の下に要る高さを測って写真を縮める
+  photoBox: (W, H, pop, measure) => {
+    const u = W / 1080, m = BOLD_MARGIN * u;
+    const below = labelsBelow(pop, measure) * u;
+    return { x: m, y: m, w: W - 2 * m, h: H - 2 * m - below - (below ? m : 0) };
   },
   draw(ctx, d) {
     const { W, H, u, pop } = d;
@@ -590,45 +478,14 @@ const bold = {
     ctx.strokeRect(14 * u, 14 * u, W - 28 * u, H - 28 * u);
     ctx.textBaseline = 'alphabetic';
 
-    if (pop.badge) {
-      const l = layoutLines(pop.badge, W - 140 * u, measurer(ctx, FONTS.impact), { maxSize: 54 * u, minSize: 32 * u });
-      ctx.font = font(FONTS.impact, l.size);
-      const tw = ctx.measureText(l.lines[0]).width;
-      roundRectPath(ctx, 40 * u, 32 * u, tw + 48 * u, 74 * u, 10 * u);
-      ctx.fillStyle = PRICE_RED;
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.textAlign = 'left';
-      ctx.fillText(l.lines[0], 64 * u, 69 * u + l.size * 0.36);
-    }
-
-    const box = this.photoBox(W, H);
+    const box = this.photoBox(W, H, pop, canvasMeasure(ctx));
     if (!drawPhoto(ctx, d.photo, box, pop.crop)) drawNoPhoto(ctx, box, ['#ffcf6b', '#f08a24'], d);
     // 産地・商品名・数量と単位（置き場所と見た目は label-design.js）
-    const lay = drawLabels(ctx, box, pop, u);
-
-    const left = 50 * u, maxW = W - 100 * u;
-    if (H / W > 1.2 && pop.catch.trim()) {   // 縦長はひとことを1行（商品名の下。商品名が無ければ写真のすぐ下）
-      const y = box.y + box.h + (lay.bottom == null ? 14 : lay.bottom + 10) * u;
-      ctx.textAlign = 'left';
-      const cl = layoutLines(pop.catch.replace(/\s*\n\s*/g, ' '), maxW, measurer(ctx, FONTS.round), { maxSize: 40 * u, minSize: 30 * u, maxLines: 1 });
-      ctx.font = font(FONTS.round, cl.size);
-      ctx.fillStyle = '#5a3a1a';
-      ctx.fillText(cl.lines[0], left, y + cl.size * 1.1);
-    }
-
+    drawLabels(ctx, box, pop, u);
     // 金額キャッチは写真の右下に乗せる（中身は price-design.js）
     if (d.price) drawPrice(ctx, box, d.price, u);
-
-    // いちばん下: 店名（左に小さく）
-    if (d.shopName) {
-      ctx.font = font(FONTS.round, 28 * u);
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#777';
-      ctx.fillText(d.shopName, left, H - 40 * u);
-    }
   },
 };
 
-export const TEMPLATES = { fresh, marche, chirashi, simple, bold };
-export const TEMPLATE_ORDER = ['bold', 'fresh', 'marche', 'chirashi', 'simple'];
+export const TEMPLATES = { fresh, marche, simple, bold };
+export const TEMPLATE_ORDER = ['bold', 'fresh', 'marche', 'simple'];

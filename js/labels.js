@@ -59,6 +59,15 @@ export function layoutLabels(pop, measure, design = LABEL_DESIGN) {
   };
 }
 
+/**
+ * 写真の下に要る高さ（デザイン単位）＝写真の枠の下端より下にはみ出す行の下端。下に何も出ないなら 0。
+ * 「金額主役」が写真の高さを決めるのに使う（商品名が2行なら写真を縮める）。
+ */
+export function labelsBelow(pop, measure, design = LABEL_DESIGN) {
+  const lay = layoutLabels(pop, measure, design);
+  return Math.max(0, ...LABEL_KEYS.map(k => labelBounds(lay, k, design)?.box.y1 ?? 0));
+}
+
 /** 行が占める範囲（デザイン単位）。編集画面がクリックの当たり判定と、選んだ行の枠に使う。描かない行は null。 */
 export function labelBounds(lay, key, design = LABEL_DESIGN) {
   const L = lay[key];
