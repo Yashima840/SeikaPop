@@ -60,8 +60,10 @@
     <section>
       <h2>ポップを作る・試す</h2>
       <p class="when">売り場でスマホから使うアプリ本体。PCでは動きの確認に</p>
+      <!-- アプリはスマホと同じ画面なので「← 作業場」を付けない。別のタブで開き、作業場のタブを残す（名前付きなので何度押しても同じタブ） -->
+      <p class="note">アプリは別のタブで開きます。作業場へはこのタブに戻ってください</p>
       <ol class="plain">
-        <li><a class="go" href="../">アプリを開く</a>
+        <li><a class="go" href="../" target="seikapop-app">アプリを開く ↗</a>
           <span class="note">スマホの大きさで見たいときは F12 →「デバイスのツールバー」</span></li>
         <li>スマホで試す: <code>start-lan.bat</code> で起動し、黒い窓に出るアドレスを同じ Wi-Fi のスマホで開く
           <span class="note">共有ボタン・ホーム画面への追加は HTTPS の公開版でだけ動く</span></li>
@@ -77,7 +79,8 @@
           <span class="note local" data-local>保存は start.bat で開いた PC でだけできます</span></li>
         <li><a class="go" href="gallery.html">見本帳で崩れを確かめる</a>
           <span class="note">全デザイン×全サイズ×長い名前。はみ出し・重なりが無いか見る</span></li>
-        <li><a class="go" href="../">アプリで実物を見る</a></li>
+        <li><a class="go" href="../" target="seikapop-app">アプリで実物を見る ↗</a>
+          <span class="note">直したあとは、アプリのタブで再読み込み（F5）</span></li>
       </ol>
     </section>
 

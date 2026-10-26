@@ -33,7 +33,7 @@
   検査は `js/catch-check.js`（税込の併記を小さくしすぎない等）。描き方は `js/price-design.js` の印の範囲だけ。外部AIに頼む手順は `tools/price-kit/PROMPT.md`。
   範囲を手で直したら `node tools/price-kit/build.mjs` で試作キットを作り直す（`npm test` が食い違いを止める）。
 - ファイルを足したら `sw.js` の `SHELL` に足し、`VERSION` を上げる。
-- PC 用の画面を足したら `tools/index.html`（作業場＝`start.bat` で開く唯一の入口）に足し、画面には「← 作業場」の戻り口を付ける。
+- PC 用の画面を足したら `tools/index.html`（作業場＝`start.bat` で開く唯一の入口）に足し、画面には「← 作業場」の戻り口を付ける（アプリ本体はスマホと共通なので付けない。作業場から別のタブで開く）。
 
 ## 確認
 
