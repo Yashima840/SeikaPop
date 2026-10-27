@@ -156,6 +156,7 @@ function withShadow(ctx, blur, color, fn) {
  * 価格（数字＋「円」）と、その上の単位・下の税の文字を中心 (cx, cy) へ置く。
  * 価格は総額表示（税込）が義務なので、税込（税抜で入れたときは税込の金額）を必ず添える。
  * st.halo＝価格の下地の色（「各」の縁取りに使う）。
+ * st.outline＝数字と「円」の縁取りの色（細い線。無ければ縁取らない）。
  * st.stops＝数字と「円」をグラデーションにするとき [[位置, 色], …]（上端が 0。無ければ st.color の一色）。
  */
 function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
@@ -189,9 +190,22 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
     for (const [at, c] of st.stops) fill.addColorStop(at, c);
   }
   ctx.fillStyle = fill;
-  paint(num, left, base, st.font, size);
+  // st.outline があれば、数字と「円」だけを細く縁取る（地の色に溶け込まないように。線の半分は字の下に隠れる）
+  const paintNum = (text, x, y, f, s) => {
+    if (st.outline) {
+      ctx.save();
+      ctx.font = font(f, s);
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = s * 0.045;   // 字の大きさに合わせる（小さい「円」が潰れないように）
+      ctx.strokeStyle = st.outline;
+      ctx.strokeText(text, x, y);
+      ctx.restore();
+    }
+    paint(text, x, y, f, s);
+  };
+  paintNum(num, left, base, st.font, size);
   if (d.price.each) paintEach(ctx, left, base, st.font, size * yenK * EACH_OF_YEN, fill, st.halo || '#fff');
-  paint('円', left + wNum + size * 0.04, base, st.font, size * yenK);
+  paintNum('円', left + wNum + size * 0.04, base, st.font, size * yenK);
   ctx.textAlign = 'center';
   ctx.fillStyle = st.subColor || st.color;
   const sub = Math.max(38 * u, size * 0.3);
@@ -222,7 +236,7 @@ function drawBadgePrice(ctx, d, nameTop) {
   ctx.translate(x + bw * b.text.cx, top + bh * b.text.cy);
   if (b.rotate) ctx.rotate(b.rotate * Math.PI / 180);
   drawPriceBlock(ctx, d, 0, 0, maxW, {
-    font: FONTS.impact, maxSize: 150 * u, color: b.color, stops: TEXT_GRADIENTS[b.color], subColor: b.sub, halo: b.halo || '#1e1c1c',
+    font: FONTS.impact, maxSize: 150 * u, color: b.color, stops: TEXT_GRADIENTS[b.color], outline: b.outline, subColor: b.sub, halo: b.halo || '#1e1c1c',
   });
   ctx.restore();
 }
