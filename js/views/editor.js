@@ -5,7 +5,7 @@ import {
   DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, NAME_FONTS, parsePriceInput,
   PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, taxRateOf, updateRegularFrom, withSample,
 } from '../model.js';
-import { dragCrop, zoomCrop, ZOOM_MAX } from '../layout.js';
+import { dragCrop, moveBadge, zoomCrop, ZOOM_MAX } from '../layout.js';
 import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.js';
 import { ensureFonts, photoBoxOf, renderPop, renderToFile, thumbnailOf } from '../render.js';
 import { TEMPLATE_ORDER, TEMPLATES } from '../templates.js';
@@ -59,9 +59,10 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
   // ---- プレビュー ----
   const canvas = h('canvas', { class: 'preview-canvas' });
   const statusEl = h('span', { class: 'status', text: '' });
+  let hit = {};   // 見本の上で指で動かせる物の置き場所（金額の台紙）
   const draw = frameThrottle(async () => {
     await ensureFonts(pop, settings, () => toast('文字の書体を読み込めませんでした（電波を確認してください）。端末の字で表示します'));
-    renderPop(canvas, pop, photoShown, settings, { preview: true });
+    hit = renderPop(canvas, pop, photoShown, settings, { preview: true });
   });
 
   // ---- 保存（打つたびに少し待って保存。失敗したら必ず知らせる）----
@@ -86,11 +87,26 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     updateExportState();
   };
 
-  // ---- 写真の位置（ドラッグ）・拡大（ピンチ・ホイール）----
+  // ---- 金額の台紙の位置（ドラッグ）・写真の位置（ドラッグ）・拡大（ピンチ・ホイール）----
   const pointers = new Map();
   let pinchDist = 0;
+  let badgeDrag = null;   // 台紙を動かしている指 { id, x, y, rect }
   const canvasScale = () => canvas.width / canvas.getBoundingClientRect().width;
+  const onBadge = ev => {
+    const b = hit.badge;
+    if (!b) return false;
+    const r = canvas.getBoundingClientRect(), k = canvasScale();
+    const x = (ev.clientX - r.left) * k, y = (ev.clientY - r.top) * k;
+    return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+  };
   canvas.addEventListener('pointerdown', ev => {
+    // 台紙の上を押したら台紙を動かす（写真が無くても動かせる）
+    if (!badgeDrag && !pointers.size && onBadge(ev)) {
+      badgeDrag = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, rect: { ...hit.badge } };
+      canvas.setPointerCapture(ev.pointerId);
+      return;
+    }
+    if (badgeDrag) return;
     if (!photoImg) { pickPhoto(false); return; }
     canvas.setPointerCapture(ev.pointerId);
     pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
@@ -100,6 +116,13 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     }
   });
   canvas.addEventListener('pointermove', ev => {
+    if (badgeDrag) {
+      if (ev.pointerId !== badgeDrag.id) return;
+      const k = canvasScale();
+      pop.badgePos = moveBadge(badgeDrag.rect, (ev.clientX - badgeDrag.x) * k, (ev.clientY - badgeDrag.y) * k, canvas.width, canvas.height);
+      changed();
+      return;
+    }
     const prev = pointers.get(ev.pointerId);
     if (!prev || !photoShown) return;
     const cur = { x: ev.clientX, y: ev.clientY };
@@ -118,7 +141,11 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     }
     changed();
   });
-  const endPointer = ev => { pointers.delete(ev.pointerId); if (pointers.size < 2) pinchDist = 0; };
+  const endPointer = ev => {
+    if (badgeDrag?.id === ev.pointerId) badgeDrag = null;
+    pointers.delete(ev.pointerId);
+    if (pointers.size < 2) pinchDist = 0;
+  };
   canvas.addEventListener('pointerup', endPointer);
   canvas.addEventListener('pointercancel', endPointer);
   canvas.addEventListener('wheel', ev => {
@@ -306,8 +333,9 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
       v => { pop.size = v; changed({ rebuild: true }); }, pop.size);
     // 金額の台紙は「写真主役」だけ
     const badgeChips = () => ((pop.template || 'fresh') === 'fresh' ? h('div', { class: 'field' },
-      h('span', { class: 'label', text: '金額の台紙' }),
-      chips(PRICE_BADGES.map(b => [b.id, b.label]), v => { pop.priceBadge = v; changed({ rebuild: true }); }, pop.priceBadge || '')) : null);
+      h('span', { class: 'label', text: '金額の台紙（見本の上で指で動かせます）' }),
+      chips(PRICE_BADGES.map(b => [b.id, b.label]), v => { pop.priceBadge = v; changed({ rebuild: true }); }, pop.priceBadge || ''),
+      h('div', { class: 'row' }, h('button', { class: 'mini', onclick: () => { pop.badgePos = null; changed(); } }, '台紙の位置を戻す'))) : null);
 
     exportBox.hidden = wizard && steps[step] !== 'out';
     // デザインの段は下の見本が大きく並ぶので、上の見本はしまう

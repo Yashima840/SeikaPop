@@ -22,7 +22,7 @@ export const DEFAULT_ADJUST = Object.freeze({ brightness: 0, contrast: 0, satura
 const CONTENT_FIELDS = [
   'name', 'catch', 'price', 'priceTax', 'unit', 'origin', 'badge',
   'template', 'size', 'photoId', 'crop', 'adjust', 'thumb', 'each', 'nameFont', 'photoFade', 'photoSepia', 'photoVintage',
-  'priceBadge',
+  'priceBadge', 'badgePos',
 ];
 
 export function newId() {
@@ -42,6 +42,7 @@ export function createPop(now = new Date()) {
     each: false,          // 価格の頭に「各」を付ける（同じ値段の品をまとめて出すとき）
     nameFont: '',         // 商品名の書体（NAME_FONTS の id。'' はデザインのまま）
     priceBadge: '',       // 「写真主役」の金額の台紙（PRICE_BADGES の id。'' は黄色い丸）
+    badgePos: null,       // 金額の台紙を指で動かした先（中心。画像の幅・高さに対する割合）。null はデザインの位置
     unit: '',
     origin: '',
     badge: '',           // 見出し。画像には入れない（フレームで入れる）。古いデータとの互換のため残す

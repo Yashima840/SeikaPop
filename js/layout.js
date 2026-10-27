@@ -44,6 +44,23 @@ export function dragCrop(crop, dx, dy, imgW, imgH, boxW, boxH) {
   return next;
 }
 
+/**
+ * 金額の台紙の置き場所 { x, y, w, h }（左上と大きさ）。pos（台紙の中心。画像の幅・高さに対する割合）が
+ * 無ければ auto（デザインが決めた左上）に置く。どちらでも画像からはみ出さないように寄せる。
+ */
+export function placeBadge(W, H, w, h, pos, auto) {
+  const x = pos ? pos.x * W - w / 2 : auto.x;
+  const y = pos ? pos.y * H - h / 2 : auto.y;
+  return { x: clamp(x, 0, Math.max(0, W - w)), y: clamp(y, 0, Math.max(0, H - h)), w, h };
+}
+
+/** 置き場所 rect の台紙を dx, dy（画像の px）動かした後の pos（中心の割合）。大きさが変わっても同じ辺りに来るように割合で持つ。 */
+export function moveBadge(rect, dx, dy, W, H) {
+  const r = placeBadge(W, H, rect.w, rect.h, { x: (rect.x + rect.w / 2 + dx) / W, y: (rect.y + rect.h / 2 + dy) / H });
+  const round = v => Math.round(v * 10000) / 10000;
+  return { x: round((r.x + r.w / 2) / W), y: round((r.y + r.h / 2) / H) };
+}
+
 export const ZOOM_MAX = 4;
 export function zoomCrop(crop, factor) {
   return { ...crop, zoom: clamp((crop.zoom || 1) * factor, 1, ZOOM_MAX) };

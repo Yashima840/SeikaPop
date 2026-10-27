@@ -1,7 +1,7 @@
 // 写真の切り出し・指での移動・文字の折り返し
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coverSource, dragCrop, layoutLines, seededRandom, splitsAreNice, wrapText, zoomCrop } from '../js/layout.js';
+import { coverSource, dragCrop, layoutLines, moveBadge, placeBadge, seededRandom, splitsAreNice, wrapText, zoomCrop } from '../js/layout.js';
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} != ${b}`);
 const mono = (t, s = 1) => Array.from(t).length * s;   // 1文字＝大きさぶんの幅
@@ -77,4 +77,20 @@ test('商品名: 少し小さくすれば言葉の切れ目で折れるなら、
 test('段ボール模様の乱数は毎回同じ並び（プレビューと出力が揃う）', () => {
   const a = seededRandom(1), b = seededRandom(1);
   for (let i = 0; i < 5; i++) assert.equal(a(), b());
+});
+
+test('金額の台紙: 動かしていなければデザインの位置、動かした先は割合で持ち、画像からはみ出さない', () => {
+  const auto = { x: 600, y: 300 };
+  assert.deepEqual(placeBadge(1080, 1080, 400, 400, null, auto), { x: 600, y: 300, w: 400, h: 400 });
+  // 中心を割合で持つので、縦長にしても同じ辺りに来る
+  assert.deepEqual(placeBadge(1080, 1920, 400, 400, { x: 0.5, y: 0.5 }, auto), { x: 340, y: 760, w: 400, h: 400 });
+  // デザインの位置がはみ出していても寄せる
+  assert.deepEqual(placeBadge(1080, 1080, 400, 400, null, { x: 900, y: -20 }), { x: 680, y: 0, w: 400, h: 400 });
+
+  const rect = { x: 600, y: 300, w: 400, h: 400 };
+  const near = (p, x, y) => assert.ok(Math.abs(p.x - x) < 0.5 && Math.abs(p.y - y) < 0.5, JSON.stringify(p));
+  // 左へ100・下へ50 動かすと、左上は (500, 350)
+  near(placeBadge(1080, 1080, 400, 400, moveBadge(rect, -100, 50, 1080, 1080), rect), 500, 350);
+  // 端の先まで指を動かしても、台紙は画像の中に留まる
+  near(placeBadge(1080, 1080, 400, 400, moveBadge(rect, 5000, -5000, 1080, 1080), rect), 680, 0);
 });

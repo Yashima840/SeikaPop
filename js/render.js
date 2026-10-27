@@ -94,7 +94,10 @@ export async function ensureFonts(pop, settings, onFail) {
   }
 }
 
-/** pop を canvas へ描く。canvas の大きさは出力サイズ（1080幅）に合わせる。 */
+/**
+ * pop を canvas へ描く。canvas の大きさは出力サイズ（1080幅）に合わせる。
+ * 返すのは指で動かせる物の置き場所（{ badge: { x, y, w, h } }＝金額の台紙。無ければ空）。
+ */
 export function renderPop(canvas, pop, photo, settings, { preview = false } = {}) {
   const s = sizeOf(pop);
   if (canvas.width !== s.w) canvas.width = s.w;
@@ -102,16 +105,18 @@ export function renderPop(canvas, pop, photo, settings, { preview = false } = {}
   const ctx = canvas.getContext('2d');
   ctx.save();
   ctx.clearRect(0, 0, s.w, s.h);
+  const hit = {};
   // 見出し（badge）とひとこと（catch＝今はメモ）・店名は画像に入れない。見出しはフレーム（広告）で入れる。
   // デザインはどれも空なら描かない作りなので、ここで空にして渡す（古いポップに残っている文字も出さない）
   templateOf(pop).draw(ctx, {
-    W: s.w, H: s.h, u: s.w / 1080, pop: { ...pop, badge: '', catch: '' }, photo, preview,
+    W: s.w, H: s.h, u: s.w / 1080, pop: { ...pop, badge: '', catch: '' }, photo, preview, hit,
     price: priceTexts(pop, settings),   // 価格が無ければ null
     shopName: '',   // 店名はポップに入れない（フレームの下の帯で入れる）
     nameFont: nameFontOf(pop),   // 商品名の書体（選んでいなければ null＝デザインのまま）
     priceBadge: badgeFor(pop),   // 金額の台紙（「写真主役」だけが使う。無ければ黄色い丸）
   });
   ctx.restore();
+  return hit;
 }
 
 /** 出力用の画像ファイル（JPEG）と、履歴の一覧に出す見本を作る。 */
