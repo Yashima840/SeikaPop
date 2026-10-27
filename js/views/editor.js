@@ -3,7 +3,7 @@
 import * as store from '../store.js';
 import {
   DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, NAME_FONTS, parsePriceInput,
-  priceTexts, regularFromPop, SAMPLE_PHOTO_URL, shotFromPop, SIZES, taxRateOf, updateRegularFrom, withSample,
+  priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, taxRateOf, updateRegularFrom, withSample,
 } from '../model.js';
 import { dragCrop, zoomCrop, ZOOM_MAX } from '../layout.js';
 import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.js';
@@ -315,7 +315,8 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
         photo: () => [photoButtons(), photoImg ? h('p', { class: 'hint', text: '写真が入りました。撮り直すときは上のボタンをもう一度。' }) : null],
         name: () => [field('商品名', nameInput), field('産地（食品はメーカー名）', originInput)],
         price: priceFields,
-        design: () => [designPicker(), h('div', { class: 'field' }, h('span', { class: 'label', text: '大きさ' }), sizeChips())],
+        design: () => [designPicker(), h('div', { class: 'field' },
+          h('span', { class: 'label', text: '大きさ（押すと見本の形が替わります。共有するときは使う先に合わせて作り直します）' }), sizeChips())],
         check: () => [field('産地（食品はメーカー名）', originInput), ...priceFields()],
         out: () => [],
       }[key]();
@@ -403,7 +404,9 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
   // 置く場所はチェックで選ぶ（みんなで使える場所＝事務所のドライブ・このスマホは最初から印あり。開くたびに戻す）
   const collectorReady = collectorOf(settings).ready;
   const choice = { shared: collectorReady, phone: true, regular: false };
-  const shareBtn = h('button', { class: 'primary big', onclick: () => doShare() }, '共有する（LINE・Instagram など）');
+  // 共有は使う先ごとのボタン。押した先の大きさで描き直して渡す
+  const shareBtns = SHARE_TARGETS.map(t => h('button', { class: 'primary share-btn', onclick: () => doShare(t) },
+    h('b', { text: t.label }), h('small', { text: SIZES[t.size].label })));
   const saveBtn = h('button', { class: 'big', onclick: () => doSave() }, '保存する');
   const problemsEl = h('ul', { class: 'problems' });
   const confirmRow = pop.fromRegularId ? h('label', { class: 'check confirm' },
@@ -414,7 +417,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     const problems = exportProblems(pop);
     if (saveTargets(choice, collectorReady).none) problems.push('保存する場所に1つ以上チェックを入れてください');
     problemsEl.replaceChildren(...problems.map(p => h('li', { text: p })));
-    shareBtn.disabled = exportProblems(pop).length > 0;
+    for (const b of shareBtns) b.disabled = exportProblems(pop).length > 0;
     saveBtn.disabled = problems.length > 0;
   }
 
@@ -436,10 +439,11 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     }
   }
 
-  async function makeImage() {
+  /** 画像を作る。size を渡すとその大きさで描き直す（ポップの大きさは変えない）。 */
+  async function makeImage(size = null) {
     try {
       await save.flush();
-      return await renderToFile(pop, photoShown, settings);
+      return await renderToFile(size ? { ...pop, size } : pop, photoShown, settings);
     } catch (err) {
       toast(`画像を作れませんでした: ${err.message}`, { error: true });
       return null;
@@ -456,12 +460,18 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     }
   }
 
-  async function doShare() {
+  /** target: 使う先（SHARE_TARGETS）。その大きさで描いて共有する。履歴とみんなで使える場所へはポップの大きさの1枚。 */
+  async function doShare(target) {
     if (exportProblems(pop).length) return;
-    const made = await makeImage();
+    const made = await makeImage(target.size);
     if (!made) return;
     // 共有画面を開く前に待つと、端末によっては「タップから時間が経った」として共有を断られるので並行して進める
-    const side = Promise.all([keepInHistory(made), choice.shared && collectorReady ? sendShared(made) : null]);
+    const side = (async () => {
+      const own = SIZES[pop.size] ? pop.size : 'square';
+      const std = own === target.size ? made : await makeImage();
+      if (!std) return;
+      await Promise.all([keepInHistory(std), choice.shared && collectorReady ? sendShared(std) : null]);
+    })();
     try {
       const { file } = made;
       if (navigator.canShare?.({ files: [file] })) {
@@ -540,10 +550,11 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     exportBox.replaceChildren(...[
       h('h3', {}, '出す'),
       confirmRow,
-      shareBtn,
+      h('h3', { class: 'sub' }, '共有する（使う先に合わせた大きさで作ります）'),
+      h('div', { class: 'share-row' }, shareBtns),
       h('h3', { class: 'sub' }, '保存する場所'),
       choiceBox('shared', 'みんなで使える場所に保管', collectorReady
-        ? { note: '事務所のドライブに集まります。共有したときもここに入ります' }
+        ? { note: '事務所のドライブに集まります。共有したときも、このポップの大きさで入ります' }
         : { disabled: true, note: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」で入れます）' }),
       choiceBox('phone', 'このスマホに保存', { note: '写真（ダウンロード）に入ります' }),
       pop.isRegular

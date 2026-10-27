@@ -7,6 +7,13 @@ export const SIZES = {
   story: { label: '縦長 9:16', note: 'ストーリーズ', w: 1080, h: 1920 },
 };
 
+// 共有するときの使う先。押した先の大きさでその場で描き直して渡す（保存するのはポップの大きさの1枚だけ）
+export const SHARE_TARGETS = [
+  { id: 'line', label: 'LINE', size: 'square' },
+  { id: 'insta', label: 'Instagram 投稿', size: 'portrait' },
+  { id: 'story', label: 'ストーリーズ', size: 'story' },
+];
+
 export const DEFAULT_CROP = Object.freeze({ x: 0, y: 0, zoom: 1 });
 export const DEFAULT_ADJUST = Object.freeze({ brightness: 0, contrast: 0, saturation: 0, warmth: 0 });
 
