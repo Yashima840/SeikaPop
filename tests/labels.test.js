@@ -19,7 +19,8 @@ test('空の行は描かない（産地を入れていないポップに緑の�
   assert.equal(lay.origin, null);
   assert.equal(lay.unit, null);
   assert.equal(labelBounds(lay, 'origin'), null);
-  assert.equal(labelText('unit', { unit: '1袋' }, LABEL_DESIGN.unit), '〈1袋〉');
+  assert.equal(labelText('unit', { unit: '1袋' }, LABEL_DESIGN.unit), '1袋');
+  assert.equal(labelText('unit', { unit: '1袋' }, { ...LABEL_DESIGN.unit, prefix: '〈', suffix: '〉' }), '〈1袋〉', '前後の飾りを付けたとき');
 });
 
 test('置き場所は x, y のとおり（ドラッグで決めた位置に出る）', () => {

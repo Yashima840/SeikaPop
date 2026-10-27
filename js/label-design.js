@@ -72,8 +72,8 @@ export const LABEL_DESIGN = {
       "padY": 8,
       "radius": 12
     },
-    "prefix": "〈",
-    "suffix": "〉",
+    "prefix": "",
+    "suffix": "",
     "under": true
   }
 };
