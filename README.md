@@ -102,7 +102,7 @@ GitHub（公開版・リポジトリ・公開の進み具合）・Apps Script（
 ```bash
 npm test        # 計算部分のテスト（node --test。インストール不要）
 npm run lint    # oxlint（初回は自動で取得）
-python tools/make_icons.py   # アイコンを作り直す（Pillow）
+python tools/make_icons.py   # アイコンを icons/source/badge.png から作り直す（Pillow）
 ```
 
 ビルドは無い（素の HTML / JavaScript モジュール）。外部ライブラリも使っていない。
