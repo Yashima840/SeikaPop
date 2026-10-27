@@ -203,16 +203,21 @@ function drawBadgePrice(ctx, d, nameTop) {
   if (d.hit) d.hit.badge = place;   // 編集画面で指で動かせるように
   const { x, y: top } = place;
   withShadow(ctx, 24 * u, 'rgba(0,0,0,0.4)', () => ctx.drawImage(b.img, x, top, bw, bh));
-  const cx = x + bw * b.text.cx, cy = top + bh * b.text.cy, maxW = bw * b.text.w;
+  const maxW = bw * b.text.w;
+  // 文字は枠の中心を原点にして描く（台紙によっては少し傾ける）
+  ctx.save();
+  ctx.translate(x + bw * b.text.cx, top + bh * b.text.cy);
+  if (b.rotate) ctx.rotate(b.rotate * Math.PI / 180);
   let color = b.color;
   if (color === 'gold') {
     // 数字の高さ（だいたい maxW の半分）に合わせた、上が明るい金
-    color = ctx.createLinearGradient(0, cy - maxW * 0.3, 0, cy + maxW * 0.2);
+    color = ctx.createLinearGradient(0, -maxW * 0.3, 0, maxW * 0.2);
     color.addColorStop(0, '#fff6c8');
     color.addColorStop(0.45, '#f5c84c');
     color.addColorStop(1, '#b8861a');
   }
-  drawPriceBlock(ctx, d, cx, cy, maxW, { font: FONTS.impact, maxSize: 150 * u, color, subColor: b.sub, halo: '#1e1c1c' });
+  drawPriceBlock(ctx, d, 0, 0, maxW, { font: FONTS.impact, maxSize: 150 * u, color, subColor: b.sub, halo: b.halo || '#1e1c1c' });
+  ctx.restore();
 }
 
 // ------------------------------------------------------------------
