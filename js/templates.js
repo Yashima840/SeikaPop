@@ -156,6 +156,7 @@ function withShadow(ctx, blur, color, fn) {
  * 価格（数字＋「円」）と、その上の単位・下の税の文字を中心 (cx, cy) へ置く。
  * 価格は総額表示（税込）が義務なので、税込（税抜で入れたときは税込の金額）を必ず添える。
  * st.halo＝価格の下地の色（「各」の縁取りに使う）。
+ * st.stops＝数字と「円」をグラデーションにするとき [[位置, 色], …]（上端が 0。無ければ st.color の一色）。
  */
 function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
   const { pop, u } = d;
@@ -181,9 +182,15 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
     }
     ctx.fillText(text, x, y);
   };
-  ctx.fillStyle = st.color;
+  // st.stops があれば、数字の上端から基準の線までのグラデーション（「円」「各」も同じ塗り）
+  let fill = st.color;
+  if (st.stops) {
+    fill = ctx.createLinearGradient(0, base - size * 0.74, 0, base);
+    for (const [at, c] of st.stops) fill.addColorStop(at, c);
+  }
+  ctx.fillStyle = fill;
   paint(num, left, base, st.font, size);
-  if (d.price.each) paintEach(ctx, left, base, st.font, size * yenK * EACH_OF_YEN, st.color, st.halo || '#fff');
+  if (d.price.each) paintEach(ctx, left, base, st.font, size * yenK * EACH_OF_YEN, fill, st.halo || '#fff');
   paint('円', left + wNum + size * 0.04, base, st.font, size * yenK);
   ctx.textAlign = 'center';
   ctx.fillStyle = st.subColor || st.color;
@@ -194,6 +201,12 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
   paintMixed(ctx, note, cx, base + sub * 1.25, subFont, fitFontSize(note, maxW * 0.92, measurer(ctx, subFont), sub * 0.85, 18 * u), 'center', paint);
   ctx.restore();
 }
+
+// 台紙の上の数字と「円」のグラデーション（PRICE_BADGES の color に名前で書く）
+const TEXT_GRADIENTS = {
+  gold: [[0, '#fff6c8'], [0.45, '#f5c84c'], [1, '#b8861a']],          // 金文字: 上が明るい金
+  blackGold: [[0, '#b8860b'], [0.22, '#2e2109'], [0.55, '#0b0905'], [0.85, '#3a2a0c'], [1, '#a87a1c']],   // 黒文字に金の照り（上下が金）
+};
 
 /** 「写真主役」の金額を台紙の絵の上に描く。nameTop は商品名の上端（動かしていなければ、台紙はその上の右に置く）。 */
 function drawBadgePrice(ctx, d, nameTop) {
@@ -208,15 +221,9 @@ function drawBadgePrice(ctx, d, nameTop) {
   ctx.save();
   ctx.translate(x + bw * b.text.cx, top + bh * b.text.cy);
   if (b.rotate) ctx.rotate(b.rotate * Math.PI / 180);
-  let color = b.color;
-  if (color === 'gold') {
-    // 数字の高さ（だいたい maxW の半分）に合わせた、上が明るい金
-    color = ctx.createLinearGradient(0, -maxW * 0.3, 0, maxW * 0.2);
-    color.addColorStop(0, '#fff6c8');
-    color.addColorStop(0.45, '#f5c84c');
-    color.addColorStop(1, '#b8861a');
-  }
-  drawPriceBlock(ctx, d, 0, 0, maxW, { font: FONTS.impact, maxSize: 150 * u, color, subColor: b.sub, halo: b.halo || '#1e1c1c' });
+  drawPriceBlock(ctx, d, 0, 0, maxW, {
+    font: FONTS.impact, maxSize: 150 * u, color: b.color, stops: TEXT_GRADIENTS[b.color], subColor: b.sub, halo: b.halo || '#1e1c1c',
+  });
   ctx.restore();
 }
 
