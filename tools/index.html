@@ -139,6 +139,7 @@
           <span class="note">「新しい合言葉を作る」で、口で伝えられる合言葉（例 tomato-negi-kaki-482）ができる</span></li>
         <li>受け取り口のスクリプト プロパティ <code>PASSCODE</code> に貼って保存（<code>tools/collector/README.md</code> の 2）
           <a class="ext" data-ext="script" href="https://script.google.com/home" target="_blank" rel="noopener">Apps Script を開く</a>
+          <a class="ext" data-ext="script" data-page="settings" href="https://script.google.com/home" target="_blank" rel="noopener">合言葉（PASSCODE）を直す</a>
           <span class="note"><code>Code.gs</code> には書かない。受け取り口の URL はアプリに入っている（<code>js/collect.js</code> の <code>BUILT_IN_COLLECTOR_URL</code>）</span></li>
         <li>店員さんに合言葉を伝える → スマホの「⚙ 設定 → みんなで使える場所」に合言葉と名前を入れてもらう</li>
       </ol>
@@ -172,10 +173,12 @@
           </details>
           <ol class="plain">
             <li><a class="ext" data-ext="script" href="https://script.google.com/home" target="_blank" rel="noopener">受け取り口（Apps Script）</a>
-              <span class="note">Code.gs の差し替え・合言葉（PASSCODE）・デプロイの管理</span>
+              ・<a class="ext" data-ext="script" data-page="settings" href="https://script.google.com/home" target="_blank" rel="noopener">合言葉（PASSCODE）を直す</a>
+              <span class="note">Code.gs の差し替え・デプロイの管理。「合言葉を直す」はプロジェクトの設定（一番下のスクリプト プロパティ）を開く。
+                どちらも下で開く先を登録するまでは Apps Script の一覧が開く</span>
               <details data-reg="script">
                 <summary>直接開く先を登録する（この PC のブラウザだけに覚える）</summary>
-                プロジェクトを開いたときのアドレス（<code>https://script.google.com/…/edit</code>）を貼る
+                プロジェクトを開いたときのアドレス（<code>https://script.google.com/…/projects/…/edit</code>。<code>…/settings</code> でもよい）を貼る
                 <input type="url" spellcheck="false" placeholder="https://script.google.com/home/projects/…/edit">
                 <button type="button" data-save>登録</button> <button type="button" data-clear>登録を消す</button>
                 <div class="err" data-msg></div>
@@ -227,8 +230,18 @@
     u.searchParams.set('authuser', saved.account);
     return u.href;
   }
+  /** Apps Script のプロジェクトのアドレスを、同じプロジェクトの別の画面（edit・settings など）へ。プロジェクトでなければそのまま。 */
+  function projectPage(url, page) {
+    const m = url.match(/^(https:\/\/script\.google\.com\/.*?\/projects\/[\w-]+)/);
+    return m ? `${m[1]}/${page}` : url;
+  }
   function refresh() {
-    for (const a of document.querySelectorAll('[data-ext]')) a.href = withAccount(saved[a.dataset.ext] || a.dataset.fallback);
+    for (const a of document.querySelectorAll('[data-ext]')) {
+      const url = saved[a.dataset.ext] || a.dataset.fallback;
+      // 合言葉の画面へは設定、ふだんはエディタへ（どちらのアドレスを登録しても同じに開く）
+      const page = a.dataset.page || (a.dataset.ext === 'script' ? 'edit' : '');
+      a.href = withAccount(page ? projectPage(url, page) : url);
+    }
     document.getElementById('accountNote').textContent = saved.account
       ? `${saved.account} で開きます`
       : '法人のアカウントを登録するまでは、Chrome のいつものアカウント（個人用のことが多い）で開きます';
