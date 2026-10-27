@@ -25,13 +25,20 @@ test('広告の画面とはじめの画面は同じポップを並べる: レギ
   const at = n => new Date(Date.UTC(2026, 9, 1, 0, n)).toISOString();
   const reg = { ...createPop(), isRegular: true, updatedAt: at(1) };
   const today = { ...popFromRegular(reg), updatedAt: at(3) };
-  const plain = { ...createPop(), updatedAt: at(2) };
-  const many = Array.from({ length: RECENT_MAX }, (_, i) => ({ ...createPop(), updatedAt: at(100 + i) }));
+  const plain = { ...createPop(), name: 'なす', updatedAt: at(2) };
+  const many = Array.from({ length: RECENT_MAX }, (_, i) => ({ ...createPop(), name: `品${i}`, updatedAt: at(100 + i) }));
   const l = popLists([reg, today, plain, ...many]);
   assert.deepEqual(l.regulars.map(p => p.id), [reg.id]);
   assert.equal(l.recent.length, RECENT_MAX);
   assert.equal(l.recent[0].id, many.at(-1).id, '新しい順');
   assert.ok(!l.recent.some(p => p.id === plain.id), '古いものは上限で外れる');
+});
+
+test('何も入れていないポップ（作ってすぐアプリを閉じたもの）は履歴に並べない', () => {
+  const blank = createPop();
+  const named = { ...createPop(), name: 'トマト' };
+  const photoOnly = { ...createPop(), photoId: 'p1' };
+  assert.deepEqual(popLists([blank, named, photoOnly]).recent.map(p => p.id).sort(), [named.id, photoOnly.id].sort());
 });
 
 test('以前の広告の作りかけ（枠に画像の id）は、そのポップの id へ読み替える', () => {

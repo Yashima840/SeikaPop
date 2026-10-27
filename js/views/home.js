@@ -1,9 +1,10 @@
 // はじめの画面: 1枚作る／フレームにまとめる（広告）の入口と、レギュラー・履歴の2つの欄
 
 import * as store from '../store.js';
-import { createPop, formatShotTime, moveToRegular, popFromRegular, popLists, popTitle } from '../model.js';
+import { createPop, formatShotTime, isBlankPop, moveToRegular, popFromRegular, popLists, popTitle } from '../model.js';
 import { confirmBox, h, toast } from '../ui.js';
 import { onOutboxChange, outboxStatus } from '../sender.js';
+import { recordError } from '../crash.js';
 
 function card(pop, { onOpen, actions, sub = '' }) {
   return h('div', { class: 'card' },
@@ -24,6 +25,10 @@ export async function showHome(root, app) {
   app.setTitle('青果ポップ', { back: false });
   const pops = await store.listPops();
   const { regulars, recent } = popLists(pops);   // 広告の画面にも同じものが並ぶ
+  // 「1枚作る」の後、編集画面のままアプリを閉じると空のポップが残る（離れるときの片付けが走らない）。ここで片付ける
+  for (const p of pops.filter(isBlankPop)) {
+    store.deletePop(p.id).catch(err => recordError('空のポップの片付け', err));
+  }
 
   const openNew = async () => {
     const pop = createPop();

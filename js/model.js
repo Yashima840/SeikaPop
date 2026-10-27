@@ -239,9 +239,10 @@ export const RECENT_MAX = 30;
 /**
  * はじめの画面と広告の画面に並べるポップ: レギュラーと履歴（レギュラー以外の新しい順 RECENT_MAX 件）。
  * 2つの画面で同じものが並ぶように、ここだけで決める。
+ * 何も入れていないポップ（「1枚作る」の後、編集画面のままアプリを閉じたもの）は並べない。
  */
 export function popLists(pops) {
-  const sorted = sortByUpdated(pops);
+  const sorted = sortByUpdated(pops.filter(p => !isBlankPop(p)));
   return {
     regulars: sorted.filter(p => p.isRegular),
     recent: sorted.filter(p => !p.isRegular).slice(0, RECENT_MAX),
