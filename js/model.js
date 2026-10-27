@@ -248,7 +248,7 @@ export const PRICE_BADGES = [
   { id: 'gold-paint', label: '金の塗り', src: 'img/badges/gold-paint.png', aspect: 694 / 472,
     text: { cx: 0.5, cy: 0.5, w: 0.58 }, font: { family: 'Lobster', weight: '400' }, rotate: -8, color: 'blackGold', outline: '#000000', sub: '#3a2508', halo: '#f2c14e' },
   { id: 'green-medal', label: '緑のメダル', src: 'img/badges/green-medal.png', aspect: 484 / 472,
-    text: { cx: 0.5, cy: 0.49, w: 0.5, h: 0.36 }, font: { family: 'Anton', weight: '400' }, numScale: 1.15, numShift: 0.5, color: '#ffffff', sub: '#ffffff', halo: '#1f5a2c' },
+    text: { cx: 0.5, cy: 0.49, w: 0.5, h: 0.36 }, font: { family: 'Shippori Mincho B1', weight: '800' }, numScale: 1.6, numShift: 0.5, color: '#ffffff', sub: '#ffffff', halo: '#1f5a2c' },
 ];
 
 /** 台紙のボタンを押したときの次の台紙の id（一覧の順に回り、最後の次は最初へ。知らない id は最初の次）。 */
