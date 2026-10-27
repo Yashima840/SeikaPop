@@ -49,6 +49,13 @@
         <label><input id="each" type="checkbox"> 各</label>
       </div>
       <div class="row">
+        <label>数字と「円」の大きさ <input id="scale" type="range" min="0.7" max="1.6" step="0.05" value="1" style="width:16em"></label>
+        <b id="scaleText">×1.00</b>
+        <button id="scaleReset">アプリの今の大きさに戻す</button>
+        <span class="help" id="scaleNow"></span>
+      </div>
+      <p class="help">単位・税込の大きさは変わりません。桁の多い金額で横にはみ出しそうなときは、アプリが自動で少し控えめにします（価格を 1980 などにして確かめてください）。</p>
+      <div class="row">
         <label>ほかの書体（Google Fonts の名前） <input id="family" type="text" placeholder="例: Rampart One" style="width:14em"></label>
         <label>太さ <select id="weight"><option>400</option><option>500</option><option>600</option><option>700</option><option>800</option><option>900</option></select></label>
         <button id="add">候補に足す</button>
@@ -90,6 +97,8 @@
     const settings = { taxRate: 8, taxRounding: 'floor' };
     const badges = PRICE_BADGES.filter(b => b.id);
     const original = new Map(badges.map(b => [b.id, b.font]));   // アプリで今使っている書体（この画面では書き換えて試す）
+    const appScale = new Map(badges.map(b => [b.id, b.numScale || 1]));   // アプリで今使っている数字の大きさ
+    const scales = new Map(appScale);   // この画面で試している大きさ（台紙ごと）
     let badge = badges[badges.length - 1];
     let chosen = null;
     const photo = await new Promise(resolve => {
@@ -125,13 +134,22 @@
     // f の書体で描いた1080の画像（台紙を f にしてから描き、終わったら元に戻す）
     const work = document.createElement('canvas');
     function drawWith(f) {
-      const keep = badge.font;
+      const keep = { font: badge.font, numScale: badge.numScale };
       badge.font = f;
+      badge.numScale = scales.get(badge.id);
       try {
         return renderPop(work, popNow(), photo, settings);
       } finally {
-        badge.font = keep;
+        Object.assign(badge, keep);
       }
+    }
+
+    // 大きさのつまみ（台紙を替えたら、その台紙の大きさを出す）
+    const fmt = v => Number(v).toFixed(2);
+    function showScale() {
+      $('scale').value = scales.get(badge.id);
+      $('scaleText').textContent = `×${fmt(scales.get(badge.id))}`;
+      $('scaleNow').textContent = `アプリの今の大きさ ×${fmt(appScale.get(badge.id))}`;
     }
 
     function showBig(f) {
@@ -140,8 +158,9 @@
       const big = $('big');
       big.width = work.width; big.height = work.height;
       big.getContext('2d').drawImage(work, 0, 0);
-      $('pick').textContent = `${badge.label} … ${f.family}（太さ ${f.weight}）`;
-      $('tell').value = `${badge.label}の書体を ${f.family} ${f.weight} にして`;
+      const sc = fmt(scales.get(badge.id));
+      $('pick').textContent = `${badge.label} … ${f.family}（太さ ${f.weight}）・数字の大きさ ×${sc}`;
+      $('tell').value = `${badge.label}の書体を ${f.family} ${f.weight}、数字の大きさを ×${sc} にして`;
       for (const el of document.querySelectorAll('.cand')) el.classList.toggle('on', el.dataset.key === `${f.family}:${f.weight}`);
     }
 
@@ -190,12 +209,15 @@
     function renderBadgeButtons() {
       $('badges').replaceChildren(document.createTextNode('台紙'), ...badges.map(b => Object.assign(document.createElement('button'), {
         textContent: b.label, className: b === badge ? 'on' : '',
-        onclick: () => { badge = b; renderBadgeButtons(); redrawAll(); },
+        onclick: () => { badge = b; renderBadgeButtons(); showScale(); redrawAll(); },
       })));
     }
 
     await Promise.all(badges.map(b => ensureFonts({ ...popNow(), priceBadge: b.id }, settings)));   // 全部の台紙の絵と、アプリの書体
     renderBadgeButtons();
+    showScale();
+    $('scale').addEventListener('input', () => { scales.set(badge.id, Number($('scale').value)); showScale(); redrawAll(); });
+    $('scaleReset').onclick = () => { scales.set(badge.id, appScale.get(badge.id)); showScale(); redrawAll(); };
     for (const id of ['price', 'unit', 'each']) $(id).addEventListener('input', redrawAll);
     $('add').onclick = () => {
       const family = $('family').value.trim();
