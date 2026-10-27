@@ -89,7 +89,7 @@ export async function queueStockPhoto(photoId, title) {
 /** ストックに問い合わせる（読むだけなので控えない）。{ ok, data } か { ok:false, message }。 */
 async function askStock(action, extra) {
   const c = collectorOf(await store.getSettings());
-  if (!c.ready) return { ok: false, notSet: true, message: '事務所への送り先が設定されていません（⚙ 設定 →「事務所へ送る」）' };
+  if (!c.ready) return { ok: false, notSet: true, message: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」）' };
   return post(c.url, stockRequestBody(c.passcode, action, extra), readStockReply);
 }
 

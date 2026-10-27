@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>設定用リンクを作る</title>
+<title>合言葉を決める</title>
 <style>
   :root { --green: #2f7d43; --red: #d32f2f; --line: #dcd8cc; --muted: #6b726b; color-scheme: light; }
   body { margin: 0; background: #f4f2ec; color: #1f2a22; font-family: "Yu Gothic UI", "Hiragino Sans", sans-serif; line-height: 1.6; }
@@ -20,23 +20,27 @@
 <body>
 <main>
   <p><a href="../">← 作業場</a></p>
-  <h1>設定用リンクを作る（事務所用）</h1>
+  <h1>合言葉を決める（事務所用）</h1>
   <!-- 部品（js/collect.js）を読めないと何も動かないので、読めたときだけ下の script がこの注意を消す -->
   <p id="notLoaded" class="error">この画面は、ファイルをダブルクリックで直接開くと動きません。
     次のアドレスを開いてください: https://yashima840.github.io/SeikaPop/tools/collector/link.html</p>
 
-  <p class="hint">受け取り口の設置手順は <code>tools/collector/README.md</code>。ここで作ったリンクを店員さんに LINE などで送ります。
-    リンクには合言葉が入っているので、店の外の人には送らないでください。</p>
+  <p class="hint">店員さんは、アプリの「⚙ 設定 → みんなで使える場所」に<b>合言葉と名前を1回入れるだけ</b>で、事務所のドライブへ送れるようになります
+    （送り先の URL はアプリに入っています）。合言葉は朝礼や口頭で伝えてください。<b>店の外の人には教えない</b>こと。</p>
 
-  <p class="hint">使う順番: ① 合言葉を作ってコピー → Google の画面で受け取り口を作る（PASSCODE に貼り付け・ウェブアプリとして公開）
-    → この画面に戻って ② に URL を貼る → 下に設定用リンクが出る。<b>この画面は閉じずに置いておいてください</b>（閉じると合言葉が消えます）。</p>
+  <p class="hint">使う順番: ① 「新しい合言葉を作る」→「合言葉をコピー」→ 受け取り口のスクリプト プロパティ <code>PASSCODE</code> に貼り付けて保存
+    → 店員さんに伝える。合言葉を変えると、前の合言葉の端末からは届かなくなります（その端末で新しい合言葉を入れ直す）。
+    受け取り口の設置手順は <code>tools/collector/README.md</code>。</p>
 
-  <label for="pass">① 合言葉（受け取り口のスクリプト プロパティ PASSCODE と同じもの）</label>
+  <label for="pass">① 合言葉（受け取り口のスクリプト プロパティ PASSCODE と同じもの。言葉3つと3桁の数）</label>
   <input id="pass" autocomplete="off" spellcheck="false">
   <button id="gen" type="button">新しい合言葉を作る</button>
   <button id="copyPass" type="button">合言葉をコピー</button>
 
-  <label for="url">② 受け取り口のウェブアプリの URL（https://script.google.com/…/exec の形）</label>
+  <h2 style="font-size:16px;margin-top:28px">（使わなくてもよい）設定用リンク</h2>
+  <p class="hint">合言葉を打つ代わりに、リンクを LINE などで送って設定してもらうこともできます。リンクには合言葉が入っています。</p>
+
+  <label for="url">② 受け取り口のウェブアプリの URL（ふつうは変えなくてよい。アプリに入っているもの）</label>
   <input id="url" autocomplete="off" spellcheck="false">
 
   <label for="app">③ アプリの URL（ふつうは変えなくてよい）</label>
@@ -48,16 +52,17 @@
   <button id="copyLink" type="button">リンクをコピー</button>
 </main>
 <script type="module">
-  import { isValidPasscode, makeSetupLink, parseSetupCode } from '../../js/collect.js';
+  import { BUILT_IN_COLLECTOR_URL, isValidPasscode, makeEasyPasscode, makeSetupLink, parseSetupCode } from '../../js/collect.js';
 
   const $ = id => document.getElementById(id);
   $('notLoaded').remove();
+  $('url').value = BUILT_IN_COLLECTOR_URL;
   const update = () => {
     $('out').value = '';
     const pass = $('pass').value.trim(), url = $('url').value.trim();
     // 足りないものを黙らずに出す（何も出ないと、どこで止まっているか分からない）
     if (!pass) { $('err').textContent = '① の合言葉がまだです（「新しい合言葉を作る」を押してください）'; return; }
-    if (!url) { $('err').textContent = '② に受け取り口の URL を貼り付けてください（README の「3. ウェブアプリとして公開する」の最後に出る URL）'; return; }
+    if (!url) { $('err').textContent = '② に受け取り口の URL を入れてください（README の「3. ウェブアプリとして公開する」の最後に出る URL）'; return; }
     if (!isValidPasscode(pass)) { $('err').textContent = '合言葉は英数字と - _ で 8〜64 文字にしてください（「新しい合言葉を作る」がおすすめ）'; return; }
     const link = makeSetupLink($('app').value.trim(), url, pass);
     // アプリ側と同じ読み方で読めるかを確かめてから出す（読めないリンクを配らないように）
@@ -76,8 +81,7 @@
     }
   };
   $('gen').addEventListener('click', () => {
-    const bytes = crypto.getRandomValues(new Uint8Array(18));
-    $('pass').value = Array.from(bytes, b => 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 56]).join('');
+    $('pass').value = makeEasyPasscode(crypto.getRandomValues(new Uint8Array(6)));
     update();
   });
   $('copyPass').addEventListener('click', () => copy($('pass').value.trim(), '合言葉'));

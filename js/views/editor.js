@@ -156,7 +156,7 @@ export async function showEditor(root, app, popId) {
     try {
       const ok = await queueStockPhoto(pop.photoId, pop.name);
       toast(ok ? 'ストックへ送ります（届くと、どの端末の「📦 ストックから」にも出ます）'
-        : '事務所への送り先が設定されていないので送れません（⚙ 設定 →「事務所へ送る」）', { error: !ok });
+        : '合言葉がまだ入っていないので送れません（⚙ 設定 →「みんなで使える場所」）', { error: !ok });
     } catch (err) {
       toast(`ストックへ送れませんでした: ${err.message}`, { error: true });
     }
@@ -440,7 +440,7 @@ export async function showEditor(root, app, popId) {
       h('h3', { class: 'sub' }, '保存する場所'),
       choiceBox('shared', 'みんなで使える場所に保管', collectorReady
         ? { note: '事務所のドライブに集まります。共有したときもここに入ります' }
-        : { disabled: true, note: '送り先がまだ設定されていません（⚙ 設定 →「事務所へ送る」）' }),
+        : { disabled: true, note: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」で入れます）' }),
       choiceBox('phone', 'このスマホに保存', { note: '写真（ダウンロード）に入ります' }),
       pop.isRegular
         ? h('p', { class: 'hint' }, 'これはレギュラーの元です。ここで直すと、次に呼び出したときから反映されます。')

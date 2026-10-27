@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   adOutboxRecord, collectorOf, deliveryBaseName, deliveryBody, makeSetupLink, outboxReplaced,
   filterStock, parseSetupCode, popOutboxRecord, readReply, readStockReply, sortOutbox, stockItems, stockLabel,
-  saveTargets, stockOutboxRecord, stockRequestBody, DELIVERY_FORMAT,
+  BUILT_IN_COLLECTOR_URL, makeEasyPasscode, parsePasscodeInput, saveTargets, stockOutboxRecord, stockRequestBody, DELIVERY_FORMAT,
 } from '../js/collect.js';
 import { createPop } from '../js/model.js';
 
@@ -160,4 +160,30 @@ test('保存する場所: 送り先が未設定なら「みんなで使える場
   assert.equal(saveTargets({ shared: true, phone: false }, false).none, true);
   assert.equal(saveTargets({ regular: true }, false).none, false);
   assert.equal(saveTargets({}, true).none, true);
+});
+
+test('合言葉だけで送れる（URL を入れていない端末は組み込みの受け取り口へ）', () => {
+  const c = collectorOf({ collector: { passcode: 'tomato-negi-kaki-482', sender: '田中' } });
+  assert.equal(c.ready, true);
+  assert.equal(c.url, BUILT_IN_COLLECTOR_URL);
+  assert.equal(collectorOf({ collector: { sender: '田中' } }).ready, false);
+  assert.equal(collectorOf({}).ready, false);
+});
+
+test('打った合言葉を読む: 全角・前後の空白は直し、短いものや記号入りは理由付きで断る', () => {
+  assert.deepEqual(parsePasscodeInput('  ｔｏｍａｔｏ－ｎｅｇｉ－４８２ '), { ok: true, url: '', passcode: 'tomato-negi-482' });
+  assert.equal(parsePasscodeInput('').ok, false);
+  assert.equal(parsePasscodeInput('tomato').ok, false);
+  assert.equal(parsePasscodeInput('tomato negi kaki').ok, false);
+  // 前の設定用リンクを貼っても読める
+  const link = makeSetupLink('https://example.com/app/', BUILT_IN_COLLECTOR_URL, 'abcdEFGH1234');
+  assert.deepEqual(parsePasscodeInput(link), { ok: true, url: BUILT_IN_COLLECTOR_URL, passcode: 'abcdEFGH1234' });
+});
+
+test('覚えやすい合言葉: 言葉3つ＋3桁で、合言葉の形として通る', () => {
+  const p = makeEasyPasscode(new Uint8Array([0, 1, 2, 0, 0, 7]));
+  assert.equal(p, 'tomato-kyuuri-ninjin-007');
+  const q = makeEasyPasscode(new Uint8Array([255, 255, 255, 255, 255, 255]));
+  assert.match(q, /^[a-z]+-[a-z]+-[a-z]+-\d{3}$/);
+  assert.equal(parsePasscodeInput(q).ok, true);
 });

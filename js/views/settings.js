@@ -4,7 +4,7 @@ import * as store from '../store.js';
 import { backupFileName } from '../backup.js';
 import { parseTaxRateInput, TAX_ROUNDINGS, taxRateOf } from '../model.js';
 import { clearErrorLog, readErrorLog } from '../crash.js';
-import { collectorOf, parseSetupCode } from '../collect.js';
+import { BUILT_IN_COLLECTOR_URL, collectorOf, parsePasscodeInput, parseSetupCode } from '../collect.js';
 import { flushOutbox, onOutboxChange, outboxStatus, pingCollector } from '../sender.js';
 import { confirmBox, debounce, downloadFile, h, toast } from '../ui.js';
 
@@ -32,17 +32,22 @@ function isStandalone() {
   return window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
 }
 
-/** 送り先を入れて、通じるか確かめる。 */
+/**
+ * 送り先を確かめてから入れる。url が空なら組み込みの受け取り口。
+ * 合言葉が違うと分かったときは入れない（false）。電波が無いなどで確かめられないときは入れて知らせる。
+ */
 async function applyCollector(settings, url, passcode, sender) {
+  const r = await pingCollector(url || BUILT_IN_COLLECTOR_URL, passcode);
+  if (r.stop) { toast(r.message, { error: true }); return false; }
   settings.collector = { url, passcode, sender };
   await store.putSettings(settings);
-  const r = await pingCollector(url, passcode);
-  if (r.ok) toast('送り先を設定しました（事務所に届くことを確かめました）');
-  else toast(`送り先は設定しましたが、確かめられませんでした: ${r.message}`, { error: true });
+  if (r.ok) toast('設定しました（事務所に届くことを確かめました）');
+  else toast(`設定しましたが、届くかは確かめられませんでした: ${r.message}`, { error: true });
   flushOutbox();
+  return true;
 }
 
-/** 「事務所へ送る」の欄。戻り値の dispose で表示の更新を止める。 */
+/** 「みんなで使える場所（事務所へ送る）」の欄。戻り値の dispose で表示の更新を止める。 */
 async function collectorSection(settings, rerender) {
   const c = collectorOf(settings);
   const statusList = h('ul', { class: 'info' });
@@ -51,7 +56,7 @@ async function collectorSection(settings, rerender) {
       const st = await outboxStatus();
       // replaceChildren は null を「null」という文字にしてしまうので除く
       statusList.replaceChildren(...[
-        h('li', { text: c.ready ? '送り先: 設定済み' : '送り先: まだ設定されていません（事務所から届く設定用リンクを下に貼り付けてください）' }),
+        h('li', { text: c.ready ? '設定済み（共有・保存したポップを送ります）' : 'まだ設定されていません（下に合言葉を入れてください）' }),
         st.count ? h('li', { text: `まだ送れていないもの: ${st.count} 件（アプリを開いたときや電波が戻ったときに送り直します）` }) : null,
         st.lastError ? h('li', { class: 'field-error', text: `送れなかった理由: ${st.lastError}` }) : null,
       ].filter(Boolean));
@@ -74,17 +79,27 @@ async function collectorSection(settings, rerender) {
       }
     },
   });
-  const codeInput = h('textarea', { rows: 2, placeholder: '事務所から届いた設定用リンクを長押し →「コピー」して、ここに貼り付け' });
+  // iPhone が先頭を大文字にしたり、言葉を直したりしないように止める
+  const codeInput = h('input', {
+    type: 'text', placeholder: '例: tomato-negi-kaki-482', autocomplete: 'off', autocapitalize: 'off',
+    autocorrect: 'off', spellcheck: 'false',
+  });
   const codeError = h('span', { class: 'field-error', text: '' });
   const readCode = async () => {
-    const r = parseSetupCode(codeInput.value);
-    codeError.textContent = r.ok ? '' : r.message;   // 読めないときも貼った文字は消さない
+    const r = parsePasscodeInput(codeInput.value);
+    // 読めないときも打った文字は消さない
+    codeError.textContent = r.ok ? '' : r.message;
     if (!r.ok) return;
+    const sender = senderInput.value.trim();
+    if (!sender) { codeError.textContent = '名前も入れてください（誰が作ったか分かるように）'; return; }
+    codeError.textContent = '確かめています…';
     try {
-      await applyCollector(settings, r.url, r.passcode, senderInput.value.trim());
-      rerender();
+      const ok = await applyCollector(settings, r.url, r.passcode, sender);
+      codeError.textContent = ok ? '' : '合言葉が違います（もう一度確かめてください）';
+      if (ok) rerender();
     } catch (err) {
-      toast(`送り先を保存できませんでした: ${err.message}`, { error: true });
+      codeError.textContent = '';
+      toast(`設定を保存できませんでした: ${err.message}`, { error: true });
     }
   };
   const test = async () => {
@@ -110,8 +125,8 @@ async function collectorSection(settings, rerender) {
   };
 
   const el = h('section', { class: 'form' },
-    h('h3', {}, '事務所へ送る'),
-    h('p', { class: 'hint' }, '設定すると、共有・保存・履歴に残したポップが、事務所の Google ドライブへ自動で送られます（操作は増えません）。'),
+    h('h3', {}, 'みんなで使える場所（事務所へ送る）'),
+    h('p', { class: 'hint' }, '合言葉を入れると、共有・保存したポップが事務所の Google ドライブへ自動で送られます。写真ストックも使えるようになります。'),
     h('label', { class: 'field' }, h('span', { class: 'label', text: 'あなたの名前（誰が作ったか分かるように）' }), senderInput),
     statusList,
     c.ready
@@ -121,9 +136,9 @@ async function collectorSection(settings, rerender) {
         h('button', { class: 'danger', onclick: remove }, '送るのをやめる'))
       : null,
     h('label', { class: 'field' },
-      h('span', { class: 'label', text: c.ready ? '送り先を変える（新しい設定用リンクを貼り付け）' : '設定用リンクを貼り付け' }),
+      h('span', { class: 'label', text: c.ready ? '合言葉を変える' : '合言葉（事務所で聞いてください。1回入れれば覚えます）' }),
       codeInput, codeError),
-    h('button', { onclick: readCode }, '貼り付けたリンクで設定する'),
+    h('button', { class: c.ready ? '' : 'primary', onclick: readCode }, '合言葉で設定する'),
   );
   return { el, dispose };
 }
@@ -141,8 +156,7 @@ export async function showSetup(root, app, href) {
   const apply = async () => {
     if (!senderInput.value.trim()) { toast('名前を入れてください（誰が作ったか分かるように）', { error: true }); return; }
     try {
-      await applyCollector(settings, r.url, r.passcode, senderInput.value.trim());
-      app.go('#/settings');
+      if (await applyCollector(settings, r.url, r.passcode, senderInput.value.trim())) app.go('#/settings');
     } catch (err) {
       toast(`送り先を保存できませんでした: ${err.message}`, { error: true });
     }
@@ -151,7 +165,7 @@ export async function showSetup(root, app, href) {
     h('p', {}, 'この端末で作ったポップを、事務所の Google ドライブへ自動で送るようにします。'),
     isStandalone() ? null : h('p', { class: 'hint' },
       '※ iPhone でホーム画面のアイコンから使っている場合、ここで設定してもアイコンの方には届きません。',
-      'このリンクをコピーして、アイコンから開いたアプリの「設定 → 事務所へ送る」に貼り付けてください。'),
+      'アイコンから開いたアプリの「⚙ 設定 → みんなで使える場所」に合言葉を入れてください（このリンクを貼り付けても設定できます）。'),
     h('label', { class: 'field' }, h('span', { class: 'label', text: 'あなたの名前' }), senderInput),
     h('button', { class: 'primary big', onclick: apply }, '設定する'),
   ));

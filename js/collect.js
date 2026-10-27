@@ -17,11 +17,49 @@ export const DELIVERY_VERSION = 1;
 const COLLECTOR_URL = /^https:\/\/script\.google\.com\/(?:a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/;
 const PASSCODE = /^[\w-]{8,64}$/;
 
-/** 設定から送り先を取り出す。ready: 送れる状態か。 */
+// この店の受け取り口（法人アカウントのウェブアプリ）。URL だけでは送れない（合言葉が要る）ので、公開されても困らない。
+// 店員さんは合言葉を1回打つだけで設定できる。別の店で使うときはここを差し替える（設定用リンクで別の URL も入れられる）。
+export const BUILT_IN_COLLECTOR_URL =
+  'https://script.google.com/macros/s/AKfycbytU4tbwjjDlPVbi5vWbptmh3Ar3XddpZOPm4FT9V6DmR7IweiZh7Xc3A1gpHuGVHbQxA/exec';
+
+/** 設定から送り先を取り出す。URL を入れていない端末は組み込みの受け取り口へ送る。ready: 送れる状態か。 */
 export function collectorOf(settings) {
   const c = settings?.collector || {};
-  const ready = COLLECTOR_URL.test(c.url || '') && PASSCODE.test(c.passcode || '');
-  return { ready, url: c.url || '', passcode: c.passcode || '', sender: String(c.sender || '').trim() };
+  const url = c.url || BUILT_IN_COLLECTOR_URL;
+  const ready = COLLECTOR_URL.test(url) && PASSCODE.test(c.passcode || '');
+  return { ready, url, passcode: c.passcode || '', sender: String(c.sender || '').trim() };
+}
+
+/**
+ * 設定画面で打った合言葉を読む。全角で打っても半角にし、前後の空白は除く。
+ * 前の設定用リンクを貼り付けたときは、その中の送り先と合言葉を使う。
+ * { ok, url, passcode } か { ok:false, message }（url が空なら組み込みの受け取り口）。
+ */
+export function parsePasscodeInput(text) {
+  const s = String(text ?? '').normalize('NFKC').trim();
+  if (!s) return { ok: false, message: '合言葉を入れてください（事務所で聞いてください）' };
+  if (s.includes('#/setup?')) return parseSetupCode(s);
+  if (!PASSCODE.test(s)) {
+    return { ok: false, message: '合言葉は英字・数字・「-」「_」で8文字以上です（空白や記号が入っていないか確かめてください）' };
+  }
+  return { ok: true, url: '', passcode: s };
+}
+
+// 覚えやすい合言葉に使う言葉（青果のローマ字。打ち間違えにくい短いもの）
+const EASY_WORDS = [
+  'tomato', 'kyuuri', 'ninjin', 'daikon', 'kabocha', 'negi', 'nasu', 'piman', 'ringo', 'mikan', 'ichigo', 'budou',
+  'momo', 'nashi', 'kaki', 'renkon', 'gobou', 'hakusai', 'kyabetsu', 'retasu', 'tamanegi', 'jagaimo', 'shouga',
+  'ninniku', 'edamame', 'suika', 'meron', 'banana', 'kiwi', 'remon', 'yuzu', 'satoimo',
+];
+
+/**
+ * 口で伝えられる合言葉（言葉3つ＋3桁の数。例 tomato-negi-kaki-482）。約3,300万通り。
+ * bytes は乱数（crypto.getRandomValues の Uint8Array、6個以上）。テストで決まった値を渡せるように外から受け取る。
+ */
+export function makeEasyPasscode(bytes) {
+  const words = [0, 1, 2].map(i => EASY_WORDS[bytes[i] % EASY_WORDS.length]);
+  const num = ((bytes[3] << 16) | (bytes[4] << 8) | bytes[5]) % 1000;
+  return [...words, String(num).padStart(3, '0')].join('-');
 }
 
 /**
@@ -168,7 +206,7 @@ export function pingBody(passcode) {
 export function readReply(reply) {
   if (!reply || typeof reply !== 'object') return { ok: false, message: '送り先から読める返事がありません（設置の手順を確かめてください）' };
   if (reply.ok === true) return { ok: true };
-  if (reply.code === 'passcode') return { ok: false, stop: true, message: '合言葉が違います（事務所から新しい設定用リンクをもらってください）' };
+  if (reply.code === 'passcode') return { ok: false, stop: true, message: '合言葉が違います（事務所で今の合言葉を聞いて、⚙ 設定 →「みんなで使える場所」で入れ直してください）' };
   return { ok: false, message: `送り先で失敗しました: ${reply.message || '理由不明'}` };
 }
 

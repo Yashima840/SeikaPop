@@ -3,7 +3,7 @@
 // 書体（Google Fonts）は変わらないので「控えがあれば控え」。
 // ファイルを足したら SHELL にも足し、VERSION を上げること。
 
-const VERSION = 'v8';
+const VERSION = 'v9';
 const SHELL_CACHE = `seikapop-shell-${VERSION}`;
 const FONT_CACHE = 'seikapop-fonts';
 const SHELL = [

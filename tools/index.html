@@ -132,15 +132,15 @@
     </section>
 
     <section>
-      <h2>事務所へ集める準備（事務所で1回だけ）</h2>
+      <h2>みんなで使える場所の準備（事務所で）</h2>
       <p class="when">店員さんのスマホで作ったポップを、法人の Google ドライブへ自動で集めたいとき</p>
       <ol>
-        <li><a class="go" href="collector/link.html">設定用リンクを作る</a>
-          <span class="note">画面の ① で合言葉を作る。<b>この画面は閉じずに</b>次へ（閉じると合言葉が消える）</span></li>
-        <li>Google の画面で受け取り口を作る（<code>tools/collector/README.md</code> の 1〜3）
+        <li><a class="go" href="collector/link.html">合言葉を決める</a>
+          <span class="note">「新しい合言葉を作る」で、口で伝えられる合言葉（例 tomato-negi-kaki-482）ができる</span></li>
+        <li>受け取り口のスクリプト プロパティ <code>PASSCODE</code> に貼って保存（<code>tools/collector/README.md</code> の 2）
           <a class="ext" data-ext="script" href="https://script.google.com/home" target="_blank" rel="noopener">Apps Script を開く</a>
-          <span class="note">合言葉は PASSCODE に貼る。<code>Code.gs</code> には書かない</span></li>
-        <li>設定用リンクの画面に戻り、② に受け取り口の URL を貼る → できたリンクを店員さんへ LINE などで送る</li>
+          <span class="note"><code>Code.gs</code> には書かない。受け取り口の URL はアプリに入っている（<code>js/collect.js</code> の <code>BUILT_IN_COLLECTOR_URL</code>）</span></li>
+        <li>店員さんに合言葉を伝える → スマホの「⚙ 設定 → みんなで使える場所」に合言葉と名前を入れてもらう</li>
       </ol>
     </section>
 

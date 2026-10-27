@@ -393,7 +393,7 @@ export async function showAd(root, app) {
       h('h3', { class: 'sub' }, '保存する場所'),
       choiceBox('shared', 'みんなで使える場所に保管', collectorReady
         ? { note: '事務所のドライブに集まります。共有したときもここに入ります' }
-        : { disabled: true, note: '送り先がまだ設定されていません（⚙ 設定 →「事務所へ送る」）' }),
+        : { disabled: true, note: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」で入れます）' }),
       choiceBox('phone', 'このスマホに保存', { note: '写真（ダウンロード）に入ります' }),
       problemsEl, saveBtn),
   );
