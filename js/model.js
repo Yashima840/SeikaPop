@@ -237,6 +237,7 @@ export function nameFontOf(pop) {
 // color は数字と「円」の色（'gold'＝金、'blackGold'＝金文字を逆にした黒文字 のグラデーション。templates.js の TEXT_GRADIENTS）、sub は単位と税込の色、halo は「各」の縁取りの色（台紙の地の色）。
 // font は数字と「円」の書体 { family, weight }（Google Fonts の名前。無ければ太い見出しの書体）。書体の候補は tools/badge-fonts.html で見比べる。
 // lift はまとまり全体を税込の文字の高さの何倍上げるか（下の飾りに税込がかかるとき）。
+// numShift は数字と「円」だけを右へずらす量（「円」の幅の何倍か）。
 // rotate は文字の傾き（度。左回りがマイナス）。outline は数字と「円」の細い縁取りの色（地に溶け込むとき）。
 export const PRICE_BADGES = [
   { id: '', label: '黄色い丸' },
@@ -247,7 +248,7 @@ export const PRICE_BADGES = [
   { id: 'gold-paint', label: '金の塗り', src: 'img/badges/gold-paint.png', aspect: 694 / 472,
     text: { cx: 0.5, cy: 0.5, w: 0.58 }, font: { family: 'Lobster', weight: '400' }, rotate: -8, color: 'blackGold', outline: '#000000', sub: '#3a2508', halo: '#f2c14e' },
   { id: 'green-medal', label: '緑のメダル', src: 'img/badges/green-medal.png', aspect: 484 / 472,
-    text: { cx: 0.5, cy: 0.49, w: 0.5 }, color: '#ffffff', sub: '#ffffff', halo: '#1f5a2c' },
+    text: { cx: 0.5, cy: 0.49, w: 0.5, h: 0.36 }, font: { family: 'Anton', weight: '400' }, numShift: 0.5, color: '#ffffff', sub: '#ffffff', halo: '#1f5a2c' },
 ];
 
 /** 台紙のボタンを押したときの次の台紙の id（一覧の順に回り、最後の次は最初へ。知らない id は最初の次）。 */

@@ -157,6 +157,7 @@ function withShadow(ctx, blur, color, fn) {
  * 価格は総額表示（税込）が義務なので、税込（税抜で入れたときは税込の金額）を必ず添える。
  * st.halo＝価格の下地の色（「各」の縁取りに使う）。
  * st.eachApart＝「各」を数字に重ねず、左に離して置く（数字の書体が斜め・細身で重なると読みにくいとき）。
+ * st.numShift＝数字と「円」だけを右へずらす量（「円」の幅の何倍か。左へはマイナス）。
  * st.lift＝まとまり全体を税込の文字の高さの何倍上げるか（無ければ 0）。
  * st.outline＝数字と「円」の縁取りの色（細い線。無ければ縁取らない）。
  * st.stops＝数字と「円」をグラデーションにするとき [[位置, 色], …]（上端が 0。無ければ st.color の一色）。
@@ -174,7 +175,8 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
   const wAll = both(num, size);
   // st.eachApart のときは「各」を数字に重ねず左に離して置くので、その分まとまりを右へずらして真ん中に保つ
   const eachSize = size * yenK * EACH_OF_YEN;
-  const left = cx - wAll / 2 + (d.price.each && st.eachApart ? eachSize * 0.55 : 0);
+  // st.numShift があれば、数字と「円」（と「各」）だけを「円」の幅 × numShift だけ右へ（単位・税込は動かさない）
+  const left = cx - wAll / 2 + (d.price.each && st.eachApart ? eachSize * 0.55 : 0) + (st.numShift || 0) * mNum('円', size * yenK);
   ctx.save();
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
@@ -248,7 +250,7 @@ function drawBadgePrice(ctx, d, nameTop) {
   if (b.rotate) ctx.rotate(b.rotate * Math.PI / 180);
   drawPriceBlock(ctx, d, 0, 0, maxW, {
     // 枠の高さ（text.h）があれば、単位〜税込のまとまり（数字のおよそ 1.8 倍）がその高さに収まる大きさまで
-    font: b.font || FONTS.impact, maxSize: Math.min(150 * u, b.text.h ? bh * b.text.h / 1.8 : Infinity), color: b.color, stops: TEXT_GRADIENTS[b.color], outline: b.outline, lift: b.lift, eachApart: true, subColor: b.sub, halo: b.halo || '#1e1c1c',
+    font: b.font || FONTS.impact, maxSize: Math.min(150 * u, b.text.h ? bh * b.text.h / 1.8 : Infinity), color: b.color, stops: TEXT_GRADIENTS[b.color], outline: b.outline, lift: b.lift, numShift: b.numShift, eachApart: true, subColor: b.sub, halo: b.halo || '#1e1c1c',
   });
   ctx.restore();
 }
