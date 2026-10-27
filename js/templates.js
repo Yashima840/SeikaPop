@@ -157,6 +157,7 @@ function withShadow(ctx, blur, color, fn) {
  * 価格は総額表示（税込）が義務なので、税込（税抜で入れたときは税込の金額）を必ず添える。
  * st.halo＝価格の下地の色（「各」の縁取りに使う）。
  * st.eachApart＝「各」を数字に重ねず、左に離して置く（数字の書体が斜め・細身で重なると読みにくいとき）。
+ * st.numScale＝数字と「円」だけを何倍の大きさにするか（単位・税込はそのまま）。
  * st.numShift＝数字と「円」だけを右へずらす量（「円」の幅の何倍か。左へはマイナス）。
  * st.lift＝まとまり全体を税込の文字の高さの何倍上げるか（無ければ 0）。
  * st.outline＝数字と「円」の縁取りの色（細い線。無ければ縁取らない）。
@@ -171,16 +172,19 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
   const size = Math.min(st.maxSize, Math.floor(st.maxSize * maxW / both(num, st.maxSize)));
   // st.lift があれば、まとまり全体を税込の文字の高さ × lift だけ上へ（台紙の下の飾りに税込がかからないように）
   if (st.lift) cy -= st.lift * Math.max(38 * u, size * 0.3) * 0.85;
-  const wNum = mNum(num, size);
-  const wAll = both(num, size);
+  // st.numScale があれば、数字と「円」だけをその倍の大きさに（単位・税込の大きさは size のまま）
+  // 横幅に余裕が無い（桁が多い）ときは、枠の幅を少しだけ越えるところまでに抑える
+  const ns = Math.min(size * (st.numScale || 1), Math.max(size, size * maxW * 1.05 / both(num, size)));
+  const wNum = mNum(num, ns);
+  const wAll = both(num, ns);
   // st.eachApart のときは「各」を数字に重ねず左に離して置くので、その分まとまりを右へずらして真ん中に保つ
-  const eachSize = size * yenK * EACH_OF_YEN;
+  const eachSize = ns * yenK * EACH_OF_YEN;
   // st.numShift があれば、数字と「円」（と「各」）だけを「円」の幅 × numShift だけ右へ（単位・税込は動かさない）
-  const left = cx - wAll / 2 + (d.price.each && st.eachApart ? eachSize * 0.55 : 0) + (st.numShift || 0) * mNum('円', size * yenK);
+  const left = cx - wAll / 2 + (d.price.each && st.eachApart ? eachSize * 0.55 : 0) + (st.numShift || 0) * mNum('円', ns * yenK);
   ctx.save();
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
-  const base = cy + size * 0.36;
+  const base = cy + ns * 0.36;
   const paint = (text, x, y, f, s) => {
     ctx.font = font(f, s);
     if (st.stroke) {
@@ -194,7 +198,7 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
   // st.stops があれば、数字の上端から基準の線までのグラデーション（「円」「各」も同じ塗り）
   let fill = st.color;
   if (st.stops) {
-    fill = ctx.createLinearGradient(0, base - size * 0.74, 0, base);
+    fill = ctx.createLinearGradient(0, base - ns * 0.74, 0, base);
     for (const [at, c] of st.stops) fill.addColorStop(at, c);
   }
   ctx.fillStyle = fill;
@@ -211,18 +215,18 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
     }
     paint(text, x, y, f, s);
   };
-  paintNum(num, left, base, st.font, size);
+  paintNum(num, left, base, st.font, ns);
   if (d.price.each) {
     // 書体によっては数字の飾りが左へはみ出す（Lobster の「1」など）ので、字の見えている左端に合わせて「各」を置く
-    ctx.font = font(st.font, size);
+    ctx.font = font(st.font, ns);
     const inkLeft = Math.max(0, ctx.measureText(num).actualBoundingBoxLeft || 0);
     paintEach(ctx, left - inkLeft - (st.eachApart ? eachSize * 0.6 : 0), base, st.font, eachSize, fill, st.halo || '#fff');
   }
-  paintNum('円', left + wNum + size * 0.04, base, st.font, size * yenK);
+  paintNum('円', left + wNum + ns * 0.04, base, st.font, ns * yenK);
   ctx.textAlign = 'center';
   ctx.fillStyle = st.subColor || st.color;
   const sub = Math.max(38 * u, size * 0.3);
-  if (pop.unit) paint(pop.unit, cx, cy - size * 0.55, st.subFont || FONTS.round, sub);
+  if (pop.unit) paint(pop.unit, cx, cy - size * 0.55 - (ns - size) * 0.4, st.subFont || FONTS.round, sub);   // 数字を大きくした分だけ上へ
   const note = taxNote(d.price);
   const subFont = st.subFont || FONTS.round;
   paintMixed(ctx, note, cx, base + sub * 1.25, subFont, fitFontSize(note, maxW * 0.92, measurer(ctx, subFont), sub * 0.85, 18 * u), 'center', paint);
@@ -250,7 +254,7 @@ function drawBadgePrice(ctx, d, nameTop) {
   if (b.rotate) ctx.rotate(b.rotate * Math.PI / 180);
   drawPriceBlock(ctx, d, 0, 0, maxW, {
     // 枠の高さ（text.h）があれば、単位〜税込のまとまり（数字のおよそ 1.8 倍）がその高さに収まる大きさまで
-    font: b.font || FONTS.impact, maxSize: Math.min(150 * u, b.text.h ? bh * b.text.h / 1.8 : Infinity), color: b.color, stops: TEXT_GRADIENTS[b.color], outline: b.outline, lift: b.lift, numShift: b.numShift, eachApart: true, subColor: b.sub, halo: b.halo || '#1e1c1c',
+    font: b.font || FONTS.impact, maxSize: Math.min(150 * u, b.text.h ? bh * b.text.h / 1.8 : Infinity), color: b.color, stops: TEXT_GRADIENTS[b.color], outline: b.outline, lift: b.lift, numScale: b.numScale, numShift: b.numShift, eachApart: true, subColor: b.sub, halo: b.halo || '#1e1c1c',
   });
   ctx.restore();
 }
