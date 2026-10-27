@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>台紙の書体を見比べる（SeikaPop）</title>
+  <style>
+    :root { --line: #d6d2c6; --muted: #6b6a63; --accent: #2f7d43; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.5 system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; background: #ecebe6; color: #222; }
+    header { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      padding: 8px 14px; background: #24412d; color: #fff; }
+    header h1 { font-size: 16px; margin: 0 12px 0 0; }
+    header a.home { color: #fff; text-decoration: none; font-size: 13px; padding: 4px 8px; border-radius: 6px; border: 1px solid #fff4; }
+    main { padding: 14px; max-width: 1280px; margin: 0 auto; }
+    .card { background: #fff; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+    label { display: inline-flex; gap: 6px; align-items: center; }
+    input[type=text], input[type=number], select { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; }
+    button { font: inherit; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line); background: #f6f5f0; cursor: pointer; }
+    button.on, button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .help { color: var(--muted); font-size: 12px; margin: 4px 0; }
+    .top { display: grid; grid-template-columns: minmax(280px, 520px) 1fr; gap: 14px; align-items: start; }
+    @media (max-width: 800px) { .top { grid-template-columns: 1fr; } }
+    #big { width: 100%; display: block; border-radius: 8px; }
+    #pick { font-size: 18px; font-weight: 700; margin: 4px 0; }
+    #tell { width: 100%; font: 15px/1.4 ui-monospace, Consolas, monospace; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: #fbfaf6; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+    .cand { background: #fff; border: 2px solid transparent; border-radius: 10px; padding: 6px; cursor: pointer; text-align: center; }
+    .cand.on { border-color: var(--accent); }
+    .cand canvas { width: 100%; display: block; border-radius: 6px; background: #3a3a33; }
+    .cand .name { font-size: 13px; margin-top: 4px; }
+    .cand .tag { font-size: 11px; color: var(--muted); }
+    .cand .tag.err { color: #c62828; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="home" href="./">← 作業場</a>
+    <h1>台紙の書体を見比べる</h1>
+    <span class="help" style="color:#fffc">「写真主役」の金額の台紙で、数字と「円」の書体を試す（ここで試してもアプリは変わりません）</span>
+  </header>
+  <main>
+    <div class="card">
+      <div class="row" id="badges"></div>
+      <div class="row">
+        <label>価格 <input id="price" type="number" value="258" min="0" style="width:7em"></label>
+        <label>単位 <input id="unit" type="text" value="1玉" style="width:6em"></label>
+        <label><input id="each" type="checkbox"> 各</label>
+      </div>
+      <div class="row">
+        <label>ほかの書体（Google Fonts の名前） <input id="family" type="text" placeholder="例: Rampart One" style="width:14em"></label>
+        <label>太さ <select id="weight"><option>400</option><option>500</option><option>600</option><option>700</option><option>800</option><option>900</option></select></label>
+        <button id="add">候補に足す</button>
+      </div>
+      <p class="help">名前は <a href="https://fonts.google.com/?subset=japanese" target="_blank" rel="noopener">Google Fonts</a> に出ている名前をそのまま（例: Dela Gothic One）。その太さが無い書体は「読めません」と出ます。
+        英字だけの書体は「円」「各」が入っていないので、そこだけ端末の字になります。</p>
+    </div>
+
+    <div class="card top">
+      <canvas id="big"></canvas>
+      <div>
+        <p class="help">下の候補を押すと、ここに大きく出します。</p>
+        <p id="pick"></p>
+        <p class="help">決めたら、この1行を Claude に伝えてください。</p>
+        <input id="tell" type="text" readonly>
+      </div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <script type="module">
+    import { createPop, PRICE_BADGES } from '../js/model.js';
+    import { ensureFonts, renderPop } from '../js/render.js';
+    import { googleFontsUrl } from '../js/layout.js';
+
+    // 候補（数字が太く読める書体を中心に。和文は「円」まで同じ書体になる）
+    const CANDIDATES = [
+      ['Dela Gothic One', 400], ['Rampart One', 400], ['Reggae One', 400], ['RocknRoll One', 400],
+      ['Mochiy Pop One', 400], ['Train One', 400], ['Yuji Boku', 400], ['Yuji Syuku', 400],
+      ['Zen Antique', 400], ['Shippori Mincho B1', 800], ['Zen Old Mincho', 900], ['Noto Serif JP', 900],
+      ['Kaisei Tokumin', 800], ['M PLUS Rounded 1c', 900], ['Zen Kaku Gothic New', 900], ['Noto Sans JP', 900],
+      ['Anton', 400], ['Bebas Neue', 400], ['Oswald', 700], ['Archivo Black', 400],
+      ['Abril Fatface', 400], ['Playfair Display', 900], ['Cinzel', 900], ['Russo One', 400],
+      ['Bungee', 400], ['Kaushan Script', 400], ['Lobster', 400],
+    ].map(([family, weight]) => ({ family, weight: String(weight) }));
+
+    const $ = id => document.getElementById(id);
+    const settings = { taxRate: 8, taxRounding: 'floor' };
+    const badges = PRICE_BADGES.filter(b => b.id);
+    const original = new Map(badges.map(b => [b.id, b.font]));   // アプリで今使っている書体（この画面では書き換えて試す）
+    let badge = badges[badges.length - 1];
+    let chosen = null;
+    const photo = await new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);   // 写真が無くても台紙は描ける
+      img.src = '../img/sample-potato.jpg';
+    });
+
+    // 書体の読み込み（失敗したら false。同じ書体は1回だけ）
+    const loaded = new Map();
+    function loadFont(f) {
+      const key = `${f.family}:${f.weight}`;
+      if (!loaded.has(key)) {
+        loaded.set(key, new Promise(resolve => {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = googleFontsUrl([f]);
+          link.onload = () => document.fonts.load(`${f.weight} 80px "${f.family}"`, '0123456789,.円各')
+            .then(list => resolve(list.length > 0), () => resolve(false));
+          link.onerror = () => resolve(false);
+          document.head.append(link);
+        }));
+      }
+      return loaded.get(key);
+    }
+
+    const popNow = () => ({
+      ...createPop(), name: '白菜', origin: '埼玉県', template: 'fresh', size: 'square',
+      price: Number($('price').value) || 0, unit: $('unit').value, each: $('each').checked, priceBadge: badge.id,
+    });
+
+    // f の書体で描いた1080の画像（台紙を f にしてから描き、終わったら元に戻す）
+    const work = document.createElement('canvas');
+    function drawWith(f) {
+      const keep = badge.font;
+      badge.font = f;
+      try {
+        return renderPop(work, popNow(), photo, settings);
+      } finally {
+        badge.font = keep;
+      }
+    }
+
+    function showBig(f) {
+      chosen = f;
+      drawWith(f);
+      const big = $('big');
+      big.width = work.width; big.height = work.height;
+      big.getContext('2d').drawImage(work, 0, 0);
+      $('pick').textContent = `${badge.label} … ${f.family}（太さ ${f.weight}）`;
+      $('tell').value = `${badge.label}の書体を ${f.family} ${f.weight} にして`;
+      for (const el of document.querySelectorAll('.cand')) el.classList.toggle('on', el.dataset.key === `${f.family}:${f.weight}`);
+    }
+
+    async function addCard(f, { first = false } = {}) {
+      const key = `${f.family}:${f.weight}`;
+      if (document.querySelector(`.cand[data-key="${CSS.escape(key)}"]`)) return;
+      const cv = document.createElement('canvas');
+      const tag = Object.assign(document.createElement('div'), { className: 'tag', textContent: '読み込み中…' });
+      const card = document.createElement('div');
+      card.className = 'cand';
+      card.dataset.key = key;
+      card.append(cv, Object.assign(document.createElement('div'), { className: 'name', textContent: `${f.family}（${f.weight}）` }), tag);
+      card.onclick = () => showBig(f);
+      $('grid')[first ? 'prepend' : 'append'](card);
+      const ok = await loadFont(f);
+      tag.textContent = ok ? (isCurrent(f) ? 'アプリで今使っている書体' : '') : '読めません（名前か太さが違う）';
+      tag.classList.toggle('err', !ok);
+      card.f = f;
+      paintCard(card);
+    }
+
+    const isCurrent = f => {
+      const cur = original.get(badge.id) || { family: 'Dela Gothic One', weight: '400' };
+      return cur.family === f.family && String(cur.weight) === f.weight;
+    };
+
+    // 候補の小さい見本は、台紙のまわりだけを切り出す
+    function paintCard(card) {
+      if (!card.f) return;
+      const hit = drawWith(card.f);
+      const r = hit.badge;
+      const cv = card.querySelector('canvas');
+      const pad = 20;
+      cv.width = r.w + pad * 2; cv.height = r.h + pad * 2;
+      cv.getContext('2d').drawImage(work, r.x - pad, r.y - pad, cv.width, cv.height, 0, 0, cv.width, cv.height);
+      const tag = card.querySelector('.tag');
+      if (!tag.classList.contains('err')) tag.textContent = isCurrent(card.f) ? 'アプリで今使っている書体' : '';
+    }
+
+    function redrawAll() {
+      for (const card of document.querySelectorAll('.cand')) paintCard(card);
+      if (chosen) showBig(chosen);
+    }
+
+    // 台紙の切り替え
+    function renderBadgeButtons() {
+      $('badges').replaceChildren(document.createTextNode('台紙'), ...badges.map(b => Object.assign(document.createElement('button'), {
+        textContent: b.label, className: b === badge ? 'on' : '',
+        onclick: () => { badge = b; renderBadgeButtons(); redrawAll(); },
+      })));
+    }
+
+    await Promise.all(badges.map(b => ensureFonts({ ...popNow(), priceBadge: b.id }, settings)));   // 全部の台紙の絵と、アプリの書体
+    renderBadgeButtons();
+    for (const id of ['price', 'unit', 'each']) $(id).addEventListener('input', redrawAll);
+    $('add').onclick = () => {
+      const family = $('family').value.trim();
+      if (!family) return;
+      const f = { family, weight: $('weight').value };
+      addCard(f, { first: true }).then(() => showBig(f));
+    };
+    const start = original.get(badge.id) || { family: 'Dela Gothic One', weight: '400' };
+    await Promise.all(CANDIDATES.map(f => addCard(f)));
+    showBig(CANDIDATES.find(f => f.family === start.family && f.weight === String(start.weight)) || CANDIDATES[0]);
+  </script>
+</body>
+</html>

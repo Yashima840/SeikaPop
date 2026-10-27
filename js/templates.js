@@ -236,7 +236,7 @@ function drawBadgePrice(ctx, d, nameTop) {
   ctx.translate(x + bw * b.text.cx, top + bh * b.text.cy);
   if (b.rotate) ctx.rotate(b.rotate * Math.PI / 180);
   drawPriceBlock(ctx, d, 0, 0, maxW, {
-    font: FONTS.impact, maxSize: 150 * u, color: b.color, stops: TEXT_GRADIENTS[b.color], outline: b.outline, subColor: b.sub, halo: b.halo || '#1e1c1c',
+    font: b.font || FONTS.impact, maxSize: 150 * u, color: b.color, stops: TEXT_GRADIENTS[b.color], outline: b.outline, subColor: b.sub, halo: b.halo || '#1e1c1c',
   });
   ctx.restore();
 }

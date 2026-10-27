@@ -32,6 +32,7 @@ PAGES = {
     "デザイン編集（金額主役）": "/tools/designer.html",
     "アプリ": "/",
     "見本帳（全デザイン×全サイズ）": "/tools/gallery.html",
+    "台紙の書体を見比べる": "/tools/badge-fonts.html",
     "金額キャッチの試作キット": "/tools/price-kit/price-kit.html",
     "外部AI案の比較": "/tools/price-kit/compare.html",
     "合言葉を決める": "/tools/collector/link.html",

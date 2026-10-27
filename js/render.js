@@ -1,6 +1,6 @@
 // ポップを Canvas へ描く・画像ファイルにする。
 
-import { adFileName, exportFileName, formatDate, NAME_FONTS, nameFontOf, priceBadgeOf, priceTexts, SIZES } from './model.js';
+import { adFileName, badgeFonts, exportFileName, formatDate, NAME_FONTS, nameFontOf, priceBadgeOf, priceTexts, SIZES } from './model.js';
 import { FONTS, font, measurer, roundRectPath, TEMPLATES } from './templates.js';
 import { canvasToBlob } from './image.js';
 import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.js';
@@ -52,8 +52,8 @@ function badgeFor(pop) {
   return img ? { ...b, img } : null;
 }
 
-/** 定義を読み込む書体（金額キャッチ・産地・商品名・数量と単位の3行・商品名に選べる書体）。 */
-const designFonts = () => [...PRICE_FONTS, ...labelFontList(LABEL_DESIGN), ...NAME_FONTS.filter(f => f.family)];
+/** 定義を読み込む書体（金額キャッチ・産地・商品名・数量と単位の3行・商品名に選べる書体・金額の台紙）。 */
+const designFonts = () => [...PRICE_FONTS, ...labelFontList(LABEL_DESIGN), ...NAME_FONTS.filter(f => f.family), ...badgeFonts()];
 
 /** その書体の定義（@font-face）を読み込む。デザインで書体が変わっても index.html を直さずに済むように。 */
 function loadPriceFontCss() {
