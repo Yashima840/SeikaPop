@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   adOutboxRecord, collectorOf, deliveryBaseName, deliveryBody, makeSetupLink, outboxReplaced,
   filterStock, parseSetupCode, popOutboxRecord, readReply, readStockReply, sortOutbox, stockItems, stockLabel,
-  stockOutboxRecord, stockRequestBody, DELIVERY_FORMAT,
+  saveTargets, stockOutboxRecord, stockRequestBody, DELIVERY_FORMAT,
 } from '../js/collect.js';
 import { createPop } from '../js/model.js';
 
@@ -152,4 +152,12 @@ test('写真ストックを名前で探す: 全角半角・カタカナひらが
   assert.deepEqual(filterStock(items, 'とまと').map(i => i.id), ['1', '2']);
   assert.deepEqual(filterStock(items, 'トマト みに').map(i => i.id), ['2']);
   assert.equal(filterStock(items, '  ').length, 3);
+});
+test('保存する場所: 送り先が未設定なら「みんなで使える場所」は外し、1つも無ければ none', () => {
+  assert.deepEqual(saveTargets({ shared: true, phone: true, regular: false }, true),
+    { shared: true, phone: true, regular: false, none: false });
+  assert.equal(saveTargets({ shared: true, phone: false }, false).shared, false);
+  assert.equal(saveTargets({ shared: true, phone: false }, false).none, true);
+  assert.equal(saveTargets({ regular: true }, false).none, false);
+  assert.equal(saveTargets({}, true).none, true);
 });

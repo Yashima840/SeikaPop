@@ -12,6 +12,7 @@ import { adjustedCopy, blobToImage } from '../image.js';
 import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../render.js';
 import { confirmBox, debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
 import { queueAd } from '../sender.js';
+import { collectorOf, saveTargets } from '../collect.js';
 
 function chips(items, onPick, current) {
   return h('div', { class: 'chips' }, items.map(([value, label]) =>
@@ -309,17 +310,33 @@ export async function showAd(root, app) {
   }
 
   // ---- 出す ----
+  // 置く場所はチェックで選ぶ（編集画面と同じ。最初から印あり）
+  const collectorReady = collectorOf(settings).ready;
+  const choice = { shared: collectorReady, phone: true };
   const problemsEl = h('ul', { class: 'problems' });
   const shareBtn = h('button', { class: 'primary big', onclick: () => doExport(true) }, '共有する（LINE・Instagram など）');
-  const saveBtn = h('button', { onclick: () => doExport(false) }, '画像を保存');
+  const saveBtn = h('button', { class: 'big', onclick: () => doExport(false) }, '保存する');
   function updateExportState() {
     const p = problems();
-    problemsEl.replaceChildren(...p.map(t => h('li', { text: t })));
-    shareBtn.disabled = saveBtn.disabled = p.length > 0;
+    const none = saveTargets(choice, collectorReady).none;
+    problemsEl.replaceChildren(...[...p, ...(none ? ['保存する場所に1つ以上チェックを入れてください'] : [])]
+      .map(t => h('li', { text: t })));
+    shareBtn.disabled = p.length > 0;
+    saveBtn.disabled = p.length > 0 || none;
+  }
+  function choiceBox(key, label, { disabled = false, note = '' } = {}) {
+    return h('label', { class: 'check' },
+      h('input', {
+        type: 'checkbox', checked: choice[key], disabled,
+        onchange: ev => { choice[key] = ev.target.checked; updateExportState(); },
+      }),
+      h('span', {}, label, note ? h('small', { class: 'check-note', text: note }) : null));
   }
 
+  /** share: true＝共有（みんなで使える場所へはチェックどおり）／false＝チェックした場所へ保存。 */
   async function doExport(share) {
-    if (problems().length) return;
+    const t = saveTargets(choice, collectorReady);
+    if (problems().length || (!share && t.none)) return;
     const frame = frameOf();
     let made;
     try {
@@ -336,7 +353,12 @@ export async function showAd(root, app) {
     const shot = shotFromAd({ ...ad, slots: ad.slots.map(id => popShotKey(popById.get(id))) }, frame, made);
     const kept = store.addShot(shot, made.file)
       .catch(err => toast(`広告を履歴に残せませんでした: ${err.message}`, { error: true }));
-    queueAd(shot, made.file).catch(err => toast(`事務所へ送る準備ができませんでした: ${err.message}`, { error: true }));
+    const sent = t.shared
+      ? queueAd(shot, made.file).catch(err => {
+        toast(`みんなで使える場所へ送る準備ができませんでした: ${err.message}`, { error: true });
+        return false;
+      })
+      : Promise.resolve(false);
     try {
       if (share && navigator.canShare?.({ files: [made.file] })) {
         try {
@@ -344,14 +366,22 @@ export async function showAd(root, app) {
         } catch (err) {
           if (err?.name !== 'AbortError') throw err;  // 共有画面で「キャンセル」した＝失敗ではない
         }
-      } else {
+      } else if (share) {
         downloadFile(made.file);
-        toast(share ? 'この端末は共有に対応していないため、画像を保存しました' : '画像を保存しました');
+        toast('この端末は共有に対応していないため、画像を保存しました');
+      } else {
+        const done = [];
+        if (await sent) done.push('みんなで使える場所へ送ります');
+        if (t.phone) {
+          downloadFile(made.file);
+          done.push('このスマホに保存しました');
+        }
+        if (done.length) toast(done.join('・'));
       }
     } catch (err) {
       toast(`画像を出せませんでした: ${err.message}`, { error: true });
     } finally {
-      await kept;
+      await Promise.all([kept, sent]);
     }
   }
 
@@ -359,7 +389,13 @@ export async function showAd(root, app) {
   root.replaceChildren(
     h('div', { class: 'preview' }, canvas, h('div', { class: 'preview-bar' }, statusEl)),
     form,
-    h('div', { class: 'export' }, h('h3', {}, '出す'), problemsEl, shareBtn, saveBtn),
+    h('div', { class: 'export' }, h('h3', {}, '出す'), shareBtn,
+      h('h3', { class: 'sub' }, '保存する場所'),
+      choiceBox('shared', 'みんなで使える場所に保管', collectorReady
+        ? { note: '事務所のドライブに集まります。共有したときもここに入ります' }
+        : { disabled: true, note: '送り先がまだ設定されていません（⚙ 設定 →「事務所へ送る」）' }),
+      choiceBox('phone', 'このスマホに保存', { note: '写真（ダウンロード）に入ります' }),
+      problemsEl, saveBtn),
   );
   draw();
 

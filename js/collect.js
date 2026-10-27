@@ -1,7 +1,7 @@
 // 作ったポップを事務所（法人の Google ドライブ）へ集める仕組みの、計算と判定だけ。
 // 送るのは js/sender.js、控えておくのは store.js。受け取り口は tools/collector/。
 //
-// 流れ: 共有・保存・履歴に残す → 送るものを端末に控える（outbox）→ つながっていれば送る
+// 流れ: 共有・保存（「みんなで使える場所に保管」に印があるとき）→ 送るものを端末に控える（outbox）→ つながっていれば送る
 //       → 届いたら控えを消す。送れなければ控えたまま、次に開いたときにまた送る。
 // 写真ストック（どの端末からでも呼び出せる写真の置き場。ドライブの「青果ポップ 写真ストック」）も同じ受け取り口を使う。
 //       足すのは控えて送る（kind: 'stock'）、読むのはその場で問い合わせる。
@@ -22,6 +22,15 @@ export function collectorOf(settings) {
   const c = settings?.collector || {};
   const ready = COLLECTOR_URL.test(c.url || '') && PASSCODE.test(c.passcode || '');
   return { ready, url: c.url || '', passcode: c.passcode || '', sender: String(c.sender || '').trim() };
+}
+
+/**
+ * 「保存する」で実際にどこへ置くか。choice は画面のチェック（shared: みんなで使える場所＝事務所のドライブ／
+ * phone: このスマホ／regular: レギュラー）。送り先が未設定なら shared は外す。none: 置く所が1つも無い。
+ */
+export function saveTargets(choice, collectorReady) {
+  const t = { shared: !!choice.shared && !!collectorReady, phone: !!choice.phone, regular: !!choice.regular };
+  return { ...t, none: !t.shared && !t.phone && !t.regular };
 }
 
 /** 事務所が店員さんへ配る設定用リンク（アプリのURL＋#/setup?u=…&k=…）。 */

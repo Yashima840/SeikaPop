@@ -11,6 +11,7 @@ import { ensureFonts, photoBoxOf, renderPop, renderToFile, thumbnailOf } from '.
 import { TEMPLATE_ORDER, TEMPLATES } from '../templates.js';
 import { debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
 import { queuePop, queueStockPhoto } from '../sender.js';
+import { collectorOf, saveTargets } from '../collect.js';
 import { openStockPicker } from './stock.js';
 
 // 青果と食品の両方に使う（食品は「1人前」「1本入」など）
@@ -295,9 +296,11 @@ export async function showEditor(root, app, popId) {
   }
 
   // ---- 出力・レギュラー ----
-  const shareBtn = h('button', { class: 'primary big', onclick: () => doExport(true) }, '共有する（LINE・Instagram など）');
-  const saveBtn = h('button', { onclick: () => doExport(false) }, '画像を保存');
-  const keepBtn = h('button', { onclick: () => doExport(null) }, '履歴に残すだけ（広告用）');
+  // 置く場所はチェックで選ぶ（みんなで使える場所＝事務所のドライブ・このスマホは最初から印あり。開くたびに戻す）
+  const collectorReady = collectorOf(settings).ready;
+  const choice = { shared: collectorReady, phone: true, regular: false };
+  const shareBtn = h('button', { class: 'primary big', onclick: () => doShare() }, '共有する（LINE・Instagram など）');
+  const saveBtn = h('button', { class: 'big', onclick: () => doSave() }, '保存する');
   const problemsEl = h('ul', { class: 'problems' });
   const confirmRow = pop.fromRegularId ? h('label', { class: 'check confirm' },
     h('input', { type: 'checkbox', checked: pop.confirmed, onchange: ev => { pop.confirmed = ev.target.checked; changed(); } }),
@@ -305,41 +308,59 @@ export async function showEditor(root, app, popId) {
 
   function updateExportState() {
     const problems = exportProblems(pop);
+    if (saveTargets(choice, collectorReady).none) problems.push('保存する場所に1つ以上チェックを入れてください');
     problemsEl.replaceChildren(...problems.map(p => h('li', { text: p })));
-    shareBtn.disabled = saveBtn.disabled = keepBtn.disabled = problems.length > 0;
+    shareBtn.disabled = exportProblems(pop).length > 0;
+    saveBtn.disabled = problems.length > 0;
   }
 
-  /** 出した画像を履歴に残す。失敗しても共有・保存は止めない（知らせるだけ）。 */
-  async function keepInHistory(made, { quiet }) {
+  function choiceBox(key, label, { disabled = false, note = '' } = {}) {
+    return h('label', { class: 'check' },
+      h('input', {
+        type: 'checkbox', checked: choice[key], disabled,
+        onchange: ev => { choice[key] = ev.target.checked; updateExportState(); },
+      }),
+      h('span', {}, label, note ? h('small', { class: 'check-note', text: note }) : null));
+  }
+
+  /** 出した画像を履歴に残す（バックアップに入る）。失敗しても共有・保存は止めない（知らせるだけ）。 */
+  async function keepInHistory(made) {
     try {
-      const r = await store.addShot(shotFromPop(pop, made), made.file);
-      if (!quiet) toast(r.added ? '作った画像の履歴に残しました' : 'この内容はもう履歴にあります');
-      return true;
+      await store.addShot(shotFromPop(pop, made), made.file);
     } catch (err) {
       toast(`画像を履歴に残せませんでした: ${err.message}`, { error: true });
+    }
+  }
+
+  async function makeImage() {
+    try {
+      await save.flush();
+      return await renderToFile(pop, photoShown, settings);
+    } catch (err) {
+      toast(`画像を作れませんでした: ${err.message}`, { error: true });
+      return null;
+    }
+  }
+
+  /** みんなで使える場所へ送る控えを作る（送るのは裏で）。控えられたら true。 */
+  async function sendShared(made) {
+    try {
+      return await queuePop(pop, made.file);
+    } catch (err) {
+      toast(`みんなで使える場所へ送る準備ができませんでした: ${err.message}`, { error: true });
       return false;
     }
   }
 
-  /** share: true＝共有／false＝画像を保存／null＝履歴に残すだけ。どれも履歴に残す。 */
-  async function doExport(share) {
+  async function doShare() {
     if (exportProblems(pop).length) return;
-    let made;
-    try {
-      await save.flush();
-      made = await renderToFile(pop, photoShown, settings);
-    } catch (err) {
-      toast(`画像を作れませんでした: ${err.message}`, { error: true });
-      return;
-    }
-    // 事務所へ送る控えも並行して作る（送り先が未設定なら何もしない。送るのは裏で）
-    queuePop(pop, made.file).catch(err => toast(`事務所へ送る準備ができませんでした: ${err.message}`, { error: true }));
-    if (share === null) { await keepInHistory(made, { quiet: false }); return; }
-    // 共有画面を開く前に待つと、端末によっては「タップから時間が経った」として共有を断られるので並行して残す
-    const kept = keepInHistory(made, { quiet: true });
+    const made = await makeImage();
+    if (!made) return;
+    // 共有画面を開く前に待つと、端末によっては「タップから時間が経った」として共有を断られるので並行して進める
+    const side = Promise.all([keepInHistory(made), choice.shared && collectorReady ? sendShared(made) : null]);
     try {
       const { file } = made;
-      if (share && navigator.canShare?.({ files: [file] })) {
+      if (navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: pop.name });
         } catch (err) {
@@ -347,31 +368,67 @@ export async function showEditor(root, app, popId) {
         }
       } else {
         downloadFile(file);
-        toast(share ? 'この端末は共有に対応していないため、画像を保存しました' : '画像を保存しました');
+        toast('この端末は共有に対応していないため、画像を保存しました');
       }
     } catch (err) {
       toast(`画像を出せませんでした: ${err.message}`, { error: true });
     } finally {
-      await kept;
+      await side;
     }
   }
 
-  async function registerRegular() {
-    await save.flush();
-    const reg = regularFromPop(pop);
-    await store.putPop(reg);
-    pop.fromRegularId = reg.id;
-    pop.confirmed = true;   // 今まさに確かめた内容で登録したので
-    changed();
-    toast('レギュラーに登録しました。はじめの画面から呼び出せます');
-    renderExportBox();
+  /** チェックした場所へ置く。レギュラーは画像が要らないので先に済ませる。 */
+  async function doSave() {
+    const t = saveTargets(choice, collectorReady);
+    if (exportProblems(pop).length || t.none) return;
+    const done = [];
+    if (t.regular) {
+      const msg = await saveRegular();
+      if (!msg) return;
+      done.push(msg);
+    }
+    if (t.shared || t.phone) {
+      const made = await makeImage();
+      if (!made) return;
+      const kept = keepInHistory(made);
+      if (t.shared && await sendShared(made)) done.push('みんなで使える場所へ送ります');
+      if (t.phone) {
+        try {
+          downloadFile(made.file);
+          done.push('このスマホに保存しました');
+        } catch (err) {
+          toast(`画像を保存できませんでした: ${err.message}`, { error: true });
+          await kept;
+          return;
+        }
+      }
+      await kept;
+    }
+    if (done.length) toast(done.join('・'));
   }
 
-  async function updateRegular() {
-    const reg = await store.getPop(pop.fromRegularId);
-    if (!reg) { toast('元のレギュラーが見つかりませんでした（削除されたかもしれません）', { error: true }); return; }
-    await store.putPop(updateRegularFrom(reg, pop));
-    toast('レギュラーを今の内容で更新しました');
+  /** レギュラーへ登録（元が無いとき）か、元のレギュラーを今の内容で更新。できたら知らせる文言、だめなら null。 */
+  async function saveRegular() {
+    try {
+      await save.flush();
+      if (pop.fromRegularId) {
+        const reg = await store.getPop(pop.fromRegularId);
+        if (!reg) { toast('元のレギュラーが見つかりませんでした（削除されたかもしれません）', { error: true }); return null; }
+        await store.putPop(updateRegularFrom(reg, pop));
+        return 'レギュラーを今の内容で更新しました';
+      }
+      const reg = regularFromPop(pop);
+      await store.putPop(reg);
+      pop.fromRegularId = reg.id;
+      pop.confirmed = true;   // 今まさに確かめた内容で登録したので
+      changed();
+      choice.regular = false;
+      renderExportBox();      // 次からは「更新」の欄になる
+      return 'レギュラーに登録しました（はじめの画面から呼び出せます）';
+    } catch (err) {
+      toast(`レギュラーに入れられませんでした: ${err.message}`, { error: true });
+      return null;
+    }
   }
 
   function renderExportBox() {
@@ -379,14 +436,18 @@ export async function showEditor(root, app, popId) {
     exportBox.replaceChildren(...[
       h('h3', {}, '出す'),
       confirmRow,
-      problemsEl,
       shareBtn,
-      h('div', { class: 'row' }, saveBtn, keepBtn),
+      h('h3', { class: 'sub' }, '保存する場所'),
+      choiceBox('shared', 'みんなで使える場所に保管', collectorReady
+        ? { note: '事務所のドライブに集まります。共有したときもここに入ります' }
+        : { disabled: true, note: '送り先がまだ設定されていません（⚙ 設定 →「事務所へ送る」）' }),
+      choiceBox('phone', 'このスマホに保存', { note: '写真（ダウンロード）に入ります' }),
       pop.isRegular
         ? h('p', { class: 'hint' }, 'これはレギュラーの元です。ここで直すと、次に呼び出したときから反映されます。')
-        : h('div', { class: 'row' },
-          h('button', { onclick: registerRegular }, '★ レギュラーに登録'),
-          pop.fromRegularId ? h('button', { onclick: updateRegular }, 'レギュラーを今の内容で更新') : null),
+        : choiceBox('regular', pop.fromRegularId ? '★ レギュラーを今の内容で更新' : '★ レギュラーに登録',
+          { note: pop.fromRegularId ? '呼び出し元のレギュラーを、この内容に書き換えます' : 'はじめの画面から呼び出せるようにします' }),
+      problemsEl,
+      saveBtn,
     ].filter(Boolean));
     updateExportState();
   }
