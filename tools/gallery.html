@@ -18,7 +18,7 @@
   <p>写真は画面内で描いた見本（本番では撮影した写真）。<a href="./">← 作業場</a>　<a href="../index.html">アプリへ</a></p>
   <div class="wrap" id="out"></div>
   <script type="module">
-    import { createPop, SIZES } from '../js/model.js';
+    import { createPop, PRICE_BADGES, SIZES } from '../js/model.js';
     import { TEMPLATE_ORDER } from '../js/templates.js';
     import { ensureFonts, renderPop } from '../js/render.js';
 
@@ -47,13 +47,14 @@
     const out = document.getElementById('out');
     for (const c of cases) {
       for (const t of TEMPLATE_ORDER) {
-        for (const s of Object.keys(SIZES)) {
-          const pop = { ...createPop(), ...c, template: t, size: s };
+        // 「写真主役」は金額の台紙ごとにも並べる
+        for (const [s, pb] of Object.keys(SIZES).flatMap(s => (t === 'fresh' ? PRICE_BADGES : [{ id: '' }]).map(b => [s, b.id]))) {
+          const pop = { ...createPop(), ...c, template: t, size: s, priceBadge: pb };
           const cv = document.createElement('canvas');
           await ensureFonts(pop, settings);
           renderPop(cv, pop, photo, settings);
           const fig = document.createElement('figure');
-          fig.append(cv, Object.assign(document.createElement('figcaption'), { textContent: `${t} / ${s} / ${c.name}` }));
+          fig.append(cv, Object.assign(document.createElement('figcaption'), { textContent: `${t}${pb ? `（${pb}）` : ''} / ${s} / ${c.name}` }));
           out.append(fig);
         }
       }

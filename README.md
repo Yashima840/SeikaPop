@@ -107,6 +107,7 @@ GitHub（公開版・リポジトリ・公開の進み具合）・Apps Script（
 npm test        # 計算部分のテスト（node --test。インストール不要）
 npm run lint    # oxlint（初回は自動で取得）
 python tools/make_icons.py   # アイコンを icons/source/badge.png から作り直す（Pillow）
+python tools/make_badges.py  # 「写真主役」の金額の台紙を img/badges/source/*.png から作り直す（白い背景を透明に。文字の枠は model.js の PRICE_BADGES）
 ```
 
 ビルドは無い（素の HTML / JavaScript モジュール）。外部ライブラリも使っていない。

@@ -1,9 +1,10 @@
 // ポップのデータの扱い（レギュラーの使い回し・価格の読み取り・出力の止め方）
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
 import {
   createPop, exportFileName, exportProblems, formatDate, formatPrice, isBlankPop, localStamp,
-  parsePriceInput, popFromRegular, regularFromPop, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
+  parsePriceInput, popFromRegular, PRICE_BADGES, priceBadgeOf, regularFromPop, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
 } from '../js/model.js';
 
 const T0 = new Date('2026-10-20T06:30:00Z');
@@ -110,4 +111,16 @@ test('見本で描く: 空の所だけ見本（じゃが芋・長崎県・98円�
 test('共有の使う先は、どれもある大きさを指し、重ならない', () => {
   for (const t of SHARE_TARGETS) assert.ok(SIZES[t.size], t.id);
   assert.equal(new Set(SHARE_TARGETS.map(t => t.id)).size, SHARE_TARGETS.length);
+});
+
+test('金額の台紙: 絵がアプリに入っていて（オフラインでも出る）、知らない id は黄色い丸', () => {
+  const shell = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
+  for (const b of PRICE_BADGES.filter(x => x.id)) {
+    assert.ok(existsSync(new URL(`../${b.src}`, import.meta.url)), b.src);
+    assert.ok(shell.includes(`'./${b.src}'`), `sw.js の SHELL に ${b.src}`);
+    assert.ok(b.text.w > 0 && b.text.w < 1 && b.aspect > 0, b.id);
+  }
+  assert.equal(priceBadgeOf({ priceBadge: 'gold-brush' })?.id, 'gold-brush');
+  assert.equal(priceBadgeOf({ priceBadge: 'no-such' }), null);
+  assert.equal(priceBadgeOf({}), null);
 });

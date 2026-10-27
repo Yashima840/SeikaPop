@@ -195,6 +195,24 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
   ctx.restore();
 }
 
+/** 「写真主役」の金額を台紙の絵の上に描く。nameTop は商品名の上端（台紙はその上の右に置く）。 */
+function drawBadgePrice(ctx, d, nameTop) {
+  const { W, u, priceBadge: b } = d;
+  const bw = 500 * u, bh = bw / b.aspect;
+  const x = W - 40 * u - bw, top = Math.max(150 * u, nameTop - bh);
+  withShadow(ctx, 24 * u, 'rgba(0,0,0,0.4)', () => ctx.drawImage(b.img, x, top, bw, bh));
+  const cx = x + bw * b.text.cx, cy = top + bh * b.text.cy, maxW = bw * b.text.w;
+  let color = b.color;
+  if (color === 'gold') {
+    // 数字の高さ（だいたい maxW の半分）に合わせた、上が明るい金
+    color = ctx.createLinearGradient(0, cy - maxW * 0.3, 0, cy + maxW * 0.2);
+    color.addColorStop(0, '#fff6c8');
+    color.addColorStop(0.45, '#f5c84c');
+    color.addColorStop(1, '#b8861a');
+  }
+  drawPriceBlock(ctx, d, cx, cy, maxW, { font: FONTS.impact, maxSize: 150 * u, color, subColor: b.sub, halo: '#1e1c1c' });
+}
+
 // ------------------------------------------------------------------
 // 1. 写真主役（フレッシュ）: 写真を全面に敷き、下に文字・右に価格の丸
 // ------------------------------------------------------------------
@@ -274,7 +292,9 @@ const fresh = {
       withShadow(ctx, 14 * u, 'rgba(0,0,0,0.55)', () => fillLines(ctx, nl.lines, left, y - (nl.lines.length - 1) * lh, lh));
       y -= nl.lines.length * lh;
     }
-    if (d.price) {
+    if (d.price && d.priceBadge) {
+      drawBadgePrice(ctx, d, y);
+    } else if (d.price) {
       const r = 168 * u;
       const cx = W - 60 * u - r, cy = Math.max(r + 170 * u, y - r - 10 * u);
       ctx.save();

@@ -1,6 +1,6 @@
 // ポップを Canvas へ描く・画像ファイルにする。
 
-import { adFileName, exportFileName, formatDate, NAME_FONTS, nameFontOf, priceTexts, SIZES } from './model.js';
+import { adFileName, exportFileName, formatDate, NAME_FONTS, nameFontOf, priceBadgeOf, priceTexts, SIZES } from './model.js';
 import { FONTS, font, measurer, roundRectPath, TEMPLATES } from './templates.js';
 import { canvasToBlob } from './image.js';
 import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.js';
@@ -27,6 +27,31 @@ export function photoBoxOf(pop) {
 let fontWarned = false;
 let priceFontCss = null;
 
+// 金額の台紙の絵（src → 読み込んだ Image。読めなかったものは null＝黄色い丸で描く）
+const badgeImages = new Map();
+const badgeLoading = new Map();
+
+/** 台紙の絵を読み込む（描く前に済ませる。描くのは同期なので）。読めなくても止めない。 */
+function loadBadge(badge) {
+  if (!badge?.src || badgeImages.has(badge.src)) return null;
+  if (!badgeLoading.has(badge.src)) {
+    badgeLoading.set(badge.src, new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => { badgeImages.set(badge.src, img); resolve(); };
+      img.onerror = () => { badgeLoading.delete(badge.src); resolve(); };   // 次の描画で読み直す。それまでは黄色い丸
+      img.src = new URL(`../${badge.src}`, import.meta.url).href;   // tools/ の画面から呼んでも同じ絵を指すように
+    }));
+  }
+  return badgeLoading.get(badge.src);
+}
+
+/** 描くときに渡す台紙（絵が読めていなければ null）。 */
+function badgeFor(pop) {
+  const b = priceBadgeOf(pop);
+  const img = b && badgeImages.get(b.src);
+  return img ? { ...b, img } : null;
+}
+
 /** 定義を読み込む書体（金額キャッチ・産地・商品名・数量と単位の3行・商品名に選べる書体）。 */
 const designFonts = () => [...PRICE_FONTS, ...labelFontList(LABEL_DESIGN), ...NAME_FONTS.filter(f => f.family)];
 
@@ -52,7 +77,8 @@ function loadPriceFontCss() {
  * 読めなくても（電波が無い等）端末の字で描けるので止めない。
  */
 export async function ensureFonts(pop, settings, onFail) {
-  if (!document.fonts?.load) return;
+  const badge = loadBadge(priceBadgeOf(pop));   // 書体と並べて待つ
+  if (!document.fonts?.load) { await badge; return; }
   const decor = Object.values(LABEL_DESIGN).flatMap(t => [t?.prefix, t?.suffix]).filter(Boolean);   // 〈〉など3行の前後の飾り
   const text = [pop.name, pop.unit, pop.origin, ...decor,
     '0123456789,.円税込抜各()（）〈〉月火水木金土日/📷写真を追加—'].join('');
@@ -61,6 +87,7 @@ export async function ensureFonts(pop, settings, onFail) {
     await Promise.all([
       ...Object.values(FONTS).map(load),
       loadPriceFontCss().then(() => Promise.all([...designFonts().filter(f => !NAME_FONTS.includes(f)), nameFontOf(pop)].filter(Boolean).map(load))),
+      badge,
     ]);
   } catch (err) {
     if (!fontWarned) { fontWarned = true; onFail?.(err); }
@@ -82,6 +109,7 @@ export function renderPop(canvas, pop, photo, settings, { preview = false } = {}
     price: priceTexts(pop, settings),   // 価格が無ければ null
     shopName: '',   // 店名はポップに入れない（フレームの下の帯で入れる）
     nameFont: nameFontOf(pop),   // 商品名の書体（選んでいなければ null＝デザインのまま）
+    priceBadge: badgeFor(pop),   // 金額の台紙（「写真主役」だけが使う。無ければ黄色い丸）
   });
   ctx.restore();
 }

@@ -3,7 +3,7 @@
 // 書体（Google Fonts）は変わらないので「控えがあれば控え」。
 // ファイルを足したら SHELL にも足し、VERSION を上げること。
 
-const VERSION = 'v11';
+const VERSION = 'v12';
 const SHELL_CACHE = `seikapop-shell-${VERSION}`;
 const FONT_CACHE = 'seikapop-fonts';
 const SHELL = [
@@ -13,6 +13,7 @@ const SHELL = [
   './js/views/home.js', './js/views/editor.js', './js/views/settings.js', './js/views/ad.js', './js/views/stock.js',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png', './icons/favicon-32.png', './icons/icon-maskable-512.png',
   './img/sample-potato.jpg',
+  './img/badges/gold-brush.png',
 ];
 
 self.addEventListener('install', ev => {

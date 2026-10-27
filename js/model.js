@@ -22,6 +22,7 @@ export const DEFAULT_ADJUST = Object.freeze({ brightness: 0, contrast: 0, satura
 const CONTENT_FIELDS = [
   'name', 'catch', 'price', 'priceTax', 'unit', 'origin', 'badge',
   'template', 'size', 'photoId', 'crop', 'adjust', 'thumb', 'each', 'nameFont', 'photoFade', 'photoSepia', 'photoVintage',
+  'priceBadge',
 ];
 
 export function newId() {
@@ -40,6 +41,7 @@ export function createPop(now = new Date()) {
     priceTax: 'excl',     // 'excl'＝税抜で入れた（税込を計算して併記）／'incl'＝税込で入れた
     each: false,          // 価格の頭に「各」を付ける（同じ値段の品をまとめて出すとき）
     nameFont: '',         // 商品名の書体（NAME_FONTS の id。'' はデザインのまま）
+    priceBadge: '',       // 「写真主役」の金額の台紙（PRICE_BADGES の id。'' は黄色い丸）
     unit: '',
     origin: '',
     badge: '',           // 見出し。画像には入れない（フレームで入れる）。古いデータとの互換のため残す
@@ -227,6 +229,20 @@ export const NAME_FONTS = [
 export function nameFontOf(pop) {
   const f = NAME_FONTS.find(x => x.id && x.id === pop?.nameFont);
   return f ? { family: f.family, weight: f.weight } : null;
+}
+
+// 「写真主役」の金額の台紙（文字を抜いた絵）。絵は img/badges/source に置いて tools/make_badges.py で透明にする。
+// text は文字を置く枠で、絵の幅・高さに対する割合（cx・cy＝中心、w＝幅）。aspect は絵の幅÷高さ。
+// color は数字と「円」の色（'gold' は金のグラデーション）、sub は単位と税込の色。
+export const PRICE_BADGES = [
+  { id: '', label: '黄色い丸' },
+  { id: 'gold-brush', label: '金の筆丸（試し）', src: 'img/badges/gold-brush.png', aspect: 295 / 273,
+    text: { cx: 0.512, cy: 0.49, w: 0.6 }, color: 'gold', sub: '#ffffff' },
+];
+
+/** ポップの金額の台紙。黄色い丸（または知らない id）なら null。 */
+export function priceBadgeOf(pop) {
+  return PRICE_BADGES.find(b => b.id && b.id === pop?.priceBadge) || null;
 }
 
 export function taxNote(texts) {

@@ -3,7 +3,7 @@
 import * as store from '../store.js';
 import {
   DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, NAME_FONTS, parsePriceInput,
-  priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, taxRateOf, updateRegularFrom, withSample,
+  PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, taxRateOf, updateRegularFrom, withSample,
 } from '../model.js';
 import { dragCrop, zoomCrop, ZOOM_MAX } from '../layout.js';
 import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.js';
@@ -304,6 +304,10 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     ];
     const sizeChips = () => chips(Object.entries(SIZES).map(([id, s]) => [id, `${s.label}（${s.note}）`]),
       v => { pop.size = v; changed({ rebuild: true }); }, pop.size);
+    // 金額の台紙は「写真主役」だけ
+    const badgeChips = () => ((pop.template || 'fresh') === 'fresh' ? h('div', { class: 'field' },
+      h('span', { class: 'label', text: '金額の台紙' }),
+      chips(PRICE_BADGES.map(b => [b.id, b.label]), v => { pop.priceBadge = v; changed({ rebuild: true }); }, pop.priceBadge || '')) : null);
 
     exportBox.hidden = wizard && steps[step] !== 'out';
     // デザインの段は下の見本が大きく並ぶので、上の見本はしまう
@@ -316,7 +320,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
         name: () => [field('商品名', nameInput), field('産地（食品はメーカー名）', originInput)],
         price: priceFields,
         design: () => [designPicker(), h('div', { class: 'field' },
-          h('span', { class: 'label', text: '大きさ（押すと見本の形が替わります。共有するときは使う先に合わせて作り直します）' }), sizeChips())],
+          h('span', { class: 'label', text: '大きさ（押すと見本の形が替わります。共有するときは使う先に合わせて作り直します）' }), sizeChips()), badgeChips()],
         check: () => [field('産地（食品はメーカー名）', originInput), ...priceFields()],
         out: () => [],
       }[key]();
@@ -379,6 +383,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
         h('h3', {}, 'デザイン'),
         chips(TEMPLATE_ORDER.map(id => [id, TEMPLATES[id].label]), v => { pop.template = v; changed({ rebuild: true }); }, pop.template),
         sizeChips(),
+        badgeChips(),
       ),
       h('section', {},
         h('h3', {}, '文字'),
