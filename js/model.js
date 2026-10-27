@@ -234,7 +234,7 @@ export function nameFontOf(pop) {
 
 // 「写真主役」の金額の台紙（文字を抜いた絵）。絵は img/badges/source に置いて tools/make_badges.py で透明にする。
 // text は文字を置く枠で、絵の幅・高さに対する割合（cx・cy＝中心、w＝幅）。aspect は絵の幅÷高さ。
-// color は数字と「円」の色（'gold'＝金、'blackGold'＝黒に金の照り のグラデーション。templates.js の TEXT_GRADIENTS）、sub は単位と税込の色、halo は「各」の縁取りの色（台紙の地の色）。
+// color は数字と「円」の色（'gold'＝金、'blackGold'＝金文字を逆にした黒文字 のグラデーション。templates.js の TEXT_GRADIENTS）、sub は単位と税込の色、halo は「各」の縁取りの色（台紙の地の色）。
 // rotate は文字の傾き（度。左回りがマイナス）。
 export const PRICE_BADGES = [
   { id: '', label: '黄色い丸' },
