@@ -23,9 +23,18 @@ export function labelText(key, pop, t) {
   return raw ? `${t.prefix || ''}${raw}${t.suffix || ''}` : '';
 }
 
-/** デザイン単位 → 画像の px。写真の枠の左下が原点、1単位＝u px。 */
-export function labelFrame(box, u) {
-  return { x: box.x, y: box.y + box.h, k: u };
+/**
+ * その行を写真の上端から測るか（fromTop）。商品名に付いていく単位は、商品名に合わせる。
+ * 上端から測る行は写真の大きさ（正方形・縦長）が変わっても上に留まる。
+ */
+export function labelFromTop(key, design = LABEL_DESIGN) {
+  if (key === 'unit' && design.unit.follow) return !!design.name.fromTop;
+  return !!design[key]?.fromTop;
+}
+
+/** デザイン単位 → 画像の px。写真の枠の左下（fromTop の行は左上）が原点、1単位＝u px。 */
+export function labelFrame(box, u, key = null, design = LABEL_DESIGN) {
+  return { x: box.x, y: key && labelFromTop(key, design) ? box.y : box.y + box.h, k: u };
 }
 
 const lineLeft = (line, align) => (align === 'right' ? line.x - line.w : align === 'center' ? line.x - line.w / 2 : line.x);
@@ -48,8 +57,11 @@ export function layoutLabels(pop, measure, design = LABEL_DESIGN) {
   const name = layoutOne('name', design.name, pop, measure);
   let anchor = null;
   if (design.unit.follow) {
+    // under のときは商品名の最後の行の下（行の頭から）、そうでなければ最後の行の終わりから
     const last = name?.lines.at(-1);
-    anchor = last ? { x: lineLeft(last, design.name.align) + last.w, y: last.y } : { x: design.name.x, y: design.name.y };
+    anchor = last
+      ? { x: lineLeft(last, design.name.align) + (design.unit.under ? 0 : last.w), y: last.y }
+      : { x: design.name.x, y: design.name.y };
   }
   const unit = layoutOne('unit', design.unit, pop, measure, anchor);
   const ys = [name?.lines.at(-1).y, design.unit.follow ? unit?.lines.at(-1).y : null].filter(v => v != null);
@@ -72,7 +84,8 @@ export function labelDesignFor(pop, design = LABEL_DESIGN) {
  */
 export function labelsBelow(pop, measure, design = LABEL_DESIGN) {
   const lay = layoutLabels(pop, measure, design);
-  return Math.max(0, ...LABEL_KEYS.map(k => labelBounds(lay, k, design)?.box.y1 ?? 0));
+  // 写真の上端から測る行は写真の中に乗るので、下には要らない
+  return Math.max(0, ...LABEL_KEYS.filter(k => !labelFromTop(k, design)).map(k => labelBounds(lay, k, design)?.box.y1 ?? 0));
 }
 
 /** 行が占める範囲（デザイン単位）。編集画面がクリックの当たり判定と、選んだ行の枠に使う。描かない行は null。 */
@@ -133,13 +146,16 @@ function drawOne(ctx, L, t) {
 
 /** 3行を描く。box＝写真の枠、u＝倍率（幅1080pxで 1）。置き方（layoutLabels の結果）を返す。 */
 export function drawLabels(ctx, box, pop, u, design = LABEL_DESIGN) {
-  const f = labelFrame(box, u);
   const lay = layoutLabels(pop, canvasMeasure(ctx), design);
-  ctx.save();
-  ctx.translate(f.x, f.y);
-  ctx.scale(f.k, f.k);
-  for (const key of LABEL_KEYS) if (lay[key]) drawOne(ctx, lay[key], design[key]);
-  ctx.restore();
+  for (const key of LABEL_KEYS) {
+    if (!lay[key]) continue;
+    const f = labelFrame(box, u, key, design);
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.scale(f.k, f.k);
+    drawOne(ctx, lay[key], design[key]);
+    ctx.restore();
+  }
   return lay;
 }
 
@@ -183,6 +199,10 @@ export function labelDesignProblems(d) {
   if (d.version !== 1) out.push('3行のデザインの version が 1 ではありません');
   for (const key of LABEL_KEYS) lineProblems(d[key], LABEL_NAMES[key], out);
   if (d.unit && typeof d.unit.follow !== 'boolean') out.push('数量と単位の「商品名に付いていく」は true か false にしてください');
+  if (d.unit && d.unit.under != null && typeof d.unit.under !== 'boolean') out.push('数量と単位の「商品名の下に置く」は true か false にしてください');
+  for (const key of LABEL_KEYS) {
+    if (d[key] && d[key].fromTop != null && typeof d[key].fromTop !== 'boolean') out.push(`${LABEL_NAMES[key]}の「写真の上端から測る」は true か false にしてください`);
+  }
   return out;
 }
 

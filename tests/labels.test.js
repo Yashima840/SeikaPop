@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { LABEL_DESIGN } from '../js/label-design.js';
-import { LABEL_FONTS, labelBounds, labelDesignFor, labelDesignProblems, labelFontList, labelText, labelsBelow, layoutLabels } from '../js/labels.js';
+import { LABEL_FONTS, labelBounds, labelDesignFor, labelDesignProblems, labelFontList, labelFrame, labelText, labelsBelow, layoutLabels } from '../js/labels.js';
 import { createPop, NAME_FONTS, nameFontOf } from '../js/model.js';
 
 const measure = (s, size) => Array.from(s).length * size;   // 1文字＝大きさ1つ分
@@ -31,6 +31,7 @@ test('置き場所は x, y のとおり（ドラッグで決めた位置に出�
 
 test('単位が商品名に付いていくときは、名前の最後の行の終わりから。付いていかなければ自分の位置', () => {
   const d = design();
+  d.unit.under = false;
   const lay = layoutLabels(pop, measure, d);
   const name = lay.name.lines[0];
   assert.equal(lay.unit.lines[0].x, name.x + name.w + d.unit.x);
@@ -42,6 +43,7 @@ test('単位が商品名に付いていくときは、名前の最後の行の�
 
 test('右揃えの商品名に付いていく単位は、名前の右端から', () => {
   const d = design();
+  d.unit.under = false;
   Object.assign(d.name, { align: 'right', x: 800 });
   const lay = layoutLabels(pop, measure, d);
   assert.equal(lay.unit.lines[0].x, 800 + d.unit.x);
@@ -60,6 +62,9 @@ test('長い商品名は最大幅で折り返し、行数を超えるなら縮�
 
 test('ひとことを置く下端は、商品名（と付いていく単位）の最後の行', () => {
   const d = design();
+  const under = layoutLabels({ ...pop, name: 'シャインマスカット大粒種なし' }, measure, d);
+  assert.equal(under.bottom, under.unit.lines.at(-1).y, '単位を名前の下に置くなら単位の行');
+  Object.assign(d.unit, { under: false, y: 0 });   // 名前の終わりに並べる
   const two = layoutLabels({ ...pop, name: 'シャインマスカット大粒種なし' }, measure, d);
   assert.equal(two.bottom, two.name.lines.at(-1).y);
   assert.equal(layoutLabels({ name: '', unit: '', origin: '' }, measure, d).bottom, null);
@@ -86,6 +91,8 @@ test('打ち間違いを保存前に止める', () => {
   assert.match(bad(d => { d.origin.bg.fill = 'green'; }), /背景の色/);
   assert.match(bad(d => { d.unit.prefix = '【【【【【'; }), /4 文字/);
   assert.match(bad(d => { d.unit.follow = 'yes'; }), /付いていく/);
+  assert.match(bad(d => { d.unit.under = 1; }), /商品名の下に置く/);
+  assert.match(bad(d => { d.name.fromTop = 'top'; }), /上端から測る/);
   assert.match(bad(d => { delete d.origin; }), /産地の設定がありません/);
   assert.match(bad(d => { d.name.fill = '#12345'; }), /商品名の色/);
 });
@@ -100,10 +107,33 @@ test('商品名の書体を選ぶと、3行のデザインの商品名だけ差�
   for (const f of NAME_FONTS.filter(x => x.id)) assert.match(f.weight, /^[1-9]00$/);
 });
 
-test('写真の下に要る高さ: 商品名が2行なら1行より大きい・何も無ければ 0', () => {
+test('写真の下に要る高さ: 商品名を写真の下に置くなら、2行は1行より大きい・何も無ければ 0', () => {
   const measure = (s, size) => Array.from(s).length * size;
+  const d = design();
+  Object.assign(d.name, { fromTop: false, y: 108 });
   const pop = { ...createPop(), name: 'トマト', unit: '1袋', origin: '' };
-  const one = labelsBelow(pop, measure), two = labelsBelow({ ...pop, name: 'シャインマスカット大粒種なし' }, measure);
+  const one = labelsBelow(pop, measure, d), two = labelsBelow({ ...pop, name: 'シャインマスカット大粒種なし' }, measure, d);
   assert.ok(one > 0 && two > one, `${one} / ${two}`);
-  assert.equal(labelsBelow({ ...pop, name: '', unit: '' }, measure), 0);
+  assert.equal(labelsBelow({ ...pop, name: '', unit: '' }, measure, d), 0);
+});
+
+test('商品名を写真の上に乗せる（上端から測る）なら、写真の下には何も要らない（余白は四辺とも同じ）', () => {
+  const measure = (s, size) => Array.from(s).length * size;
+  const pop = { ...createPop(), name: 'シャインマスカット大粒種なし', unit: '1房', origin: '山梨県産' };
+  assert.ok(LABEL_DESIGN.name.fromTop);
+  assert.equal(labelsBelow(pop, measure), 0);
+  // 上端から測る行は写真の左上が原点、ほかの行は左下
+  const box = { x: 40, y: 40, w: 1000, h: 1000 };
+  assert.deepEqual(labelFrame(box, 1, 'name'), { x: 40, y: 40, k: 1 });
+  assert.deepEqual(labelFrame(box, 1, 'unit'), { x: 40, y: 40, k: 1 }, '付いていく単位は商品名に合わせる');
+  assert.deepEqual(labelFrame(box, 1, 'origin'), { x: 40, y: 1040, k: 1 });
+});
+
+test('単位を商品名の下に置くときは、名前の最後の行の頭から（2行の名前でも最後の行の下）', () => {
+  const d = design();
+  const two = layoutLabels({ ...pop, name: 'シャインマスカット大粒種なし' }, measure, d);
+  const last = two.name.lines.at(-1);
+  assert.ok(two.name.lines.length === 2);
+  assert.deepEqual([two.unit.lines[0].x, two.unit.lines[0].y], [last.x + d.unit.x, last.y + d.unit.y]);
+  assert.ok(two.unit.lines[0].y > last.y, '名前より下');
 });

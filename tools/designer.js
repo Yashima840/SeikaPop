@@ -226,7 +226,7 @@ function drawGrid() {
 // 金額キャッチは写真の右下、3行は写真の左下が原点（デザインの座標 ⇔ 画像の px）
 function geometry(pop, key) {
   const box = photoBoxOf(pop);
-  const f = isLabel(key) ? labelFrame(box, SIZES[pop.size].w / 1080) : api.catchFrame(box, design);
+  const f = isLabel(key) ? labelFrame(box, SIZES[pop.size].w / 1080, key, labels) : api.catchFrame(box, design);
   return {
     toPx: (x, y) => [f.x + x * f.k, f.y + y * f.k],
     toDesign: (px, py) => [(px - f.x) / f.k, (py - f.y) / f.k],
@@ -709,6 +709,23 @@ function labelRows(part) {
       labels.unit.y = round1(before[1] - base[1]);
       commit(); buildPanel();
     }) : null,
+    part === 'unit' && t.follow ? checkRow('商品名の下に置く（位置は名前の最後の行の頭からのずれ）', !!t.under, on => {
+      const before = anchorOf('unit', currentPop());
+      labels.unit.under = on;
+      labels.unit.x = 0; labels.unit.y = 0;
+      const base = anchorOf('unit', currentPop());
+      labels.unit.x = round1(before[0] - base[0]);
+      labels.unit.y = round1(before[1] - base[1]);
+      commit(); buildPanel();
+    }) : null,
+    part === 'unit' && t.follow ? null : checkRow('写真の上端から測る（写真の大きさが変わっても上に留まる）', !!t.fromTop, on => {
+      // 原点が写真の左下⇔左上に替わるので、見た目の位置が飛ばないよう写真の高さの分だけ表し直す
+      const pop = currentPop();
+      const h = photoBoxOf(pop).h / (SIZES[pop.size].w / 1080);
+      labels[part].fromTop = on;
+      labels[part].y = round1(labels[part].y + (on ? h : -h));
+      commit(); buildPanel();
+    }),
     numRow(part === 'unit' && t.follow ? '横のずれ' : '横の位置', `${p}.x`, -400, 1100, 0.5),
     numRow(part === 'unit' && t.follow ? '縦のずれ' : '縦の位置', `${p}.y`, -1300, 500, 0.5),
     colorRow('文字の色', `${p}.fill`),

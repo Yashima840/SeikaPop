@@ -3,6 +3,8 @@
 // x, y は1行目の文字の基準点（align の位置・文字の下端の線）。
 // size は最大の大きさ。maxW を超えると maxLines まで折り返し、それでも入らなければ minSize まで縮める。
 // unit.follow が true のときは、x, y は「商品名の最後の行の終わり」からのずれ（名前の長さに付いていく）。
+// unit.under が true なら「商品名の最後の行の頭」からのずれ（商品名の下に置く）。
+// fromTop が true の行は、写真の枠の左上が原点（写真の大きさが変わっても上に留まる）。付いていく単位は商品名に合わせる。
 export const LABEL_DESIGN = {
   "version": 1,
   "origin": {
@@ -30,8 +32,8 @@ export const LABEL_DESIGN = {
   "name": {
     "font": "Dela Gothic One",
     "weight": "400",
-    "x": 10,
-    "y": 108,
+    "x": 50,
+    "y": 132,
     "size": 104,
     "minSize": 56,
     "maxW": 840,
@@ -40,26 +42,38 @@ export const LABEL_DESIGN = {
     "slant": 0,
     "fill": "#1a1a1a",
     "strokes": [],
-    "bg": null,
+    "bg": {
+      "fill": "#ffffff",
+      "padX": 18,
+      "padY": 10,
+      "radius": 14
+    },
     "prefix": "",
-    "suffix": ""
+    "suffix": "",
+    "fromTop": true
   },
   "unit": {
     "font": "Dela Gothic One",
     "weight": "400",
     "follow": true,
-    "x": 6,
-    "y": 0,
-    "size": 40,
-    "minSize": 24,
-    "maxW": 220,
+    "x": 0,
+    "y": 82,
+    "size": 48,
+    "minSize": 28,
+    "maxW": 600,
     "maxLines": 1,
     "align": "left",
     "slant": 0,
     "fill": "#1a1a1a",
     "strokes": [],
-    "bg": null,
+    "bg": {
+      "fill": "#ffffff",
+      "padX": 14,
+      "padY": 8,
+      "radius": 12
+    },
     "prefix": "〈",
-    "suffix": "〉"
+    "suffix": "〉",
+    "under": true
   }
 };
