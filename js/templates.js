@@ -198,7 +198,7 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
 /** 「写真主役」の金額を台紙の絵の上に描く。nameTop は商品名の上端（台紙はその上の右に置く）。 */
 function drawBadgePrice(ctx, d, nameTop) {
   const { W, u, priceBadge: b } = d;
-  const bw = 500 * u, bh = bw / b.aspect;
+  const bw = Math.min(500, 560 * b.aspect) * u, bh = bw / b.aspect;   // 縦長の台紙は高さで抑える
   const x = W - 40 * u - bw, top = Math.max(150 * u, nameTop - bh);
   withShadow(ctx, 24 * u, 'rgba(0,0,0,0.4)', () => ctx.drawImage(b.img, x, top, bw, bh));
   const cx = x + bw * b.text.cx, cy = top + bh * b.text.cy, maxW = bw * b.text.w;

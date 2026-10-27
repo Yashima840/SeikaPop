@@ -238,6 +238,8 @@ export const PRICE_BADGES = [
   { id: '', label: '黄色い丸' },
   { id: 'gold-brush', label: '金の筆丸（試し）', src: 'img/badges/gold-brush.png', aspect: 295 / 273,
     text: { cx: 0.512, cy: 0.49, w: 0.6 }, color: 'gold', sub: '#ffffff' },
+  { id: 'red-medal', label: '赤のメダル（試し）', src: 'img/badges/red-medal.png', aspect: 482 / 590,
+    text: { cx: 0.498, cy: 0.424, w: 0.54 }, color: 'gold', sub: '#ffffff' },
 ];
 
 /** ポップの金額の台紙。黄色い丸（または知らない id）なら null。 */
