@@ -237,9 +237,9 @@ export function nameFontOf(pop) {
 // color は数字と「円」の色（'gold' は金のグラデーション）、sub は単位と税込の色。
 export const PRICE_BADGES = [
   { id: '', label: '黄色い丸' },
-  { id: 'gold-brush', label: '金の筆丸（試し）', src: 'img/badges/gold-brush.png', aspect: 295 / 273,
-    text: { cx: 0.512, cy: 0.49, w: 0.6 }, color: 'gold', sub: '#ffffff' },
-  { id: 'red-medal', label: '赤のメダル（試し）', src: 'img/badges/red-medal.png', aspect: 482 / 590,
+  { id: 'gold-brush', label: '金の筆丸', src: 'img/badges/gold-brush.png', aspect: 512 / 463,
+    text: { cx: 0.498, cy: 0.465, w: 0.56 }, color: 'gold', sub: '#ffffff' },
+  { id: 'red-medal', label: '赤のメダル', src: 'img/badges/red-medal.png', aspect: 482 / 590,
     text: { cx: 0.498, cy: 0.424, w: 0.54 }, color: 'gold', sub: '#ffffff' },
 ];
 
