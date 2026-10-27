@@ -1,4 +1,4 @@
-// 起動と画面の切り替え（#/ ・ #/edit/<id> ・ #/settings ・ #/ad ・ #/setup?…）
+// 起動と画面の切り替え（#/ ・ #/edit/<id> ・ #/make/<id>（かんたん作成）・ #/settings ・ #/ad ・ #/setup?…）
 // 作った画像の一覧は、はじめの画面に入った（前の #/history は、はじめの画面として開く）
 
 import { installCrashHandlers, recordError } from './crash.js';
@@ -42,8 +42,8 @@ function route() {
     const hash = location.hash || '#/';
     try {
       window.scrollTo(0, 0);
-      const m = hash.match(/^#\/edit\/(.+)$/);
-      if (m) leaveCurrent = await showEditor(root, app, decodeURIComponent(m[1]));
+      const m = hash.match(/^#\/(edit|make)\/(.+)$/);
+      if (m) leaveCurrent = await showEditor(root, app, decodeURIComponent(m[2]), { wizard: m[1] === 'make' });
       else if (hash === '#/settings') leaveCurrent = await showSettings(root, app);
       else if (hash.startsWith('#/setup?')) leaveCurrent = await showSetup(root, app, location.href);
       else if (hash === '#/ad') leaveCurrent = await showAd(root, app);

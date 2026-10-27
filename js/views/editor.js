@@ -13,6 +13,7 @@ import { debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
 import { queuePop, queueStockPhoto } from '../sender.js';
 import { collectorOf, saveTargets } from '../collect.js';
 import { openStockPicker } from './stock.js';
+import { recordError } from '../crash.js';
 
 // 青果と食品の両方に使う（食品は「1人前」「1本入」など）
 const UNITS = ['1袋', '1個', '1パック', '1本', '1玉', '1房', '100g', '1盛', '1人前', '1本入', '1個入'];
@@ -26,7 +27,20 @@ function field(label, input, extra) {
   return h('label', { class: 'field' }, h('span', { class: 'label', text: label }), input, extra);
 }
 
-export async function showEditor(root, app, popId) {
+// かんたん作成（ウィザード）の段。レギュラーから作ったポップは、価格・産地を確かめて出すだけの短い流れ
+const STEPS = {
+  photo: { label: '写真', title: '写真を入れる', hint: '撮った写真は自動で明るく整えます。位置は上の見本を指で動かす・2本指で拡大。' },
+  name: { label: '名前', title: '商品名と産地', hint: '産地は食品ならメーカー名。入れなくても作れます。' },
+  price: { label: '価格', title: '価格と単位', hint: '税抜で入れると、設定の税率で計算した税込も入ります。' },
+  design: { label: 'デザイン', title: 'デザインを選ぶ', hint: '今入れた中身で描いています。押すと上の見本が替わります。' },
+  check: { label: '確認', title: '今日の価格・産地を確かめる', hint: 'レギュラーから呼び出したので、前回の内容が入っています。' },
+  out: { label: '出す', title: '仕上がりを確かめて出す', hint: '' },
+};
+const NEW_STEPS = ['photo', 'name', 'price', 'design', 'out'];
+const REGULAR_STEPS = ['check', 'out'];
+
+/** wizard: かんたん作成（1段ずつ）で開く。「くわしく直す」でいつもの画面に切り替えられる。 */
+export async function showEditor(root, app, popId, { wizard = false } = {}) {
   let pop = await store.getPop(popId);
   if (!pop) { toast('ポップが見つかりませんでした', { error: true }); app.go('#/'); return null; }
   const settings = await store.getSettings();
@@ -211,6 +225,37 @@ export async function showEditor(root, app, popId) {
     return el;
   };
 
+  // ---- かんたん作成の段 ----
+  const steps = pop.fromRegularId ? REGULAR_STEPS : NEW_STEPS;
+  let step = 0;
+  const goStep = i => {
+    step = Math.max(0, Math.min(steps.length - 1, i));
+    rebuildForm();
+    window.scrollTo(0, 0);
+  };
+  const toFullEditor = () => {
+    wizard = false;
+    rebuildForm();
+    window.scrollTo(0, 0);
+  };
+
+  /** デザインの候補を、今の中身で描いて並べる（重いので、この段を出したときだけ描く） */
+  function designPicker() {
+    const grid = h('div', { class: 'design-grid' });
+    for (const id of TEMPLATE_ORDER) {
+      const cv = h('canvas', { class: 'design-thumb' });
+      grid.append(h('button', {
+        type: 'button', class: pop.template === id ? 'design-pick on' : 'design-pick',
+        onclick: () => { pop.template = id; changed({ rebuild: true }); },
+      }, cv, h('span', { text: TEMPLATES[id].label })));
+      const p = { ...pop, template: id };
+      ensureFonts(p, settings)
+        .then(() => renderPop(cv, p, photoShown, settings, { preview: true }))
+        .catch(err => recordError('デザインの見本', err));
+    }
+    return grid;
+  }
+
   function rebuildForm() {
     const nameInput = textInput('name', '例: 完熟トマト');
     const memoInput = textInput('catch', '例: 入荷数・仕入れ先への連絡など', { multiline: true });
@@ -218,14 +263,72 @@ export async function showEditor(root, app, popId) {
     const originInput = textInput('origin', '例: 熊本県産／○○食品');
     const setText = (key, input, value) => { pop[key] = value; input.value = value; changed(); };
 
+    const photoButtons = () => h('div', { class: 'row' },
+      h('button', { class: 'primary', onclick: () => pickPhoto(true) }, '📷 撮影'),
+      h('button', { onclick: () => pickPhoto(false) }, '🖼 写真から選ぶ'),
+      h('button', { onclick: pickFromStock }, '📦 ストックから'),
+    );
+    const priceFields = () => [
+      h('div', { class: 'two' },
+        // 「各」のチェックは価格の欄の左（label の中に入力を2つ入れると押した先がずれるので、div で組む）
+        h('div', { class: 'field' },
+          h('span', { class: 'label', text: isTaxExcluded(pop) ? '価格（税抜・円）' : '価格（税込・円）' }),
+          h('div', { class: 'price-row' },
+            h('label', { class: 'each-box' },
+              h('input', { type: 'checkbox', checked: !!pop.each, onchange: ev => { pop.each = ev.target.checked; changed(); } }),
+              '各'),
+            priceInput,
+          ),
+          priceError, priceNote,
+        ),
+        field('単位', unitInput),
+      ),
+      chips([['excl', '税抜で入れる'], ['incl', '税込で入れる']],
+        v => { pop.priceTax = v; showPriceNote(); changed({ rebuild: true }); }, isTaxExcluded(pop) ? 'excl' : 'incl'),
+      chips(UNITS.map(u => [u, u]), v => setText('unit', unitInput, v), pop.unit),
+    ];
+    const sizeChips = () => chips(Object.entries(SIZES).map(([id, s]) => [id, `${s.label}（${s.note}）`]),
+      v => { pop.size = v; changed({ rebuild: true }); }, pop.size);
+
+    exportBox.hidden = wizard && steps[step] !== 'out';
+    if (wizard) {
+      const key = steps[step];
+      const info = STEPS[key];
+      const body = {
+        photo: () => [photoButtons(), photoImg ? h('p', { class: 'hint', text: '写真が入りました。撮り直すときは上のボタンをもう一度。' }) : null],
+        name: () => [field('商品名', nameInput), field('産地（食品はメーカー名）', originInput)],
+        price: priceFields,
+        design: () => [designPicker(), h('div', { class: 'field' }, h('span', { class: 'label', text: '大きさ' }), sizeChips())],
+        check: () => [field('産地（食品はメーカー名）', originInput), ...priceFields()],
+        out: () => [],
+      }[key]();
+      const last = step === steps.length - 1;
+      const nextLabel = key === 'photo' && !photoImg ? '写真なしで次へ →' : '次へ →';
+      form.replaceChildren(
+        h('div', { class: 'steps' }, steps.map((k, i) => h('button', {
+          type: 'button', class: i === step ? 'step on' : i < step ? 'step done' : 'step',
+          onclick: () => goStep(i),
+        }, h('b', { text: String(i + 1) }), STEPS[k].label))),
+        h('section', {},
+          h('h3', {}, `${step + 1}. ${info.title}`),
+          info.hint ? h('p', { class: 'hint', text: info.hint }) : null,
+          ...body,
+        ),
+        h('div', { class: 'row wizard-nav' },
+          step > 0 ? h('button', { onclick: () => goStep(step - 1) }, '← 戻る') : null,
+          last ? null : h('button', { class: 'primary', onclick: () => goStep(step + 1) }, nextLabel),
+        ),
+        h('p', { class: 'center' }, h('button', { class: 'mini', onclick: toFullEditor }, 'くわしく直す（いつもの画面）')),
+      );
+      // 名前の段は、商品名を打って Enter（改行）で次へ
+      if (key === 'name') nameInput.addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.isComposing) goStep(step + 1); });
+      return;
+    }
+
     form.replaceChildren(
       h('section', {},
         h('h3', {}, '写真'),
-        h('div', { class: 'row' },
-          h('button', { class: 'primary', onclick: () => pickPhoto(true) }, '📷 撮影'),
-          h('button', { onclick: () => pickPhoto(false) }, '🖼 写真から選ぶ'),
-          h('button', { onclick: pickFromStock }, '📦 ストックから'),
-        ),
+        photoButtons(),
         // お洒落に見せる仕上げ（補正の「自動補正」「補正なし」では外れない）
         photoImg ? h('div', { class: 'row effects' },
           h('label', { class: 'each-box' },
@@ -257,7 +360,7 @@ export async function showEditor(root, app, popId) {
       h('section', {},
         h('h3', {}, 'デザイン'),
         chips(TEMPLATE_ORDER.map(id => [id, TEMPLATES[id].label]), v => { pop.template = v; changed({ rebuild: true }); }, pop.template),
-        chips(Object.entries(SIZES).map(([id, s]) => [id, `${s.label}（${s.note}）`]), v => { pop.size = v; changed({ rebuild: true }); }, pop.size),
+        sizeChips(),
       ),
       h('section', {},
         h('h3', {}, '文字'),
@@ -273,23 +376,7 @@ export async function showEditor(root, app, popId) {
             onclick: () => { pop.nameFont = f.id; changed({ rebuild: true }); },
           }, f.label))),
         ),
-        h('div', { class: 'two' },
-          // 「各」のチェックは価格の欄の左（label の中に入力を2つ入れると押した先がずれるので、div で組む）
-          h('div', { class: 'field' },
-            h('span', { class: 'label', text: isTaxExcluded(pop) ? '価格（税抜・円）' : '価格（税込・円）' }),
-            h('div', { class: 'price-row' },
-              h('label', { class: 'each-box' },
-                h('input', { type: 'checkbox', checked: !!pop.each, onchange: ev => { pop.each = ev.target.checked; changed(); } }),
-                '各'),
-              priceInput,
-            ),
-            priceError, priceNote,
-          ),
-          field('単位', unitInput),
-        ),
-        chips([['excl', '税抜で入れる'], ['incl', '税込で入れる']],
-          v => { pop.priceTax = v; showPriceNote(); changed({ rebuild: true }); }, isTaxExcluded(pop) ? 'excl' : 'incl'),
-        chips(UNITS.map(u => [u, u]), v => setText('unit', unitInput, v), pop.unit),
+        ...priceFields(),
         field('メモ（画像には入りません）', memoInput),
       ),
     );

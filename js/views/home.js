@@ -33,12 +33,12 @@ export async function showHome(root, app) {
   const openNew = async () => {
     const pop = createPop();
     await store.putPop(pop);
-    app.go(`#/edit/${pop.id}`);
+    app.go(`#/make/${pop.id}`);   // 新しく作るときは、かんたん作成（1段ずつ）で
   };
   const useRegular = async reg => {
     const pop = popFromRegular(reg);
     await store.putPop(pop);
-    app.go(`#/edit/${pop.id}`);
+    app.go(`#/make/${pop.id}`);   // 価格・産地を確かめて出すだけの短い流れ
   };
   const makeRegular = async pop => {
     try {
