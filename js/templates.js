@@ -156,6 +156,8 @@ function withShadow(ctx, blur, color, fn) {
  * 価格（数字＋「円」）と、その上の単位・下の税の文字を中心 (cx, cy) へ置く。
  * 価格は総額表示（税込）が義務なので、税込（税抜で入れたときは税込の金額）を必ず添える。
  * st.halo＝価格の下地の色（「各」の縁取りに使う）。
+ * st.eachApart＝「各」を数字に重ねず、左に離して置く（数字の書体が斜め・細身で重なると読みにくいとき）。
+ * st.lift＝まとまり全体を税込の文字の高さの何倍上げるか（無ければ 0）。
  * st.outline＝数字と「円」の縁取りの色（細い線。無ければ縁取らない）。
  * st.stops＝数字と「円」をグラデーションにするとき [[位置, 色], …]（上端が 0。無ければ st.color の一色）。
  */
@@ -166,9 +168,13 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
   const yenK = 0.42;
   const both = (t, s) => mNum(t, s) + mNum('円', s * yenK) + s * 0.04;
   const size = Math.min(st.maxSize, Math.floor(st.maxSize * maxW / both(num, st.maxSize)));
+  // st.lift があれば、まとまり全体を税込の文字の高さ × lift だけ上へ（台紙の下の飾りに税込がかからないように）
+  if (st.lift) cy -= st.lift * Math.max(38 * u, size * 0.3) * 0.85;
   const wNum = mNum(num, size);
   const wAll = both(num, size);
-  const left = cx - wAll / 2;
+  // st.eachApart のときは「各」を数字に重ねず左に離して置くので、その分まとまりを右へずらして真ん中に保つ
+  const eachSize = size * yenK * EACH_OF_YEN;
+  const left = cx - wAll / 2 + (d.price.each && st.eachApart ? eachSize * 0.55 : 0);
   ctx.save();
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
@@ -204,7 +210,12 @@ function drawPriceBlock(ctx, d, cx, cy, maxW, st) {
     paint(text, x, y, f, s);
   };
   paintNum(num, left, base, st.font, size);
-  if (d.price.each) paintEach(ctx, left, base, st.font, size * yenK * EACH_OF_YEN, fill, st.halo || '#fff');
+  if (d.price.each) {
+    // 書体によっては数字の飾りが左へはみ出す（Lobster の「1」など）ので、字の見えている左端に合わせて「各」を置く
+    ctx.font = font(st.font, size);
+    const inkLeft = Math.max(0, ctx.measureText(num).actualBoundingBoxLeft || 0);
+    paintEach(ctx, left - inkLeft - (st.eachApart ? eachSize * 0.6 : 0), base, st.font, eachSize, fill, st.halo || '#fff');
+  }
   paintNum('円', left + wNum + size * 0.04, base, st.font, size * yenK);
   ctx.textAlign = 'center';
   ctx.fillStyle = st.subColor || st.color;
@@ -236,7 +247,8 @@ function drawBadgePrice(ctx, d, nameTop) {
   ctx.translate(x + bw * b.text.cx, top + bh * b.text.cy);
   if (b.rotate) ctx.rotate(b.rotate * Math.PI / 180);
   drawPriceBlock(ctx, d, 0, 0, maxW, {
-    font: b.font || FONTS.impact, maxSize: 150 * u, color: b.color, stops: TEXT_GRADIENTS[b.color], outline: b.outline, subColor: b.sub, halo: b.halo || '#1e1c1c',
+    // 枠の高さ（text.h）があれば、単位〜税込のまとまり（数字のおよそ 1.8 倍）がその高さに収まる大きさまで
+    font: b.font || FONTS.impact, maxSize: Math.min(150 * u, b.text.h ? bh * b.text.h / 1.8 : Infinity), color: b.color, stops: TEXT_GRADIENTS[b.color], outline: b.outline, lift: b.lift, eachApart: true, subColor: b.sub, halo: b.halo || '#1e1c1c',
   });
   ctx.restore();
 }
