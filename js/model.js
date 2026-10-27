@@ -240,11 +240,11 @@ export function nameFontOf(pop) {
 export const PRICE_BADGES = [
   { id: '', label: '黄色い丸' },
   { id: 'gold-brush', label: '金の筆丸', src: 'img/badges/gold-brush.png', aspect: 512 / 463,
-    text: { cx: 0.498, cy: 0.465, w: 0.56 }, color: 'gold', sub: '#ffffff' },
+    text: { cx: 0.498, cy: 0.465, w: 0.56 }, font: { family: 'Oswald', weight: '700' }, color: 'gold', sub: '#ffffff' },
   { id: 'red-medal', label: '赤のメダル', src: 'img/badges/red-medal.png', aspect: 482 / 590,
-    text: { cx: 0.498, cy: 0.424, w: 0.54 }, color: 'gold', sub: '#ffffff' },
+    text: { cx: 0.498, cy: 0.424, w: 0.54 }, font: { family: 'Zen Antique', weight: '400' }, color: 'gold', sub: '#ffffff' },
   { id: 'gold-paint', label: '金の塗り', src: 'img/badges/gold-paint.png', aspect: 694 / 472,
-    text: { cx: 0.5, cy: 0.5, w: 0.58 }, rotate: -8, color: 'blackGold', outline: '#000000', sub: '#3a2508', halo: '#f2c14e' },
+    text: { cx: 0.5, cy: 0.5, w: 0.58 }, font: { family: 'Lobster', weight: '400' }, rotate: -8, color: 'blackGold', outline: '#000000', sub: '#3a2508', halo: '#f2c14e' },
 ];
 
 /** 台紙のボタンを押したときの次の台紙の id（一覧の順に回り、最後の次は最初へ。知らない id は最初の次）。 */
