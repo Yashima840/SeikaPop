@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createPop, exportFileName, exportProblems, formatDate, formatPrice, isBlankPop, localStamp,
-  parsePriceInput, popFromRegular, regularFromPop, updateRegularFrom,
+  parsePriceInput, popFromRegular, regularFromPop, SAMPLE_POP, updateRegularFrom, withSample,
 } from '../js/model.js';
 
 const T0 = new Date('2026-10-20T06:30:00Z');
@@ -92,4 +92,17 @@ test('何も入れていない新規だけを「空」とみなす（レギュ�
   assert.equal(isBlankPop({ ...blank, photoId: 'x' }), false);
   assert.equal(isBlankPop({ ...blank, isRegular: true }), false);
   assert.equal(isBlankPop({ ...blank, fromRegularId: 'r' }), false);
+});
+
+test('見本で描く: 空の所だけ見本（じゃが芋・長崎県・98円）にし、入れた所と元のポップは変えない', () => {
+  const blank = createPop();
+  const s = withSample(blank);
+  assert.equal(s.name, SAMPLE_POP.name);
+  assert.equal(s.origin, SAMPLE_POP.origin);
+  assert.equal(s.price, SAMPLE_POP.price);
+  assert.equal(blank.name, '', '元のポップは空のまま');
+  const mine = withSample({ ...createPop(), name: 'トマト', price: 0 });
+  assert.equal(mine.name, 'トマト');
+  assert.equal(mine.price, 0, '0円は入れた値として残す');
+  assert.equal(mine.origin, SAMPLE_POP.origin);
 });

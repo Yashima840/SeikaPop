@@ -3,7 +3,7 @@
 import * as store from '../store.js';
 import {
   DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, NAME_FONTS, parsePriceInput,
-  priceTexts, regularFromPop, shotFromPop, SIZES, taxRateOf, updateRegularFrom,
+  priceTexts, regularFromPop, SAMPLE_PHOTO_URL, shotFromPop, SIZES, taxRateOf, updateRegularFrom, withSample,
 } from '../model.js';
 import { dragCrop, zoomCrop, ZOOM_MAX } from '../layout.js';
 import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.js';
@@ -32,11 +32,11 @@ const STEPS = {
   photo: { label: '写真', title: '写真を入れる', hint: '撮った写真は自動で明るく整えます。位置は上の見本を指で動かす・2本指で拡大。' },
   name: { label: '名前', title: '商品名と産地', hint: '産地は食品ならメーカー名。入れなくても作れます。' },
   price: { label: '価格', title: '価格と単位', hint: '税抜で入れると、設定の税率で計算した税込も入ります。' },
-  design: { label: 'デザイン', title: 'デザインを選ぶ', hint: '今入れた中身で描いています。押すと上の見本が替わります。' },
+  design: { label: 'デザイン', title: 'デザインを選ぶ', hint: 'まだ入れていない所は見本（じゃが芋・長崎県・98円）で描いています。写真・名前・価格はこの後で入れます。' },
   check: { label: '確認', title: '今日の価格・産地を確かめる', hint: 'レギュラーから呼び出したので、前回の内容が入っています。' },
   out: { label: '出す', title: '仕上がりを確かめて出す', hint: '' },
 };
-const NEW_STEPS = ['photo', 'name', 'price', 'design', 'out'];
+const NEW_STEPS = ['design', 'photo', 'name', 'price', 'out'];
 const REGULAR_STEPS = ['check', 'out'];
 
 /** wizard: かんたん作成（1段ずつ）で開く。「くわしく直す」でいつもの画面に切り替えられる。 */
@@ -239,7 +239,21 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     window.scrollTo(0, 0);
   };
 
-  /** デザインの候補を、今の中身で描いて並べる（重いので、この段を出したときだけ描く） */
+  // 見本の写真（アプリに入れてある）。読めなければ写真なしの見本で描く
+  let sampleImg = null;
+  const loadSample = async () => {
+    if (sampleImg) return sampleImg;
+    try {
+      const res = await fetch(SAMPLE_PHOTO_URL);
+      if (!res.ok) throw new Error(`見本の写真を読めませんでした（${res.status}）`);
+      sampleImg = await blobToImage(await res.blob());
+    } catch (err) {
+      recordError('見本の写真', err);
+    }
+    return sampleImg;
+  };
+
+  /** デザインの候補を並べる。まだ入れていない所は見本で描く（重いので、この段を出したときだけ描く） */
   function designPicker() {
     const grid = h('div', { class: 'design-grid' });
     for (const id of TEMPLATE_ORDER) {
@@ -248,9 +262,10 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
         type: 'button', class: pop.template === id ? 'design-pick on' : 'design-pick',
         onclick: () => { pop.template = id; changed({ rebuild: true }); },
       }, cv, h('span', { text: TEMPLATES[id].label })));
-      const p = { ...pop, template: id };
-      ensureFonts(p, settings)
-        .then(() => renderPop(cv, p, photoShown, settings, { preview: true }))
+      // 自分の写真が無いときは見本の写真を、真ん中で切り取って使う
+      const p = { ...withSample(pop), template: id, ...(photoShown ? {} : { crop: { ...DEFAULT_CROP } }) };
+      Promise.all([ensureFonts(p, settings), photoShown ? null : loadSample()])
+        .then(([, sample]) => renderPop(cv, p, photoShown || sample, settings, { preview: true }))
         .catch(err => recordError('デザインの見本', err));
     }
     return grid;
@@ -291,6 +306,8 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
       v => { pop.size = v; changed({ rebuild: true }); }, pop.size);
 
     exportBox.hidden = wizard && steps[step] !== 'out';
+    // デザインの段は下の見本が大きく並ぶので、上の見本はしまう
+    previewEl.hidden = wizard && steps[step] === 'design';
     if (wizard) {
       const key = steps[step];
       const info = STEPS[key];
@@ -318,7 +335,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
           step > 0 ? h('button', { onclick: () => goStep(step - 1) }, '← 戻る') : null,
           last ? null : h('button', { class: 'primary', onclick: () => goStep(step + 1) }, nextLabel),
         ),
-        h('p', { class: 'center' }, h('button', { class: 'mini', onclick: toFullEditor }, 'くわしく直す（いつもの画面）')),
+        h('p', { class: 'center' }, h('button', { class: 'mini', onclick: toFullEditor }, 'くわしく直す')),
       );
       // 名前の段は、商品名を打って Enter（改行）で次へ
       if (key === 'name') nameInput.addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.isComposing) goStep(step + 1); });
@@ -539,10 +556,11 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     updateExportState();
   }
 
+  const previewEl = h('div', { class: 'preview' }, canvas, h('div', { class: 'preview-bar' }, statusEl));
   rebuildForm();
   renderExportBox();
   root.replaceChildren(
-    h('div', { class: 'preview' }, canvas, h('div', { class: 'preview-bar' }, statusEl)),
+    previewEl,
     form, exportBox, fileCamera, fileLibrary,
   );
   draw();

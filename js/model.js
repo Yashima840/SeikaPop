@@ -85,6 +85,20 @@ export function updateRegularFrom(regular, pop, now = new Date()) {
   return { ...regular, ...contentOf(pop), updatedAt: now.toISOString() };
 }
 
+// かんたん作成でデザインを選ぶとき、まだ入れていない所に入れて見せる見本（写真は img/sample-potato.jpg）
+export const SAMPLE_POP = { name: 'じゃが芋', origin: '長崎県', price: 98 };
+export const SAMPLE_PHOTO_URL = 'img/sample-potato.jpg';
+
+/** 見本で描くためのポップ。入れてある所はそのまま、空の所だけ見本にする（元のポップは変えない）。 */
+export function withSample(pop) {
+  return {
+    ...pop,
+    name: String(pop.name).trim() ? pop.name : SAMPLE_POP.name,
+    origin: String(pop.origin).trim() ? pop.origin : SAMPLE_POP.origin,
+    price: pop.price ?? SAMPLE_POP.price,
+  };
+}
+
 /** 作っただけで何も入れていないポップか（戻ったときに片付けてよいもの）。 */
 export function isBlankPop(pop) {
   return !pop.isRegular && !pop.fromRegularId && !pop.photoId
