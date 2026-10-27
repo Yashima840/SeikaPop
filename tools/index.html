@@ -175,7 +175,7 @@
             <li><a class="ext" data-ext="script" href="https://script.google.com/home" target="_blank" rel="noopener">受け取り口（Apps Script）</a>
               ・<a class="ext" data-ext="script" data-page="settings" href="https://script.google.com/home" target="_blank" rel="noopener">合言葉（PASSCODE）を直す</a>
               <span class="note">Code.gs の差し替え・デプロイの管理。「合言葉を直す」はプロジェクトの設定（一番下のスクリプト プロパティ）を開く。
-                どちらも下で開く先を登録するまでは Apps Script の一覧が開く</span>
+                この PC で clasp を設定済みならそのプロジェクトが開く。別のプロジェクトにしたいときは下で登録する</span>
               <details data-reg="script">
                 <summary>直接開く先を登録する（この PC のブラウザだけに覚える）</summary>
                 プロジェクトを開いたときのアドレス（<code>https://script.google.com/…/projects/…/edit</code>。<code>…/settings</code> でもよい）を貼る
@@ -213,10 +213,13 @@
     script: { ok: v => v.startsWith('https://script.google.com/'), what: 'Apps Script のアドレス（https://script.google.com/ で始まる）' },
     drive: { ok: v => v.startsWith('https://drive.google.com/'), what: 'ドライブのアドレス（https://drive.google.com/ で始まる）' },
     stock: { ok: v => v.startsWith('https://drive.google.com/'), what: 'ドライブのアドレス（https://drive.google.com/ で始まる）' },
-    account: { ok: v => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), what: 'メールアドレス' },
+    // @ の直前の「.」は打ち間違い（Google が別のアカウントとして扱い、いつものアカウントで開いてしまう）
+    account: { ok: v => /^[^@\s.][^@\s]*(?<!\.)@[^@\s]+\.[^@\s]+$/.test(v), what: 'メールアドレス（@ の前に「.」が付いていないか確かめて）' },
   };
   const regKey = name => `seikapop.hub.ext.${name}`;
   const saved = {};
+  // 登録が無いときの行き先。受け取り口は tools/serve.py が .clasp.json から教えてくれる（下の /api/info）
+  const auto = {};
   for (const name of Object.keys(REG)) {
     try { saved[name] = localStorage.getItem(regKey(name)) || ''; } catch { saved[name] = ''; /* 読めない設定（シークレット等）は未登録として扱う */ }
   }
@@ -237,7 +240,7 @@
   }
   function refresh() {
     for (const a of document.querySelectorAll('[data-ext]')) {
-      const url = saved[a.dataset.ext] || a.dataset.fallback;
+      const url = saved[a.dataset.ext] || auto[a.dataset.ext] || a.dataset.fallback;
       // 合言葉の画面へは設定、ふだんはエディタへ（どちらのアドレスを登録しても同じに開く）
       const page = a.dataset.page || (a.dataset.ext === 'script' ? 'edit' : '');
       a.href = withAccount(page ? projectPage(url, page) : url);
@@ -307,6 +310,10 @@
       const res = await fetch('/api/info');
       if (!res.ok) return;   // 公開版など、serve.py 以外で開いている
       const info = await res.json();
+      if (info.scriptId) {
+        auto.script = `https://script.google.com/home/projects/${info.scriptId}/edit`;
+        refresh();
+      }
       if (!info.lan) return;
       if (!info.ip) { note.textContent = 'この PC の IP アドレスが分かりませんでした（Wi-Fi につながっているか確かめてください）'; return; }
       document.getElementById('lanUrl').textContent = `http://${info.ip}:${info.port}/`;

@@ -34,7 +34,7 @@ PAGES = {
     "見本帳（全デザイン×全サイズ）": "/tools/gallery.html",
     "金額キャッチの試作キット": "/tools/price-kit/price-kit.html",
     "外部AI案の比較": "/tools/price-kit/compare.html",
-    "設定用リンクを作る": "/tools/collector/link.html",
+    "合言葉を決める": "/tools/collector/link.html",
 }
 CATCH_JS = ROOT / "js" / "catch-design.js"
 BACKUP_DIR = ROOT / "tools" / "designer-backup"
@@ -43,6 +43,8 @@ LABEL_JS = ROOT / "js" / "label-design.js"
 LABEL_SAVE_PATH = "/api/label-design"
 STOP_PATH = "/api/stop"
 INFO_PATH = "/api/info"
+# clasp で受け取り口を上げるときの控え（店ごと・Git に入れない）。あれば作業場が Apps Script のプロジェクトを直接開ける
+CLASP_JSON = ROOT / "tools" / "collector" / ".clasp.json"
 # 窓が無いとき（pythonw）の出力先。保存の控えや失敗の理由を後から読めるように
 LOG = ROOT / "tools" / "serve.log"
 LABEL_HEADER = """// 「金額主役」の 産地・商品名・数量と単位 の3行のデザイン（tools/designer.html の「保存」で書き換わる。手で直してもよい）
@@ -145,7 +147,11 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         # 作業場が「スマホで開くアドレス」を出すのに使う（同じ Wi-Fi 向けに起動したか・この PC のアドレス）
         if self.path == INFO_PATH:
             lan = self.server.lan
-            self.send_json(200, {"lan": lan, "ip": lan_address() if lan else None, "port": PORT})
+            info = {"lan": lan, "ip": lan_address() if lan else None, "port": PORT}
+            # 受け取り口のプロジェクトはこの PC の作業場にだけ教える（同じ Wi-Fi の他の端末には出さない）
+            if self.client_address[0] in ("127.0.0.1", "::1"):
+                info["scriptId"] = clasp_script_id()
+            self.send_json(200, info)
             return
         super().do_GET()
 
@@ -196,6 +202,15 @@ class Server(http.server.ThreadingHTTPServer):
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):  # Windows だけにある
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         super().server_bind()
+
+
+def clasp_script_id():
+    """tools/collector/.clasp.json のスクリプト ID。無い・読めないときは None（作業場は登録した先か一覧を開く）。"""
+    try:
+        sid = json.loads(CLASP_JSON.read_text(encoding="utf-8")).get("scriptId")
+    except (OSError, ValueError):
+        return None
+    return sid if isinstance(sid, str) and re.fullmatch(r"[\w-]{20,}", sid) else None
 
 
 def lan_address():
