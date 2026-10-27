@@ -318,9 +318,9 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
       const body = {
         photo: () => [photoButtons(), photoImg ? h('p', { class: 'hint', text: '写真が入りました。撮り直すときは上のボタンをもう一度。' }) : null],
         name: () => [field('商品名', nameInput), field('産地（食品はメーカー名）', originInput)],
-        price: priceFields,
+        price: () => [...priceFields(), badgeChips()],
         design: () => [designPicker(), h('div', { class: 'field' },
-          h('span', { class: 'label', text: '大きさ（押すと見本の形が替わります。共有するときは使う先に合わせて作り直します）' }), sizeChips()), badgeChips()],
+          h('span', { class: 'label', text: '大きさ（押すと見本の形が替わります。共有するときは使う先に合わせて作り直します）' }), sizeChips())],
         check: () => [field('産地（食品はメーカー名）', originInput), ...priceFields()],
         out: () => [],
       }[key]();
@@ -383,7 +383,6 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
         h('h3', {}, 'デザイン'),
         chips(TEMPLATE_ORDER.map(id => [id, TEMPLATES[id].label]), v => { pop.template = v; changed({ rebuild: true }); }, pop.template),
         sizeChips(),
-        badgeChips(),
       ),
       h('section', {},
         h('h3', {}, '文字'),
@@ -400,6 +399,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
           }, f.label))),
         ),
         ...priceFields(),
+        badgeChips(),
         field('メモ（画像には入りません）', memoInput),
       ),
     );
