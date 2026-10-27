@@ -3,7 +3,7 @@
 import * as store from '../store.js';
 import {
   DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, NAME_FONTS, parsePriceInput,
-  PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, taxRateOf, updateRegularFrom, withSample,
+  nextPriceBadge, PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, taxRateOf, updateRegularFrom, withSample,
 } from '../model.js';
 import { dragCrop, moveBadge, zoomCrop, ZOOM_MAX } from '../layout.js';
 import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.js';
@@ -331,11 +331,16 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     ];
     const sizeChips = () => chips(Object.entries(SIZES).map(([id, s]) => [id, `${s.label}（${s.note}）`]),
       v => { pop.size = v; changed({ rebuild: true }); }, pop.size);
-    // 金額の台紙は「写真主役」だけ
+    // 金額の台紙は「写真主役」だけ。台紙は増えていくので、1つのボタンを押すたびに次へ回す
+    const badgeLabel = () => {
+      const i = Math.max(0, PRICE_BADGES.findIndex(b => b.id === (pop.priceBadge || '')));
+      return `🔄 ${PRICE_BADGES[i].label}（${i + 1}/${PRICE_BADGES.length}）`;
+    };
     const badgeChips = () => ((pop.template || 'fresh') === 'fresh' ? h('div', { class: 'field' },
-      h('span', { class: 'label', text: '金額の台紙（見本の上で指で動かせます）' }),
-      chips(PRICE_BADGES.map(b => [b.id, b.label]), v => { pop.priceBadge = v; changed({ rebuild: true }); }, pop.priceBadge || ''),
-      h('div', { class: 'row' }, h('button', { class: 'mini', onclick: () => { pop.badgePos = null; changed(); } }, '台紙の位置を戻す'))) : null);
+      h('span', { class: 'label', text: '金額の台紙（押すたびに替わります。見本の上で指で動かせます）' }),
+      h('div', { class: 'row' },
+        h('button', { type: 'button', onclick: () => { pop.priceBadge = nextPriceBadge(pop.priceBadge); changed({ rebuild: true }); } }, badgeLabel()),
+        h('button', { class: 'mini', onclick: () => { pop.badgePos = null; changed(); } }, '台紙の位置を戻す'))) : null);
 
     exportBox.hidden = wizard && steps[step] !== 'out';
     // デザインの段は下の見本が大きく並ぶので、上の見本はしまう

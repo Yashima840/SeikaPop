@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   createPop, exportFileName, exportProblems, formatDate, formatPrice, isBlankPop, localStamp,
-  parsePriceInput, popFromRegular, PRICE_BADGES, priceBadgeOf, regularFromPop, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
+  nextPriceBadge, parsePriceInput, popFromRegular, PRICE_BADGES, priceBadgeOf, regularFromPop, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
 } from '../js/model.js';
 
 const T0 = new Date('2026-10-20T06:30:00Z');
@@ -123,4 +123,14 @@ test('金額の台紙: 絵がアプリに入っていて（オフラインでも
   assert.equal(priceBadgeOf({ priceBadge: 'gold-brush' })?.id, 'gold-brush');
   assert.equal(priceBadgeOf({ priceBadge: 'no-such' }), null);
   assert.equal(priceBadgeOf({}), null);
+});
+
+test('金額の台紙のボタン: 押すたびに一覧の順に回り、最後の次は最初へ戻る', () => {
+  const seen = [];
+  let id = '';
+  for (let i = 0; i < PRICE_BADGES.length; i++) { seen.push(id); id = nextPriceBadge(id); }
+  assert.deepEqual(seen, PRICE_BADGES.map(b => b.id), '全部を1回ずつ通る');
+  assert.equal(id, '', '1周したら最初（黄色い丸）');
+  assert.equal(nextPriceBadge(undefined), PRICE_BADGES[1].id, '古いポップ（台紙なし）は黄色い丸の次へ');
+  assert.equal(nextPriceBadge('no-such'), PRICE_BADGES[1].id);
 });

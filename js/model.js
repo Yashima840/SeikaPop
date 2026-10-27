@@ -243,6 +243,12 @@ export const PRICE_BADGES = [
     text: { cx: 0.498, cy: 0.424, w: 0.54 }, color: 'gold', sub: '#ffffff' },
 ];
 
+/** 台紙のボタンを押したときの次の台紙の id（一覧の順に回り、最後の次は最初へ。知らない id は最初の次）。 */
+export function nextPriceBadge(id) {
+  const i = PRICE_BADGES.findIndex(b => b.id === (id || ''));
+  return PRICE_BADGES[(Math.max(i, 0) + 1) % PRICE_BADGES.length].id;
+}
+
 /** ポップの金額の台紙。黄色い丸（または知らない id）なら null。 */
 export function priceBadgeOf(pop) {
   return PRICE_BADGES.find(b => b.id && b.id === pop?.priceBadge) || null;
