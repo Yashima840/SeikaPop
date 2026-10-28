@@ -1,9 +1,11 @@
 // 電波の弱い売り場でも開けるように、アプリ本体と書体を端末に控えておく。
 // アプリのファイルは「まずネットから、だめなら控え」＝更新がすぐ届く。
+// ネットから取るときはブラウザの控え（GitHub Pages は10分控えさせる）を使わず、毎回サーバーに新しいか確かめる
+// （変わっていなければ中身は送られないので軽い）。控えを使うと、公開した後もしばらく古い版が開く。
 // 書体（Google Fonts）は変わらないので「控えがあれば控え」。
 // ファイルを足したら SHELL にも足し、VERSION を上げること。
 
-const VERSION = 'v23';
+const VERSION = 'v24';
 const SHELL_CACHE = `seikapop-shell-${VERSION}`;
 const FONT_CACHE = 'seikapop-fonts';
 const SHELL = [
@@ -21,7 +23,9 @@ const SHELL = [
 ];
 
 self.addEventListener('install', ev => {
-  ev.waitUntil(caches.open(SHELL_CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  ev.waitUntil(caches.open(SHELL_CACHE)
+    .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'no-cache' }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', ev => {
@@ -51,7 +55,7 @@ self.addEventListener('fetch', ev => {
   if (url.origin !== self.location.origin) return;
   ev.respondWith((async () => {
     try {
-      const res = await fetch(req);
+      const res = await fetch(req, { cache: 'no-cache' });
       if (res.ok) (await caches.open(SHELL_CACHE)).put(req, res.clone());
       return res;
     } catch (err) {

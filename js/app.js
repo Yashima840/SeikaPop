@@ -58,14 +58,29 @@ function route() {
 backBtn.addEventListener('click', () => app.go(backTo));
 document.getElementById('settingsBtn').addEventListener('click', () => app.go('#/settings'));
 window.addEventListener('hashchange', route);
+// スマホはアプリを閉じても裏に残していて、次に開くと読み直さずに前の画面のまま出す（＝古い版のまま）。
+// しばらく裏にあったあと、はじめの画面で表に戻ったときは読み直して最新の版にする
+// （編集中・広告を作っている途中は読み直さない。共有画面から戻ったときに画面が替わると困るため）
+const RELOAD_AFTER_MS = 10 * 60 * 1000;
+let hiddenAt = 0;
 // スマホでアプリを裏へ回したまま閉じられても、書きかけが残るように
 // （画面は離れないので後始末は呼ばず、待っている保存だけを急がせる）
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
+    hiddenAt = Date.now();
     Promise.resolve(leaveCurrent?.flush?.()).catch(err => report('flush on hide', err));
-  } else {
-    flushOutbox();   // 共有画面から戻ったときなど。送れなかった分を送り直す
+    return;
   }
+  const onHome = (location.hash || '#/') === '#/';
+  if (hiddenAt && Date.now() - hiddenAt >= RELOAD_AFTER_MS && onHome && navigator.onLine !== false) {
+    location.reload();
+    return;
+  }
+  flushOutbox();   // 共有画面から戻ったときなど。送れなかった分を送り直す
+  if (navigator.onLine === false) return;   // 電波が無いときは確かめられない（失敗を記録に溜めない）
+  navigator.serviceWorker?.getRegistration()
+    .then(reg => reg?.update())
+    .catch(err => recordError('serviceWorker.update', err));
 });
 // 事務所へ送れなかった分は、電波が戻ったときにも送り直す（flushOutbox は例外を投げない）
 window.addEventListener('online', () => { flushOutbox(); });
