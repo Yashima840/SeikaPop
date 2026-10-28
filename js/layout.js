@@ -54,6 +54,11 @@ export function placeBadge(W, H, w, h, pos, auto) {
   return { x: clamp(x, 0, Math.max(0, W - w)), y: clamp(y, 0, Math.max(0, H - h)), w, h };
 }
 
+/** 2つの範囲 {x, y, w, h} が重なるか（辺が触れるだけなら重ならない）。 */
+export function rectsOverlap(a, b) {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
 /** 置き場所 rect の台紙を dx, dy（画像の px）動かした後の pos（中心の割合）。大きさが変わっても同じ辺りに来るように割合で持つ。 */
 export function moveBadge(rect, dx, dy, W, H) {
   const r = placeBadge(W, H, rect.w, rect.h, { x: (rect.x + rect.w / 2 + dx) / W, y: (rect.y + rect.h / 2 + dy) / H });

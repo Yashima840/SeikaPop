@@ -2,7 +2,7 @@
 // 各テンプレートは photoBox(W, H, pop, measure)＝写真を敷く枠（pop・measure は「金額主役」だけが使う） と draw(ctx, d)＝描画 を持つ。
 // 大きさは幅1080px を基準にした u（W/1080）で書き、縦の長さ（H）に合わせて写真の枠を伸ばす。
 
-import { coverSource, fitFontSize, layoutLines, placeBadge, seededRandom } from './layout.js';
+import { coverSource, fitFontSize, layoutLines, placeBadge, rectsOverlap, seededRandom } from './layout.js';
 import { splitDecimal, taxNote } from './model.js';
 import { VINTAGE } from './image.js';
 import { drawPrice } from './price-design.js';
@@ -239,7 +239,7 @@ const TEXT_GRADIENTS = {
   blackGold: [[0, '#f5c84c'], [0.45, '#17120a'], [1, '#000000']],   // 黒文字: 金文字の白い所を黄色に、黄色の所を黒にした逆の並び
 };
 
-/** 「写真主役」の金額を台紙の絵の上に描く。nameTop は商品名の上端（動かしていなければ、台紙はその上の右に置く）。 */
+/** 「写真主役」の金額を台紙の絵の上に描き、置いた範囲を返す。nameTop は商品名の上端（動かしていなければ、台紙はその上の右に置く）。 */
 function drawBadgePrice(ctx, d, nameTop) {
   const { W, H, u, pop, priceBadge: b } = d;
   const bw = Math.min(500, 560 * b.aspect) * u, bh = bw / b.aspect;   // 縦長の台紙は高さで抑える
@@ -256,6 +256,55 @@ function drawBadgePrice(ctx, d, nameTop) {
     // 枠の高さ（text.h）があれば、単位〜税込のまとまり（数字のおよそ 1.8 倍）がその高さに収まる大きさまで
     font: b.font || FONTS.impact, maxSize: Math.min(150 * u, b.text.h ? bh * b.text.h / 1.8 : Infinity), color: b.color, stops: TEXT_GRADIENTS[b.color], outline: b.outline, lift: b.lift, numScale: b.numScale, numShift: b.numShift, eachApart: true, subColor: b.sub, halo: b.halo || '#1e1c1c',
   });
+  ctx.restore();
+  return place;
+}
+
+/** 「写真主役」の金額を黄色い丸に描き、置いた範囲を返す（台紙を選んでいないとき）。 */
+function drawCirclePrice(ctx, d, nameTop) {
+  const { W, H, u, pop } = d;
+  const r = 168 * u;
+  const place = placeBadge(W, H, r * 2, r * 2, pop.badgePos, { x: W - 60 * u - r * 2, y: Math.max(170 * u, nameTop - r * 2 - 10 * u) });
+  if (d.hit) d.hit.badge = place;   // 編集画面で指で動かせるように
+  const cx = place.x + r, cy = place.y + r;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-6 * Math.PI / 180);
+  withShadow(ctx, 24 * u, 'rgba(0,0,0,0.35)', () => {
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffd23f';
+    ctx.fill();
+  });
+  ctx.lineWidth = 6 * u;
+  ctx.strokeStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(0, 0, r - 14 * u, 0, Math.PI * 2);
+  ctx.stroke();
+  drawPriceBlock(ctx, d, 0, 4 * u, r * 1.55, { font: FONTS.impact, maxSize: 132 * u, color: '#d32f2f', subColor: '#5d3a00', halo: '#ffd23f' });
+  ctx.restore();
+  return place;
+}
+
+/**
+ * 金額の上に重なった商品名を、重なった範囲だけ黒いぼかしの縁取りで描き直す（台紙の明るい色の上でも白い字が読めるように）。
+ * 範囲は台紙の影の分だけ広げて、縁取りの切れ目が台紙の上に出ないようにする。
+ */
+function drawNameOverPrice(ctx, lines, x, y, lh, size, rect, u) {
+  const pad = 28 * u;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x - pad, rect.y - pad, rect.w + pad * 2, rect.h + pad * 2);
+  ctx.clip();
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(0,0,0,0.9)';
+  ctx.shadowBlur = size * 0.12;
+  ctx.lineWidth = size * 0.1;
+  ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+  lines.forEach((ln, i) => ctx.strokeText(ln, x, y + i * lh));
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = '#fff';
+  fillLines(ctx, lines, x, y, lh);
   ctx.restore();
 }
 
@@ -331,36 +380,21 @@ const fresh = {
     }
     const nf = d.nameFont || FONTS.impact;
     const nl = layoutLines(pop.name, maxW, measurer(ctx, nf), { maxSize: 150 * u, minSize: 72 * u, maxLines: 2 });
+    const lh = nl.size * 1.12;
+    const nameY = y - (nl.lines.length - 1) * lh;   // 1行目のベースライン
+    if (nl.lines.length) y -= nl.lines.length * lh;
+    // 金額を先に描き、商品名を手前に描く（金額を指で商品名の上へ動かしても名前が隠れないように）
+    let price = null;
+    if (d.price) price = d.priceBadge ? drawBadgePrice(ctx, d, y) : drawCirclePrice(ctx, d, y);
     if (nl.lines.length) {
       ctx.font = font(nf, nl.size);
       ctx.fillStyle = '#fff';
-      const lh = nl.size * 1.12;
-      withShadow(ctx, 14 * u, 'rgba(0,0,0,0.55)', () => fillLines(ctx, nl.lines, left, y - (nl.lines.length - 1) * lh, lh));
-      y -= nl.lines.length * lh;
-    }
-    if (d.price && d.priceBadge) {
-      drawBadgePrice(ctx, d, y);
-    } else if (d.price) {
-      const r = 168 * u;
-      const place = placeBadge(W, H, r * 2, r * 2, pop.badgePos, { x: W - 60 * u - r * 2, y: Math.max(170 * u, y - r * 2 - 10 * u) });
-      if (d.hit) d.hit.badge = place;   // 編集画面で指で動かせるように
-      const cx = place.x + r, cy = place.y + r;
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(-6 * Math.PI / 180);
-      withShadow(ctx, 24 * u, 'rgba(0,0,0,0.35)', () => {
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffd23f';
-        ctx.fill();
-      });
-      ctx.lineWidth = 6 * u;
-      ctx.strokeStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(0, 0, r - 14 * u, 0, Math.PI * 2);
-      ctx.stroke();
-      drawPriceBlock(ctx, d, 0, 4 * u, r * 1.55, { font: FONTS.impact, maxSize: 132 * u, color: '#d32f2f', subColor: '#5d3a00', halo: '#ffd23f' });
-      ctx.restore();
+      withShadow(ctx, 14 * u, 'rgba(0,0,0,0.55)', () => fillLines(ctx, nl.lines, left, nameY, lh));
+      const nameRect = {
+        x: left, y: nameY - nl.size * 0.9, h: (nl.lines.length - 1) * lh + nl.size * 1.1,
+        w: Math.max(...nl.lines.map(ln => ctx.measureText(ln).width)),
+      };
+      if (price && rectsOverlap(price, nameRect)) drawNameOverPrice(ctx, nl.lines, left, nameY, lh, nl.size, price, u);
     }
   },
 };

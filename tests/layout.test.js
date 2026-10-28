@@ -1,7 +1,7 @@
 // 写真の切り出し・指での移動・文字の折り返し
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coverSource, dragCrop, layoutLines, moveBadge, placeBadge, seededRandom, splitsAreNice, wrapText, zoomCrop } from '../js/layout.js';
+import { coverSource, dragCrop, layoutLines, moveBadge, placeBadge, rectsOverlap, seededRandom, splitsAreNice, wrapText, zoomCrop } from '../js/layout.js';
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} != ${b}`);
 const mono = (t, s = 1) => Array.from(t).length * s;   // 1文字＝大きさぶんの幅
@@ -93,4 +93,12 @@ test('金額の台紙: 動かしていなければデザインの位置、動か
   near(placeBadge(1080, 1080, 400, 400, moveBadge(rect, -100, 50, 1080, 1080), rect), 500, 350);
   // 端の先まで指を動かしても、台紙は画像の中に留まる
   near(placeBadge(1080, 1080, 400, 400, moveBadge(rect, 5000, -5000, 1080, 1080), rect), 680, 0);
+});
+
+test('rectsOverlap: 金額の台紙と商品名が重なるか（辺が触れるだけなら重ならない）', () => {
+  const a = { x: 0, y: 0, w: 100, h: 100 };
+  assert.equal(rectsOverlap(a, { x: 50, y: 50, w: 100, h: 100 }), true);
+  assert.equal(rectsOverlap(a, { x: 100, y: 0, w: 50, h: 50 }), false);
+  assert.equal(rectsOverlap(a, { x: 0, y: 150, w: 50, h: 50 }), false);
+  assert.equal(rectsOverlap(a, { x: 20, y: 20, w: 10, h: 10 }), true);
 });
