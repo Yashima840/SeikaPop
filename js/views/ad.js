@@ -13,6 +13,9 @@ import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../re
 import { confirmBox, debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
 import { queueAd } from '../sender.js';
 import { collectorOf, saveTargets } from '../collect.js';
+import { recordError } from '../crash.js';
+
+const FONT_WAIT_MS = 8000;   // 書体を待つのはここまで（電波が弱くて届かなくても、端末の字で枠に入れる）
 
 function chips(items, onPick, current) {
   return h('div', { class: 'chips' }, items.map(([value, label]) =>
@@ -31,7 +34,11 @@ function popCard(pop, { onOpen, badge = '', selected = false, blocked = false })
   );
 }
 
-/** ポップの今の中身を画像（Canvas）にする。写真の補正・仕上げは編集画面と同じ。 */
+/**
+ * ポップの今の中身を画像（Canvas）にする。写真の補正・仕上げは編集画面と同じ。
+ * スマホ（特に iPhone）は Canvas に使える量が少なく、使い切ると次の画像が作れない（描いても何も出ない・描く途中で止まる）。
+ * 途中で使った写真の Canvas はすぐ手放し、作れなかったときは理由を投げる。
+ */
 async function popImage(pop, settings) {
   let photo = null;
   const blob = pop.photoId ? await store.getPhoto(pop.photoId) : null;
@@ -39,9 +46,18 @@ async function popImage(pop, settings) {
     photo = adjustedCopy(await blobToImage(blob), pop.adjust || {},
       { sepia: !!pop.photoSepia, vintage: !!pop.photoVintage });
   }
-  await ensureFonts(pop, settings);
+  // 書体が届かないまま待ち続けると、後の枠が全部描けなくなる
+  await Promise.race([ensureFonts(pop, settings), new Promise(resolve => setTimeout(resolve, FONT_WAIT_MS))]);
   const cv = document.createElement('canvas');
-  renderPop(cv, pop, photo, settings);
+  try {
+    renderPop(cv, pop, photo, settings);
+    if (!cv.width || !cv.getContext('2d')) throw new Error('canvas unavailable');
+  } catch (err) {
+    cv.width = cv.height = 0;
+    throw new Error(`スマホの画像用の空きが足りないかもしれません（${err.message}）。アプリを閉じて開き直してください`);
+  } finally {
+    if (photo instanceof HTMLCanvasElement) photo.width = photo.height = 0;   // 補正した写真の Canvas を手放す
+  }
   return cv;
 }
 
@@ -76,11 +92,25 @@ export async function showAd(root, app) {
 
   // ---- 画像（選んだポップの分だけ、今の中身から作る）とフレームの飾り ----
   const images = new Map();       // popId → 画像
+  const failed = new Map();       // popId → 画像を作れなかった理由（次に描くときに作り直す）
   const overlays = new Map();     // frameId → { img } か { error }
   async function loadChosen() {
-    for (const id of ad.slots) {
-      if (!id || images.has(id)) continue;
-      images.set(id, await popImage(popById.get(id), settings));
+    const want = new Set(ad.slots.filter(Boolean));
+    // 枠から外したポップの画像は手放す（溜めると、スマホでは次の画像を作る空きが無くなる）
+    for (const [id, cv] of images) {
+      if (!want.has(id)) { cv.width = cv.height = 0; images.delete(id); }
+    }
+    for (const id of failed.keys()) if (!want.has(id)) failed.delete(id);
+    // 1枚作れなくても残りは作る（理由は「出す」の欄に出す）
+    for (const id of want) {
+      if (images.has(id)) continue;
+      try {
+        images.set(id, await popImage(popById.get(id), settings));
+        failed.delete(id);
+      } catch (err) {
+        failed.set(id, err.message);
+        recordError('ad popImage', err);
+      }
     }
     const f = frameOf();
     if (f.overlay && !overlays.has(ad.frameId)) {
@@ -98,6 +128,7 @@ export async function showAd(root, app) {
     for (const id of new Set(ad.slots.filter(Boolean))) {
       const p = exportProblems(popById.get(id));
       if (p.length) out.push(`「${popTitle(popById.get(id))}」: ${p.join('・')}`);
+      if (failed.has(id)) out.push(`「${popTitle(popById.get(id))}」の画像を作れませんでした: ${failed.get(id)}`);
     }
     if (overlayState().error) out.push(overlayState().error);
     return out;
@@ -112,10 +143,18 @@ export async function showAd(root, app) {
     } catch (err) {
       toast(`画像を読み込めませんでした: ${err.message}`, { error: true });
     }
-    await ensureAdFonts(ad, settings, () => toast('文字の書体を読み込めませんでした（電波を確認してください）。端末の字で表示します'));
-    renderAd(canvas, frameOf(), ad, ad.slots.map(id => images.get(id) || null), settings,
-      { overlay: overlayState().img || null, preview: true });
-    updateExportState();
+    await Promise.race([
+      ensureAdFonts(ad, settings, () => toast('文字の書体を読み込めませんでした（電波を確認してください）。端末の字で表示します')),
+      new Promise(resolve => setTimeout(resolve, FONT_WAIT_MS)),
+    ]);
+    try {
+      renderAd(canvas, frameOf(), ad, ad.slots.map(id => images.get(id) || null), settings,
+        { overlay: overlayState().img || null, preview: true });
+    } catch (err) {
+      recordError('ad preview', err);
+      toast(`見本を描けませんでした: ${err.message}（アプリを閉じて開き直してください）`, { error: true });
+    }
+    updateExportState();   // 描けなくても「出す」の欄は今の選び方に合わせる（前の「あと n 枚」を残さない）
   });
 
   // ---- 作りかけの保存 ----
@@ -135,6 +174,7 @@ export async function showAd(root, app) {
     draw();
     save();
     rebuild();
+    updateExportState();   // 描き終わるのを待たずに「あと n 枚」を合わせる
   };
 
   // ---- 入力 ----
