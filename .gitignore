@@ -6,3 +6,5 @@ tools/designer-backup/
 # 受け取り口（Apps Script）のスクリプト ID と取ってきた設定。店（法人アカウント）ごとに違うので公開しない
 .clasp.json
 tools/collector/appsscript.json
+# Claude Code のこの PC だけの許可（受け取り口の本番反映など）。公開しない
+.claude/settings.local.json
