@@ -145,6 +145,12 @@ export function stockOutboxRecord(photoId, title, { id, sender, now = new Date()
   };
 }
 
+/**
+ * ストックの一覧に並べる見本の大きさ（長い辺 px）と JPEG の画質。送るときに端末で作り、受け取り口がまとめて持つ
+ * （ドライブが作る見本は PNG で1枚数十KBあり、一覧を開くたびの通信が重いため。これなら1枚数KB）。
+ */
+export const STOCK_THUMB = Object.freeze({ side: 200, quality: 0.7 });
+
 /** PC からストックへ送る写真の名前（ファイル名から拡張子を外したもの。空なら「写真」）。 */
 export function stockTitleOf(fileName) {
   return String(fileName || '').trim().replace(/\.[a-z0-9]{2,5}$/i, '').trim() || '写真';
@@ -201,13 +207,18 @@ export function filterStock(items, query) {
   return items.filter(x => words.every(w => norm(x.name).includes(w)));
 }
 
-/** 受け取り口へ送る本文。image / photo は { type, data(base64) }。 */
+/**
+ * 受け取り口へ送る本文。image / photo は { type, data(base64) }。
+ * ストックの写真（kind: stock）では、2つ目は写真ではなく一覧に並べる小さい見本（thumb）として送る。
+ */
 export function deliveryBody(record, passcode, image, photo) {
+  const stock = record.kind === 'stock';
   return {
     format: DELIVERY_FORMAT, version: DELIVERY_VERSION, passcode,
     key: record.key, kind: record.kind, title: record.title, sender: record.sender, createdAt: record.createdAt,
     name: deliveryBaseName(record.createdAt, record.sender, record.title, record.id),
-    pop: record.pop, image, photo: photo || null,
+    pop: record.pop, image, photo: stock ? null : photo || null,
+    ...(stock ? { thumb: photo || null } : {}),
   };
 }
 

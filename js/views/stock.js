@@ -3,7 +3,8 @@
 
 import * as store from '../store.js';
 import { filterStock } from '../collect.js';
-import { fetchStockImage, fetchStockList, fetchStockThumbs } from '../sender.js';
+import { fetchStockImage, fetchStockList, fetchStockThumbs, putStockThumbs, stockThumbOf } from '../sender.js';
+import { recordError } from '../crash.js';
 import { h } from '../ui.js';
 
 const THUMBS_PER_ASK = 30;   // 受け取り口が1回に返す見本の数（Code.gs の STOCK_THUMBS_MAX）
@@ -71,8 +72,28 @@ export function openStockPicker({ onPick }) {
       if (!r.ok) { setStatus(`見本を読み込めませんでした: ${r.message}`, true); return; }
       Object.assign(thumbs, r.thumbs);
       renderGrid();
+      if (r.heavy.length) lighten(r.heavy);
     }
     saveCache();
+  }
+
+  /**
+   * 受け取り口に軽い見本が無かった写真（ドライブに直接入れた写真など）は、ドライブの重い見本を端末で縮めて預け直す。
+   * 次からは、どの端末にも軽い見本が届く。うまくいかなくても一覧はそのまま使えるので、記録だけ残す。
+   */
+  async function lighten(ids) {
+    try {
+      const small = {};
+      for (const id of ids) {
+        small[id] = 'data:image/jpeg;base64,' + await store.blobToBase64(await stockThumbOf(await (await fetch(thumbs[id])).blob()));
+      }
+      Object.assign(thumbs, small);
+      saveCache();
+      const r = await putStockThumbs(small);
+      if (!r.ok) recordError('stock thumbs put', new Error(r.message));
+    } catch (err) {
+      recordError('stock thumbs lighten', err);
+    }
   }
 
   async function refresh() {

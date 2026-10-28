@@ -4,8 +4,9 @@
 import * as store from './store.js';
 import {
   adOutboxRecord, collectorOf, deliveryBody, pingBody, popOutboxRecord, readReply, readStockReply, stockItems,
-  stockOutboxRecord, stockRequestBody,
+  STOCK_THUMB, stockOutboxRecord, stockRequestBody,
 } from './collect.js';
+import { shrinkPhoto } from './image.js';
 import { newId } from './model.js';
 import { recordError } from './crash.js';
 
@@ -80,7 +81,7 @@ export async function queueStockPhoto(photoId, title) {
   if (!c.ready) return false;
   const photo = await store.getPhoto(photoId);
   if (!photo) throw new Error('写真の本体が見つかりません');
-  await store.queueDelivery(stockOutboxRecord(photoId, title, { id: newId(), sender: c.sender }), photo, null);
+  await store.queueDelivery(stockOutboxRecord(photoId, title, { id: newId(), sender: c.sender }), photo, await stockThumbOf(photo));
   notify();
   flushOutbox();
   return true;
@@ -92,7 +93,12 @@ export async function queueStockPhoto(photoId, title) {
  */
 export async function sendStockPhoto({ url, passcode, sender }, photo, title, key) {
   const record = stockOutboxRecord(key, title, { id: newId(), sender });
-  return post(url, deliveryBody(record, passcode, await asData(photo), null));
+  return post(url, deliveryBody(record, passcode, await asData(photo), await asData(await stockThumbOf(photo))));
+}
+
+/** ストックの一覧に並べる小さい見本（JPEG）。 */
+export function stockThumbOf(blob) {
+  return shrinkPhoto(blob, STOCK_THUMB.side, STOCK_THUMB.quality);
 }
 
 /** ストックに問い合わせる（読むだけなので控えない）。{ ok, data } か { ok:false, message }。 */
@@ -108,15 +114,30 @@ export async function fetchStockList() {
   return r.ok ? { ok: true, items: stockItems(r.data.items), skipped: Number(r.data.skipped) || 0 } : r;
 }
 
-/** 小さい見本（id → data URL）。無いものは入らない。 */
+/**
+ * 小さい見本（id → data URL）。無いものは入らない。
+ * heavy＝受け取り口に軽い見本がまだ無く、ドライブが作った重い見本を返してきた id（端末で縮めて putStockThumbs で返す）。
+ */
 export async function fetchStockThumbs(ids) {
   const r = await askStock('stock-thumbs', { ids });
   if (!r.ok) return r;
-  const thumbs = {};
+  const thumbs = {}, heavy = [];
   for (const [id, t] of Object.entries(r.data.thumbs || {})) {
-    if (t?.data) thumbs[id] = `data:${t.type || 'image/png'};base64,${t.data}`;
+    if (!t?.data) continue;
+    thumbs[id] = `data:${t.type || 'image/png'};base64,${t.data}`;
+    if (t.drive) heavy.push(id);
   }
-  return { ok: true, thumbs };
+  return { ok: true, thumbs, heavy };
+}
+
+/** 端末で縮めた見本（id → data URL）を受け取り口へ預ける（次からはどの端末にも軽い見本が届く）。 */
+export async function putStockThumbs(thumbs) {
+  const body = {};
+  for (const [id, url] of Object.entries(thumbs)) {
+    const [head, data] = url.split(',');
+    body[id] = { type: /^data:([^;]+)/.exec(head)?.[1] || 'image/jpeg', data };
+  }
+  return askStock('stock-thumbs-put', { thumbs: body });
 }
 
 /** 写真の本体（Blob）。 */

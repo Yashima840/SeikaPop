@@ -133,7 +133,7 @@ export function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.9) {
 }
 
 /** 撮った写真を保存用の大きさ（長辺 maxSide）へ縮めた JPEG にする。 */
-export async function shrinkPhoto(file, maxSide = 1600) {
+export async function shrinkPhoto(file, maxSide = 1600, quality = 0.88) {
   const img = await blobToImage(file);
   const w0 = img.naturalWidth, h0 = img.naturalHeight;
   if (!w0 || !h0) throw new Error('画像の大きさが読み取れませんでした');
@@ -142,7 +142,7 @@ export async function shrinkPhoto(file, maxSide = 1600) {
   cv.width = Math.round(w0 * k);
   cv.height = Math.round(h0 * k);
   cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-  return canvasToBlob(cv, 'image/jpeg', 0.88);
+  return canvasToBlob(cv, 'image/jpeg', quality);
 }
 
 /** 小さく縮めた画素から自動補正の値を決める。 */

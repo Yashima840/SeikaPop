@@ -98,6 +98,7 @@ test('送る本文に合言葉・ファイル名・画像が入る', () => {
   assert.match(body.name, /_佐藤_みかん_r3$/);
   assert.equal(body.image.data, 'AAA');
   assert.equal(body.photo, null);
+  assert.equal('thumb' in body, false, 'ポップには見本を付けない');
 });
 
 test('受け取り口の返事: 合言葉違いは残りも送らずに止める・読めない返事は失敗にする', () => {
@@ -123,9 +124,11 @@ test('写真ストックへ足す控え: 同じ写真は同じ印（2回入れ�
   assert.equal(a.kind, 'stock');
   assert.equal(a.title, 'トマト');
   assert.equal(stockOutboxRecord('p', '', { id: 'x', sender: '' }).title, '写真', '商品名が無くても名前を付ける');
-  const body = deliveryBody(a, PASS, { type: 'image/jpeg', data: 'AAA' }, null);
+  const body = deliveryBody(a, PASS, { type: 'image/jpeg', data: 'AAA' }, { type: 'image/jpeg', data: 'TT' });
   assert.equal(body.kind, 'stock');
   assert.equal(body.pop, null);
+  assert.equal(body.photo, null, 'ストックでは2つ目は写真ではない');
+  assert.equal(body.thumb.data, 'TT', '一覧に並べる見本として送る');
   assert.equal(body.name, '20261027-0830_田中_トマト_r1');
 });
 
