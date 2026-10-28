@@ -107,12 +107,17 @@ export function deliveryKey(kind, id) {
   return `${kind}:${id}`;
 }
 
-/** ドライブに置くファイル名（拡張子なし）。いつ・誰が・何を、が一目で分かるように。端末の時刻で。 */
-export function deliveryBaseName(createdAt, sender, title, id) {
+/**
+ * ドライブに置くファイル名（拡張子なし）。「商品名_産地_作った人_日時_印」（ドライブで名前順に並べると商品ごとにまとまる）。
+ * 産地が無ければその欄ごと省く。日時は端末の時刻で、末尾の印と合わせて同じ名前にならないようにするためのもの。
+ * 「_」は欄の区切りにだけ使う（中身の「_」やドライブで使えない記号は「-」にする）。
+ */
+export function deliveryBaseName(createdAt, sender, title, id, origin = '') {
   const d = new Date(createdAt);
   const stamp = Number.isNaN(d.getTime()) ? 'unknown' : localStamp(d, true);
-  const clean = (s, n) => String(s ?? '').trim().replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, n);
-  return [stamp, clean(sender, 12) || '名前なし', clean(title, 20) || 'pop', String(id).slice(0, 6)].join('_');
+  const clean = (s, n) => String(s ?? '').trim().replace(/[\\/:*?"<>|_]+/g, '-').replace(/\s+/g, ' ').slice(0, n).trim();
+  return [clean(title, 20) || 'pop', clean(origin, 12), clean(sender, 12) || '名前なし', stamp, String(id).slice(0, 6)]
+    .filter(Boolean).join('_');
 }
 
 /** ポップを送るときの控え（送る時点の中身を写し取る。後でポップを直しても送るものは変わらない）。 */
@@ -207,9 +212,19 @@ export function readSavedReply(reply) {
 export function savedItems(list) {
   if (!Array.isArray(list)) return [];
   return list.filter(x => x && typeof x.id === 'string' && typeof x.data === 'string').map(x => ({
-    id: x.id, data: x.data, name: stockLabel(x.name), product: stockProductName(x.name),
+    id: x.id, data: x.data, name: stockLabel(x.name), product: stockProductName(x.name), origin: splitStockName(x.name).origin,
     size: Number(x.size) || 0, updated: String(x.updated || ''),
   }));
+}
+
+/**
+ * 保管したポップを開いたときの並び: 商品名順（探しやすいように）→ 産地 → 新しい順。
+ * かな・カナは同じに並べる。漢字で始まる名前は読みではなく文字の順になる（読みはファイルに無いため）。
+ */
+export function sortSaved(items) {
+  const coll = new Intl.Collator('ja', { numeric: true, sensitivity: 'base' });
+  return [...items].sort((a, b) => coll.compare(a.product, b.product) || coll.compare(a.origin, b.origin)
+    || String(b.updated).localeCompare(String(a.updated)));
 }
 
 /**
@@ -234,19 +249,31 @@ export function stockItems(list) {
   }));
 }
 
-/** ストックのファイル名を { name, sender } に分ける。アプリが付けた日時・送った人・末尾の印と、拡張子は外す。 */
+/**
+ * アプリが付けたファイル名を { name, origin, sender } に分ける。日時・末尾の印と、拡張子は外す。
+ * 今の形「商品名_産地_作った人_日時_印」（産地は無いことがある）と、前の形「日時_作った人_商品名_印」の両方を読む。
+ * PC で入れた名前など、どちらでもなければ名前そのまま。
+ */
 function splitStockName(fileName) {
   const base = String(fileName || '').replace(/\.[a-z0-9]{2,5}$/i, '');
+  const who = s => (s === '名前なし' ? '' : s);
+  const parts = base.split('_');
+  const n = parts.length;
+  if ((n === 4 || n === 5) && /^\d{8}-\d{4}$/.test(parts[n - 2]) && /^[\w-]{1,6}$/.test(parts[n - 1])) {
+    const [name, origin, sender] = n === 5 ? parts : [parts[0], '', parts[1]];
+    return { name: name.trim(), origin: origin.trim(), sender: who(sender) };
+  }
   const m = /^\d{8}-\d{4}_([^_]+)_(.+)_[\w-]{1,6}$/.exec(base);
-  if (!m) return { name: base.trim(), sender: '' };
-  return { name: m[2].trim(), sender: m[1] === '名前なし' ? '' : m[1] };
+  if (m) return { name: m[2].trim(), origin: '', sender: who(m[1]) };
+  return { name: base.trim(), origin: '', sender: '' };
 }
 
-/** 「20261027-0830_田中_トマト_1a2b3c.jpg」→「トマト（田中）」。PC で入れた名前はそのまま（拡張子だけ外す）。 */
+/** 「トマト_熊本県_田中_20261027-0830_1a2b3c.jpg」→「トマト（熊本県・田中）」。PC で入れた名前はそのまま（拡張子だけ外す）。 */
 export function stockLabel(fileName) {
-  const { name, sender } = splitStockName(fileName);
+  const { name, origin, sender } = splitStockName(fileName);
   if (!name) return '（名前なし）';
-  return sender ? `${name}（${sender}）` : name;
+  const sub = [origin, sender].filter(Boolean).join('・');
+  return sub ? `${name}（${sub}）` : name;
 }
 
 /** ストックの写真を選んだときに商品名へ入れる名前（送った人は付けない。読めなければ空）。 */
@@ -272,7 +299,7 @@ export function deliveryBody(record, passcode, image, photo) {
   return {
     format: DELIVERY_FORMAT, version: DELIVERY_VERSION, passcode,
     key: record.key, kind: record.kind, title: record.title, sender: record.sender, createdAt: record.createdAt,
-    name: deliveryBaseName(record.createdAt, record.sender, record.title, record.id),
+    name: deliveryBaseName(record.createdAt, record.sender, record.title, record.id, record.pop?.origin),
     pop: record.pop, image, photo: stock ? null : photo || null,
     ...(stock ? { thumb: photo || null } : {}),
   };

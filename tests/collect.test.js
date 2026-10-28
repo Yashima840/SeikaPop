@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   adOutboxRecord, collectorOf, deliveryBaseName, deliveryBody, makeSetupLink, outboxReplaced,
-  filterStock, parseSetupCode, popOutboxRecord, readReply, readSavedAsset, readSavedReply, readStockReply, savedItems, sortOutbox, stockItems, stockLabel, stockProductName,
+  filterStock, parseSetupCode, popOutboxRecord, readReply, readSavedAsset, readSavedReply, readStockReply, savedItems, sortOutbox, sortSaved, stockItems, stockLabel, stockProductName,
   BUILT_IN_COLLECTOR_URL, makeEasyPasscode, parsePasscodeInput, saveTargets, stockOutboxRecord, stockRequestBody, stockTitleOf, stockFileKey, cleanStockName, DELIVERY_FORMAT,
 } from '../js/collect.js';
 import { createPop } from '../js/model.js';
@@ -56,11 +56,13 @@ test('送り先は URL と合言葉がそろって正しい形のときだけ「
   assert.equal(collectorOf({ collector: { url: URL_OK, passcode: PASS, sender: ' 田中 ' } }).sender, '田中');
 });
 
-test('ファイル名は端末の時刻・名前・商品名で、使えない文字は _ にする', () => {
+test('ファイル名は商品名・産地・作った人・端末の時刻・印の順。「_」は区切りだけで、中身の記号は - にする', () => {
   const local = new Date(2026, 9, 26, 8, 5);   // 日本の朝（UTC だと前日になる時刻）
-  const name = deliveryBaseName(local.toISOString(), '田中', 'トマト/大玉 3個', 'abcdef123');
-  assert.equal(name, '20261026-0805_田中_トマト_大玉_3個_abcdef');
-  assert.equal(deliveryBaseName(local.toISOString(), '', '', 'x'), '20261026-0805_名前なし_pop_x');
+  assert.equal(deliveryBaseName(local.toISOString(), '田中', 'トマト/大玉 3個', 'abcdef123', '熊本県'), 'トマト-大玉 3個_熊本県_田中_20261026-0805_abcdef');
+  assert.equal(deliveryBaseName(local.toISOString(), '田中', 'なす_長', 'x', ''), 'なす-長_田中_20261026-0805_x', '産地が無ければ欄ごと省く');
+  assert.equal(deliveryBaseName(local.toISOString(), '', '', 'x'), 'pop_名前なし_20261026-0805_x');
+  // 作った名前は一覧で読み戻せる
+  assert.equal(stockLabel(deliveryBaseName(local.toISOString(), '田中', 'トマト/大玉', 'abc', '熊本県') + '.jpg'), 'トマト-大玉（熊本県・田中）');
 });
 
 test('ポップの控えは呼んだ時点の中身を写し、端末の中でしか意味の無い写真ID・見本は持たない', () => {
@@ -91,11 +93,11 @@ test('広告は画像だけ（作り直し用のデータを持たない）', ()
 });
 
 test('送る本文に合言葉・ファイル名・画像が入る', () => {
-  const rec = popOutboxRecord({ ...createPop(), name: 'みかん' }, { id: 'r3', sender: '佐藤' });
+  const rec = popOutboxRecord({ ...createPop(), name: 'みかん', origin: '愛媛' }, { id: 'r3', sender: '佐藤' });
   const body = deliveryBody(rec, PASS, { type: 'image/jpeg', data: 'AAA' }, null);
   assert.equal(body.format, DELIVERY_FORMAT);
   assert.equal(body.passcode, PASS);
-  assert.match(body.name, /_佐藤_みかん_r3$/);
+  assert.match(body.name, /^みかん_愛媛_佐藤_\d{8}-\d{4}_r3$/);
   assert.equal(body.image.data, 'AAA');
   assert.equal(body.photo, null);
   assert.equal('thumb' in body, false, 'ポップには見本を付けない');
@@ -129,7 +131,7 @@ test('写真ストックへ足す控え: 同じ写真は同じ印（2回入れ�
   assert.equal(body.pop, null);
   assert.equal(body.photo, null, 'ストックでは2つ目は写真ではない');
   assert.equal(body.thumb.data, 'TT', '一覧に並べる見本として送る');
-  assert.equal(body.name, '20261027-0830_田中_トマト_r1');
+  assert.equal(body.name, 'トマト_田中_20261027-0830_r1');
 });
 
 test('写真ストックの問い合わせの本文と返事: 古い受け取り口はそれと分かる理由を出す', () => {
@@ -161,11 +163,27 @@ test('保管したポップの返事・一覧・作り直し用のデータ: 古
   assert.equal(readSavedAsset(null).ok, false);
 });
 
+test('保管したポップは商品名順（かな・カナは同じ）→ 産地 → 新しい順に並べる', () => {
+  const items = savedItems([
+    { id: '1', data: 'd1', name: 'トマト_熊本県_田中_20261027-0830_a', updated: '2026-10-27' },
+    { id: '2', data: 'd2', name: 'きゅうり_田中_20261020-0830_b', updated: '2026-10-20' },
+    { id: '3', data: 'd3', name: 'とまと_熊本県_佐藤_20261028-0830_c', updated: '2026-10-28' },
+    { id: '4', data: 'd4', name: 'トマト_愛知県_田中_20261026-0830_d', updated: '2026-10-26' },
+    { id: '5', data: 'd5', name: '20261029-0830_田中_キャベツ_e', updated: '2026-10-29' },   // 前の形の名前
+  ]);
+  assert.deepEqual(sortSaved(items).map(i => i.id), ['5', '2', '4', '3', '1']);
+});
+
 test('写真ストックの名前: アプリが付けた日時・印は見せず「商品名（送った人）」、PC で入れた名前はそのまま', () => {
   assert.equal(stockLabel('20261027-0830_田中_完熟トマト_1a2b3c.jpg'), '完熟トマト（田中）');
   assert.equal(stockLabel('20261027-0830_名前なし_トマト_1a2b3c.jpg'), 'トマト');
   assert.equal(stockLabel('シャインマスカット 箱.JPG'), 'シャインマスカット 箱');
   assert.equal(stockLabel(''), '（名前なし）');
+  // 今の形（商品名が先）
+  assert.equal(stockLabel('完熟トマト_熊本県_田中_20261027-0830_1a2b3c.jpg'), '完熟トマト（熊本県・田中）');
+  assert.equal(stockLabel('トマト_名前なし_20261027-0830_1a2b3c.jpg'), 'トマト');
+  assert.equal(stockProductName('完熟トマト_熊本県_田中_20261027-0830_1a2b3c.jpg'), '完熟トマト');
+  assert.equal(stockLabel('トマト_大玉.jpg'), 'トマト_大玉', 'PC で入れた名前はそのまま');
   // 商品名へ入れるのは名前だけ（送った人・日時・印・拡張子は付けない）
   assert.equal(stockProductName('20261027-0830_田中_完熟トマト_1a2b3c.jpg'), '完熟トマト');
   assert.equal(stockProductName('20261027-0830_名前なし_トマト_1a2b3c.jpg'), 'トマト');

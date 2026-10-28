@@ -4,7 +4,7 @@
 import * as store from './store.js';
 import {
   adOutboxRecord, collectorOf, deliveryBody, pingBody, popOutboxRecord, readReply, readSavedAsset, readSavedReply, readStockReply,
-  savedItems, stockItems, STOCK_THUMB, stockOutboxRecord, stockRequestBody,
+  savedItems, sortSaved, stockItems, STOCK_THUMB, stockOutboxRecord, stockRequestBody,
 } from './collect.js';
 import { shrinkPhoto } from './image.js';
 import { newId } from './model.js';
@@ -191,10 +191,10 @@ function blobOf(img) {
 
 // ---- 保管したポップ（みんなで使える場所に保管したものを、どの端末からでも呼び出して直す）----
 
-/** 保管したポップの一覧（新しい順）。{ ok, items } */
+/** 保管したポップの一覧（商品名順）。{ ok, items } */
 export async function fetchSavedList() {
   const r = await askStock('saved-list', {}, null, readSavedReply);
-  return r.ok ? { ok: true, items: savedItems(r.data.items) } : r;
+  return r.ok ? { ok: true, items: sortSaved(savedItems(r.data.items)) } : r;
 }
 
 /** 保管したポップの見本（出した画像の id → data URL）。形は fetchStockThumbs と同じ。 */
