@@ -5,8 +5,8 @@
 import * as store from '../store.js';
 import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
-  AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrame, customFrameProblems,
-  dropMissing, fitSlots, frameFor, FRAME_ORDER, FRAMES, normalizeRows, saveCustomFrame, shotFromAd, toggleShot, usedRows,
+  AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, dayInput, defaultPeriod, normalizePeriod, periodText, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrame, customFrameProblems,
+  dropMissing, fitSlots, FOOTER_TEXT, frameFor, FRAME_ORDER, FRAMES, normalizeRows, saveCustomFrame, shotFromAd, toggleShot, usedRows,
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
 import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../render.js';
@@ -80,6 +80,8 @@ export async function showAd(root, app) {
   let saved = await store.listCustomFrames();   // 名前を付けて保存したカスタムフレーム
   let ad = { ...createAd(), ...await store.getAdDraft() };
   ad.customRows = normalizeRows(ad.customRows);
+  ad.period = normalizePeriod(ad.period);
+  delete ad.showDate;   // 前の「今日の日付を入れる」（日付はもう入れない）
   // 選んでいた保存済みのカスタムが直されていたら、その形に合わせる（消されていたら形だけ残す）
   const savedNow = saved.find(f => f.id === ad.customId);
   if (savedNow) { ad.customRows = savedNow.rows; ad.customName = savedNow.name; ad.customColor = savedNow.color; } else ad.customId = null;
@@ -183,6 +185,41 @@ export async function showAd(root, app) {
     value: ad.title, placeholder: '例: 本日のおすすめ', enterkeyhint: 'done',
     oninput: () => { ad.title = titleInput.value; statusEl.textContent = '保存中…'; draw(); save(); },
   });
+  // ---- 期間のバッジ（入れたいときだけ）。打っている途中で欄を作り直すと字が消えるので、欄は一度だけ作る ----
+  const periodChanged = () => { statusEl.textContent = '保存中…'; draw(); save(); updateExportState(); };
+  const fromInput = h('input', { type: 'date', value: ad.period.from, onchange: () => setDays() });
+  const toInput = h('input', { type: 'date', value: ad.period.to, onchange: () => setDays() });
+  const periodInput = h('input', {
+    value: ad.period.text, placeholder: '例: 10/17(土)～10/19(月) 3日間限り', enterkeyhint: 'done',
+    oninput: () => { ad.period.text = periodInput.value; periodChanged(); },
+  });
+  /** 日付を選んだら、バッジの文字を作り直す（手で直した文字は、日付を選び直すまで残る）。 */
+  const setDays = () => {
+    ad.period.from = fromInput.value;
+    ad.period.to = toInput.value || fromInput.value;
+    const t = periodText(ad.period.from, ad.period.to);
+    if (t) { ad.period.text = t; periodInput.value = t; } else toast('終わりの日は、始まりの日と同じかそれより後にしてください', { error: true });
+    periodChanged();
+  };
+  const periodBox = h('div', { class: 'period-box', hidden: !ad.period.on },
+    h('div', { class: 'row' },
+      h('label', { class: 'field' }, h('span', { class: 'label', text: '始まり' }), fromInput),
+      h('label', { class: 'field' }, h('span', { class: 'label', text: '終わり' }), toInput)),
+    h('label', { class: 'field' }, h('span', { class: 'label', text: 'バッジの文字（日付を選ぶと入ります。手で直してもよい）' }), periodInput));
+  const periodCheck = h('input', {
+    type: 'checkbox', checked: ad.period.on,
+    onchange: ev => {
+      // 前に入れた期間がもう終わっていたら、今日からの3日間で入れ直す
+      if (ev.target.checked && ad.period.to < dayInput(new Date())) {
+        ad.period = defaultPeriod();
+        fromInput.value = ad.period.from; toInput.value = ad.period.to; periodInput.value = ad.period.text;
+      }
+      ad.period.on = ev.target.checked;
+      periodBox.hidden = !ad.period.on;
+      periodChanged();
+    },
+  });
+
   /** フレームを替える。custom＝カスタムのとき { id, name, rows }（保存済みのもの）。 */
   const pickFrame = (id, custom = null) => {
     builder = null;
@@ -341,10 +378,9 @@ export async function showAd(root, app) {
         h('h3', {}, '③ 文字'),
         h('label', { class: 'field' }, h('span', { class: 'label', text: '見出し' }), titleInput,
           chips(AD_TITLES.map(t => [t, t]), v => { ad.title = v; titleInput.value = v; changed(); }, ad.title)),
-        h('label', { class: 'check' },
-          h('input', { type: 'checkbox', checked: ad.showDate, onchange: ev => { ad.showDate = ev.target.checked; changed(); } }),
-          '今日の日付を入れる'),
-        settings.shopName ? null : h('p', { class: 'hint' }, '店名は設定（右上の ⚙）で入れると下の帯に入ります。'),
+        h('label', { class: 'check' }, periodCheck, '期間のバッジを入れる（例: 10/17(土)～10/19(月) 3日間限り）'),
+        periodBox,
+        h('p', { class: 'hint' }, `下の帯には「${FOOTER_TEXT}」が入ります。`),
       ),
     );
   }

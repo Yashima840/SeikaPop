@@ -209,7 +209,7 @@ export async function deleteOutbox(id) {
   await run(['outbox'], 'readwrite', tx => reqDone(tx.objectStore('outbox').delete(id)));
 }
 
-const DEFAULT_SETTINGS = { shopName: '', taxRate: DEFAULT_TAX_RATE, taxRounding: 'decimal' };
+const DEFAULT_SETTINGS = { taxRate: DEFAULT_TAX_RATE, taxRounding: 'decimal' };   // 前の店名（shopName）は使わない（フレームに入れない）
 
 export async function getSettings() {
   const rec = await run(['meta'], 'readonly', tx => reqDone(tx.objectStore('meta').get('settings')));

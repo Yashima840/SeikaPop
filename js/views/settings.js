@@ -1,4 +1,4 @@
-// 設定: 店名・事務所へ送る・バックアップ・保存の状態・エラーの記録。設定用リンクを開いたときの画面（#/setup?…）も
+// 設定: 事務所へ送る・税・バックアップ・保存の状態・エラーの記録。設定用リンクを開いたときの画面（#/setup?…）も
 
 import * as store from '../store.js';
 import { backupFileName } from '../backup.js';
@@ -183,10 +183,6 @@ export async function showSettings(root, app) {
       toast(`設定を保存できませんでした: ${err.message}`, { error: true });
     }
   }, 600);
-  const shopInput = h('input', {
-    value: settings.shopName, placeholder: '例: 青果の○○ ○○店',
-    oninput: () => { settings.shopName = shopInput.value; saveSettings(); },
-  });
 
   const taxError = h('span', { class: 'field-error', text: '' });
   const taxInput = h('input', {
@@ -242,10 +238,6 @@ export async function showSettings(root, app) {
   const collector = await collectorSection(settings, () => app.refresh());
 
   root.replaceChildren(
-    h('section', { class: 'form' },
-      h('h3', {}, 'お店'),
-      h('label', { class: 'field' }, h('span', { class: 'label', text: '店名（ポップの隅に小さく入ります）' }), shopInput),
-    ),
     collector.el,
     h('section', { class: 'form' },
       h('h3', {}, '税'),

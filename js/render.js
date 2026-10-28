@@ -1,7 +1,7 @@
 // ポップを Canvas へ描く・画像ファイルにする。
 
 import {
-  adFileName, badgeFonts, exportFileName, formatDate, NAME_FONTS, nameFontOf, priceBadgeOf, priceTexts, SIZES, upgradeDesign,
+  adFileName, badgeFonts, exportFileName, NAME_FONTS, nameFontOf, priceBadgeOf, priceTexts, SIZES, upgradeDesign,
 } from './model.js';
 import { FONTS, font, measurer, roundRectPath, TEMPLATES } from './templates.js';
 import { canvasToBlob } from './image.js';
@@ -9,6 +9,7 @@ import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.
 import { PRICE_FONTS } from './price-design.js';
 import { canvasMeasure, labelFontList } from './labels.js';
 import { LABEL_DESIGN } from './label-design.js';
+import { FOOTER_TEXT, periodOf } from './frames.js';
 
 export function sizeOf(pop) {
   return SIZES[pop.size] || SIZES.square;
@@ -137,7 +138,7 @@ export async function renderToFile(pop, photo, settings) {
 /** 広告の文字に要る字形を読み込む。読めなくても端末の字で描けるので止めない。 */
 export async function ensureAdFonts(ad, settings, onFail) {
   if (!document.fonts?.load) return;
-  const text = [ad.title, settings?.shopName, '0123456789/()月火水木金土日'].join('');
+  const text = [ad.title, periodOf(ad), FOOTER_TEXT, '0123456789/()～月火水木金土日限り'].join('');
   try {
     await Promise.all([FONTS.impact, FONTS.round].map(f => document.fonts.load(`${f.weight} 40px "${f.family}"`, text)));
   } catch (err) {
@@ -149,7 +150,7 @@ export async function ensureAdFonts(ad, settings, onFail) {
  * 広告を canvas へ描く。images は枠の順の画像（未選択は null）。overlay はフレームの飾り画像（あれば）。
  * 画像は切らずに枠へ丸ごと収める（ポップの価格・税込の表示を欠かさないため）。
  */
-export function renderAd(canvas, frame, ad, images, settings, { overlay = null, preview = false, now = new Date() } = {}) {
+export function renderAd(canvas, frame, ad, images, settings, { overlay = null, preview = false } = {}) {
   const { w: W, h: H } = frame;
   if (canvas.width !== W) canvas.width = W;
   if (canvas.height !== H) canvas.height = H;
@@ -172,6 +173,17 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
       const lh = l.size * 1.15;
       l.lines.forEach((line, i) => ctx.fillText(line, W / 2, head.h / 2 + (i - (l.lines.length - 1) / 2) * lh));
     }
+  }
+
+  // 期間のバッジ（入れたときだけ、見出しの帯のすぐ下の帯）
+  const band = frame.band, period = periodOf(ad);
+  if (band?.h && period) {
+    ctx.fillStyle = band.bg;
+    ctx.fillRect(0, band.y, W, band.h);
+    const size = fitFontSize(period, W - 80, measurer(ctx, FONTS.impact), band.h * 0.58, band.h * 0.3);
+    ctx.font = font(FONTS.impact, size);
+    ctx.fillStyle = band.color;
+    ctx.fillText(period, W / 2, band.y + band.h / 2);
   }
 
   frame.slots.forEach((slot, i) => {
@@ -209,23 +221,11 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
   if (foot?.h) {
     const y0 = H - foot.h;
     if (foot.bg) { ctx.fillStyle = foot.bg; ctx.fillRect(0, y0, W, foot.h); }
-    const size = foot.h * 0.36;
+    // 決まり文句だけ（作った日付・店名は入れない）
+    const size = fitFontSize(FOOTER_TEXT, W - 80, measurer(ctx, FONTS.round), foot.h * 0.4, foot.h * 0.2);
     ctx.fillStyle = foot.color || '#333333';
     ctx.font = font(FONTS.round, size);
-    const dateText = ad.showDate ? formatDate(now) : '';
-    const dateW = dateText ? ctx.measureText(dateText).width + 40 : 0;
-    const shop = String(settings?.shopName || '').trim();
-    if (shop) {
-      ctx.textAlign = dateText ? 'left' : 'center';
-      const shopSize = fitFontSize(shop, W - 96 - dateW, measurer(ctx, FONTS.round), size, size * 0.5);
-      ctx.font = font(FONTS.round, shopSize);
-      ctx.fillText(shop, dateText ? 48 : W / 2, y0 + foot.h / 2);
-    }
-    if (dateText) {
-      ctx.font = font(FONTS.round, size);
-      ctx.textAlign = shop ? 'right' : 'center';
-      ctx.fillText(dateText, shop ? W - 48 : W / 2, y0 + foot.h / 2);
-    }
+    ctx.fillText(FOOTER_TEXT, W / 2, y0 + foot.h / 2);
   }
   ctx.restore();
 }

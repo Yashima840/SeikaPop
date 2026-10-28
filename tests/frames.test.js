@@ -2,8 +2,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  adProblems, adShotKey, cleanCustomFrames, createAd, CUSTOM_COLORS, CUSTOM_ID, customFrame, customFrameProblems, dropMissing, fitSlots,
-  frameFor, frameProblems, FRAME_ORDER, FRAMES, mergeCustomFrames, normalizeRows, saveCustomFrame, toggleShot,
+  adProblems, adShotKey, cleanCustomFrames, createAd, CUSTOM_COLORS, CUSTOM_ID, customFrame, customFrameProblems, dayInput, defaultPeriod,
+  dropMissing, fitSlots, frameFor, frameProblems, FRAME_ORDER, FRAMES, mergeCustomFrames, normalizePeriod, normalizeRows, PERIOD_BAND,
+  periodOf, periodText, saveCustomFrame, toggleShot,
 } from '../js/frames.js';
 import { containRect } from '../js/layout.js';
 
@@ -151,12 +152,59 @@ test('全部の枠が埋まるまで出させない', () => {
   assert.match(adProblems(ad, undefined)[0], /フレーム/);
 });
 
-test('広告の印: 組み合わせ・見出しが違えば別。日付を入れるなら日が変われば別', () => {
+test('広告の印: 組み合わせ・見出し・期間のバッジの文字が違えば別。作った日は関係ない', () => {
   const ad = { ...createAd(), slots: ['a', 'b'] };
-  const d1 = new Date(2026, 9, 22, 7), d2 = new Date(2026, 9, 23, 7);
-  assert.equal(adShotKey(ad, d1), adShotKey({ ...ad }, d1));
-  assert.notEqual(adShotKey(ad, d1), adShotKey({ ...ad, slots: ['b', 'a'] }, d1));
-  assert.notEqual(adShotKey(ad, d1), adShotKey({ ...ad, title: '今週の特売' }, d1));
-  assert.notEqual(adShotKey(ad, d1), adShotKey(ad, d2));
-  assert.equal(adShotKey({ ...ad, showDate: false }, d1), adShotKey({ ...ad, showDate: false }, d2));
+  assert.equal(adShotKey(ad), adShotKey({ ...ad }));
+  assert.notEqual(adShotKey(ad), adShotKey({ ...ad, slots: ['b', 'a'] }));
+  assert.notEqual(adShotKey(ad), adShotKey({ ...ad, title: '今週の特売' }));
+  const on = { ...ad, period: { on: true, text: '10/17(土)～10/19(月) 3日間限り' } };
+  assert.notEqual(adShotKey(ad), adShotKey(on));
+  assert.notEqual(adShotKey(on), adShotKey({ ...on, period: { on: true, text: '10/24(土) 限り' } }));
+  assert.equal(adShotKey(ad), adShotKey({ ...on, period: { ...on.period, on: false } }), '入れないなら文字は関係ない');
+});
+
+test('同梱のフレームも隙間は 5px 前後（余白は作らない）。縦は中身に合わせる', () => {
+  for (const id of FRAME_ORDER) {
+    const f = FRAMES[id];
+    for (const s of f.slots) {
+      assert.ok(s.x >= 4 && s.x <= 6 || f.slots.some(o => Math.abs(s.x - (o.x + o.w) - 5) <= 1), `${id}: 左の端か隣との間`);
+      assert.ok(Math.abs(s.w - s.h) <= 1, `${id}: 正方形`);
+    }
+    assert.ok(Math.abs(f.slots[0].y - (f.header.h + 5)) <= 1, `${id}: 上の帯との間`);
+    const bottom = Math.max(...f.slots.map(s => s.y + s.h));
+    assert.ok(Math.abs(f.h - f.footer.h - bottom - 5) <= 1, `${id}: 下の帯との間`);
+  }
+});
+
+test('期間のバッジ: 日付から「10/17(土)～10/19(月) 3日間限り」を作る。1日だけ・逆順・読めない日付', () => {
+  assert.equal(periodText('2026-10-17', '2026-10-19'), '10/17(土)～10/19(月) 3日間限り');
+  assert.equal(periodText('2026-10-17', '2026-10-17'), '10/17(土) 限り');
+  assert.equal(periodText('2026-10-31', '2026-11-02'), '10/31(土)～11/2(月) 3日間限り', '月をまたぐ');
+  assert.equal(periodText('2026-10-19', '2026-10-17'), '', '終わりが前');
+  assert.equal(periodText('', '2026-10-17'), '');
+  // 初めの値は端末の日付で今日から3日間・入れない（朝9時前に UTC で前日にならない）
+  const morning = new Date(2026, 9, 17, 6, 30);
+  assert.equal(dayInput(morning), '2026-10-17');
+  assert.deepEqual(defaultPeriod(morning), { on: false, from: '2026-10-17', to: '2026-10-19', text: '10/17(土)～10/19(月) 3日間限り' });
+  // 前の作りかけ（期間が無い・壊れている）は「入れない」
+  assert.equal(normalizePeriod(undefined, morning).on, false);
+  assert.deepEqual(normalizePeriod({ on: true, from: 'x', to: '2026-10-20', text: 5 }, morning),
+    { on: true, from: '2026-10-17', to: '2026-10-20', text: '10/17(土)～10/19(月) 3日間限り' });
+});
+
+test('期間のバッジを入れると、見出しの帯の下に帯が入り、枠はその分だけ下へずれる。文字が空なら出せない', () => {
+  const base = { ...createAd(), frameId: 'pair', slots: ['a', 'b'] };
+  const on = { ...base, period: { on: true, text: '10/17(土) 限り' } };
+  const f0 = frameFor(base), f1 = frameFor(on);
+  assert.equal(f0.band, undefined);
+  assert.equal(f1.band.y, f1.header.h);
+  assert.equal(f1.h - f0.h, PERIOD_BAND.h);
+  assert.equal(f1.slots[0].y - f0.slots[0].y, PERIOD_BAND.h);
+  assert.deepEqual(frameProblems(f1), []);
+  assert.equal(periodOf(base), '');
+  assert.equal(periodOf(on), '10/17(土) 限り');
+  assert.deepEqual(adProblems(on, f1), []);
+  assert.match(adProblems({ ...on, period: { on: true, text: '  ' } }, f1)[0], /期間のバッジ/);
+  const custom = frameFor({ ...on, frameId: CUSTOM_ID, customRows: [1, 2, 0, 0, 0, 0] });
+  assert.equal(custom.band.h, PERIOD_BAND.h, 'カスタムでも入る');
 });

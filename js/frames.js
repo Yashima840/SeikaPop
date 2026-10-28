@@ -2,60 +2,83 @@
 //
 // フレームの足し方: FRAMES に1つ足し、FRAME_ORDER に id を足す。座標は出力の px。
 //   slots   画像を置く枠（並び順＝選んだ順）。画像は切らずに枠の中へ丸ごと収める（containRect）
-//   header  上の帯（見出しの文字）／footer 下の帯（店名・日付）。高さ 0 なら描かない
+//   header  上の帯（見出しの文字）／footer 下の帯（決まり文句 FOOTER_TEXT）／band 期間のバッジの帯（入れるときだけ）
 //   overlay 別に用意した飾りの画像（PNG。枠の部分を透明に抜いたもの）。'frames/xxx.png' のように
 //           置き場所を書く。置いたら sw.js の SHELL にも足すこと。画像に文字まで入れたなら header/footer は 0 に
 // 足したら npm test（frameProblems で枠のはみ出しを止める）と tools/gallery.html で見た目を確かめる。
 // カスタムフレーム（広告の画面で行ごとの枚数を選んで作る）は customFrame が行の指定から作る。
 
-import { localStamp, newId } from './model.js';
+import { newId } from './model.js';
 
-export const FRAMES = {
-  // 特売が1品だけの日用。ポップ1枚に日付を入れないので、日付はこの下の帯で入れる
-  single: {
-    label: '1枚', note: '縦 4:5', w: 1080, h: 1350,
-    bg: '#fffaf0', header: { h: 200, bg: '#2f7d43', color: '#ffffff' }, footer: { h: 110, color: '#22603a' },
-    slots: [{ x: 36, y: 224, w: 1008, h: 992 }],
-  },
-  pair: {
-    label: '2枚 横並び', note: '正方形', w: 1080, h: 1080,
-    bg: '#fff8e8', header: { h: 220, bg: '#2f7d43', color: '#ffffff' }, footer: { h: 110, color: '#22603a' },
-    slots: [{ x: 36, y: 349, w: 492, h: 492 }, { x: 552, y: 349, w: 492, h: 492 }],
-  },
-  grid4: {
-    label: '4枚 田の字', note: '縦 4:5', w: 1080, h: 1350,
-    bg: '#fdf6e3', header: { h: 200, bg: '#c62828', color: '#ffffff' }, footer: { h: 110, color: '#8e1c1c' },
-    slots: [
-      { x: 36, y: 216, w: 492, h: 492 }, { x: 552, y: 216, w: 492, h: 492 },
-      { x: 36, y: 732, w: 492, h: 492 }, { x: 552, y: 732, w: 492, h: 492 },
-    ],
-  },
-  trio: {
-    label: '3枚 大1・小2', note: '縦長 9:16', w: 1080, h: 1920,
-    bg: '#f4f2ec', header: { h: 240, bg: '#2f7d43', color: '#ffffff' }, footer: { h: 130, color: '#22603a' },
-    slots: [
-      { x: 36, y: 260, w: 1008, h: 998 },
-      { x: 36, y: 1278, w: 492, h: 492 }, { x: 552, y: 1278, w: 492, h: 492 },
-    ],
-  },
-  stack2: {
-    label: '2枚 縦並び', note: '縦長 9:16', w: 1080, h: 1920,
-    bg: '#fff3e0', header: { h: 260, bg: '#e65100', color: '#ffffff' }, footer: { h: 140, color: '#a33a00' },
-    slots: [{ x: 178, y: 284, w: 724, h: 724 }, { x: 178, y: 1032, w: 724, h: 724 }],
-  },
+// どのフレームも、写真どうし・左右の端・上下の帯との隙間は 5px（余白は作らない）。枠は正方形（ポップは正方形が多い）で、
+// 各行は横幅いっぱいに n 枚を並べ、縦は中身に合わせて伸ばす。同梱のフレームもカスタムも rowsFrame で作る。
+const LAYOUT = { w: 1080, gap: 5, headerH: 200, footerH: 90 };
+// 下の帯に入れる決まり文句（日付・店名は入れない）
+export const FOOTER_TEXT = 'なくなり次第終了いたします。画像はイメージです';
+// 期間のバッジ（「10/17(土)～10/19(月) 3日間限り」）。入れたいときだけ、見出しの帯のすぐ下に帯で差し込む
+export const PERIOD_BAND = { h: 110, bg: '#ffe14d', color: '#c62828' };
+
+/** 縦横の比から、フレームを選ぶ欄に添える形の目安。 */
+function shapeNote(w, h) {
+  const r = h / w;
+  return r <= 1.08 ? '正方形' : r <= 1.4 ? '縦長' : 'とても縦長';
+}
+
+/**
+ * 行ごとの枚数（上から。0 の行は渡さない）からフレームを作る。使う行が無ければ null。
+ * band＝期間のバッジの帯を入れるか。header/footer は色（{ bg, color }・{ color }）。
+ */
+function rowsFrame(used, { label, header, footer, bg, band = false }) {
+  if (!used.length) return null;
+  const { w: W, gap, headerH, footerH } = LAYOUT;
+  const bandH = band ? PERIOD_BAND.h : 0;
+  const innerW = W - 2 * gap;
+  const size = used.map(n => (innerW - (n - 1) * gap) / n);   // 枠の一辺（正方形）
+  const top = headerH + bandH;
+  const H = Math.round(top + gap + size.reduce((x, y) => x + y, 0) + (used.length - 1) * gap + gap + footerH);
+  let y = top + gap;
+  const slots = [];
+  used.forEach((n, r) => {
+    // 端は丸めてから幅を決める（行ごとに 1px ずれて見えないように）
+    const y0 = Math.round(y), y1 = Math.round(y + size[r]);
+    for (let i = 0; i < n; i++) {
+      const xa = Math.round(gap + i * (size[r] + gap)), xb = Math.round(gap + i * (size[r] + gap) + size[r]);
+      slots.push({ x: xa, y: y0, w: xb - xa, h: y1 - y0 });
+    }
+    y += size[r] + gap;
+  });
+  return {
+    label, note: shapeNote(W, H), w: W, h: H, bg,
+    header: { h: headerH, ...header }, footer: { h: footerH, ...footer },
+    ...(band ? { band: { y: headerH, ...PERIOD_BAND } } : {}),
+    slots,
+  };
+}
+
+// 同梱のフレーム（rows＝行ごとの枚数）。足すときは FRAME_DEFS に1つ足し、FRAME_ORDER に id を足す
+const FRAME_DEFS = {
+  // 特売が1品だけの日用
+  single: { label: '1枚', rows: [1], bg: '#fffaf0', header: { bg: '#2f7d43', color: '#ffffff' }, footer: { color: '#22603a' } },
+  pair: { label: '2枚 横並び', rows: [2], bg: '#fff8e8', header: { bg: '#2f7d43', color: '#ffffff' }, footer: { color: '#22603a' } },
+  stack2: { label: '2枚 縦並び', rows: [1, 1], bg: '#fff3e0', header: { bg: '#e65100', color: '#ffffff' }, footer: { color: '#a33a00' } },
+  trio: { label: '3枚 大1・小2', rows: [1, 2], bg: '#f4f2ec', header: { bg: '#2f7d43', color: '#ffffff' }, footer: { color: '#22603a' } },
+  grid4: { label: '4枚 田の字', rows: [2, 2], bg: '#fdf6e3', header: { bg: '#c62828', color: '#ffffff' }, footer: { color: '#8e1c1c' } },
 };
+const builtIn = (id, band = false) => {
+  const d = FRAME_DEFS[id];
+  return d ? rowsFrame(d.rows, { ...d, band }) : null;
+};
+/** 同梱のフレーム（期間のバッジ無しの形。選ぶ欄・見本帳で使う）。 */
+export const FRAMES = Object.fromEntries(Object.keys(FRAME_DEFS).map(id => [id, builtIn(id)]));
 export const FRAME_ORDER = ['single', 'pair', 'stack2', 'trio', 'grid4'];  // 枚数の少ない順
 
 // ---- カスタムフレーム: 6行それぞれに 0（使わない）〜3 枚。使う行だけを上から詰めて並べる ----
 export const CUSTOM_ID = 'custom';
 export const CUSTOM_ROWS = 6;
 export const CUSTOM_MAX_PER_ROW = 3;
-const CUSTOM = {
-  w: 1080, gap: 5,   // 写真どうし・左右の端・上下の帯との隙間は、どれもほぼ無し（5px）
-  bg: '#fdf6e3', headerH: 200, footerH: 110,
-};
+const CUSTOM_BG = '#fdf6e3';
 export const CUSTOM_NAME_MAX = 20;
-// 見出しの帯の色（選ぶ順）。foot＝下の帯の文字（店名・日付）の色。帯の文字は白
+// 見出しの帯の色（選ぶ順）。foot＝下の帯の文字の色。帯の文字は白
 export const CUSTOM_COLORS = [
   { id: 'navy', label: '濃い青', bg: '#1d3f8a', foot: '#1d3f8a' },
   { id: 'black', label: '黒', bg: '#1a1a1a', foot: '#1a1a1a' },
@@ -79,39 +102,72 @@ export function normalizeRows(rows) {
 export const usedRows = rows => normalizeRows(rows).filter(n => n > 0);
 
 /**
- * 行ごとの枚数からフレームを作る。使う行が無ければ null。name を渡すと名前入りの label にする。color＝見出しの色の id。
- * 各行は横幅いっぱい（左右の端も 5px）に n 枚を並べ、枠は正方形（ポップは正方形が多い）。
- * 縦は中身に合わせて伸ばす（行が多いと縦長になる。枠を縮めて左右に余白を作ることはしない）。
+ * 行ごとの枚数からカスタムのフレームを作る。使う行が無ければ null。name を渡すと名前入りの label にする。color＝見出しの色の id。
+ * band＝期間のバッジの帯を入れるか。
  */
-export function customFrame(rows, name = '', color = CUSTOM_COLOR_DEFAULT) {
+export function customFrame(rows, name = '', color = CUSTOM_COLOR_DEFAULT, { band = false } = {}) {
   const used = usedRows(rows);
   if (!used.length) return null;
-  const { w: W, gap, headerH, footerH } = CUSTOM;
   const c = customColorOf(color);
-  const innerW = W - 2 * gap;
-  const size = used.map(n => (innerW - (n - 1) * gap) / n);   // 枠の一辺（正方形）
-  const H = Math.round(headerH + gap + size.reduce((a, b) => a + b, 0) + (used.length - 1) * gap + gap + footerH);
-  let y = headerH + gap;
-  const slots = [];
-  used.forEach((n, r) => {
-    // 端は丸めてから幅を決める（行ごとに 1px ずれて見えないように）
-    const y0 = Math.round(y), y1 = Math.round(y + size[r]);
-    for (let i = 0; i < n; i++) {
-      const xa = Math.round(gap + i * (size[r] + gap)), xb = Math.round(gap + i * (size[r] + gap) + size[r]);
-      slots.push({ x: xa, y: y0, w: xb - xa, h: y1 - y0 });
-    }
-    y += size[r] + gap;
+  const shape = `${used.length}行 ${used.reduce((x, y) => x + y, 0)}枚`;
+  const f = rowsFrame(used, {
+    label: name ? `${name}（${shape}）` : `カスタム（${shape}）`, bg: CUSTOM_BG,
+    header: { bg: c.bg, color: '#ffffff' }, footer: { color: c.foot }, band,
   });
-  const shape = `${used.length}行 ${slots.length}枚`;
+  return { ...f, note: `${used.join('・')}枚` };
+}
+
+/** 広告で使うフレーム（カスタムなら行の指定から作る。期間のバッジを入れるなら、その帯の分だけ下へずらす）。無ければ null。 */
+export function frameFor(ad) {
+  const band = !!periodOf(ad);
+  return ad.frameId === CUSTOM_ID ? customFrame(ad.customRows, ad.customName || '', ad.customColor, { band }) : builtIn(ad.frameId, band);
+}
+
+// ---- 期間のバッジ（ad.period = { on, from, to, text }。from・to は 'YYYY-MM-DD'（端末の日付））----
+
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+const parseDay = s => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+};
+const dayLabel = d => `${d.getMonth() + 1}/${d.getDate()}(${WEEK[d.getDay()]})`;
+
+/** 端末の日付の 'YYYY-MM-DD'（toISOString は UTC なので使わない）。 */
+export function dayInput(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** 期間から入れる文字を作る:「10/17(土)～10/19(月) 3日間限り」・1日だけなら「10/17(土) 限り」。読めない・逆順なら ''。 */
+export function periodText(from, to) {
+  const a = parseDay(from), b = parseDay(to || from);
+  if (!a || !b || b < a) return '';
+  const days = Math.round((b - a) / 86400000) + 1;
+  return days === 1 ? `${dayLabel(a)} 限り` : `${dayLabel(a)}～${dayLabel(b)} ${days}日間限り`;
+}
+
+/** 期間のバッジの初めの値（今日から3日間。入れるかどうかは「入れない」）。 */
+export function defaultPeriod(now = new Date()) {
+  const from = dayInput(now);
+  const to = dayInput(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2));
+  return { on: false, from, to, text: periodText(from, to) };
+}
+
+/** 保存してある期間を読める形にそろえる（無い古い作りかけは「入れない」）。 */
+export function normalizePeriod(p, now = new Date()) {
+  const d = defaultPeriod(now);
+  if (!p || typeof p !== 'object') return d;
   return {
-    label: name ? `${name}（${shape}）` : `カスタム（${shape}）`, note: `${used.join('・')}枚`, w: W, h: H,
-    bg: CUSTOM.bg, header: { h: headerH, bg: c.bg, color: '#ffffff' }, footer: { h: footerH, color: c.foot }, slots,
+    on: p.on === true,
+    from: parseDay(p.from) ? p.from : d.from,
+    to: parseDay(p.to) ? p.to : d.to,
+    text: typeof p.text === 'string' ? p.text : d.text,
   };
 }
 
-/** 広告で使うフレーム（カスタムなら行の指定から作る）。無ければ null。 */
-export function frameFor(ad) {
-  return ad.frameId === CUSTOM_ID ? customFrame(ad.customRows, ad.customName || '', ad.customColor) : FRAMES[ad.frameId] || null;
+/** バッジに入れる文字（入れないなら ''）。 */
+export function periodOf(ad) {
+  return ad?.period?.on ? String(ad.period.text || '').trim() : '';
 }
 
 // ---- 名前を付けて保存したカスタムフレーム（{ id, name, rows, color, updatedAt } の一覧）----
@@ -169,7 +225,7 @@ export function frameProblems(frame) {
   const { w, h } = frame;
   if (!(w > 0 && h > 0)) out.push('w・h（出力の大きさ）がありません');
   if (!Array.isArray(frame.slots) || !frame.slots.length) out.push('slots（画像の枠）が1つもありません');
-  const top = frame.header?.h || 0, bottom = h - (frame.footer?.h || 0);
+  const top = (frame.header?.h || 0) + (frame.band?.h || 0), bottom = h - (frame.footer?.h || 0);
   (frame.slots || []).forEach((s, i) => {
     if (!(s.w > 0 && s.h > 0)) out.push(`${i + 1}枚目の枠の大きさがありません`);
     else if (s.x < 0 || s.y < 0 || s.x + s.w > w || s.y + s.h > h) out.push(`${i + 1}枚目の枠が画像からはみ出しています`);
@@ -183,7 +239,7 @@ export function createAd(now = new Date()) {
   return {
     // カスタムのときは、使っている保存済みのもの（customId・customName）と形（customRows）を持つ
     frameId: FRAME_ORDER[0], customId: null, customName: '', customRows: normalizeRows([]), customColor: CUSTOM_COLOR_DEFAULT,
-    title: AD_TITLES[0], showDate: true, slots: [],
+    title: AD_TITLES[0], period: defaultPeriod(now), slots: [],
     updatedAt: now.toISOString(),
   };
 }
@@ -221,21 +277,24 @@ export function dropMissing(slots, existingIds) {
 /** 出力を止める理由（空なら出せる）。 */
 export function adProblems(ad, frame) {
   if (!frame) return ['フレームを選んでください'];
+  const out = [];
   const empty = ad.slots.filter(s => !s).length;
-  return empty ? [`あと ${empty} 枚、「② ポップを選ぶ」から選んでください`] : [];
+  if (empty) out.push(`あと ${empty} 枚、「② ポップを選ぶ」から選んでください`);
+  if (ad.period?.on && !periodOf(ad)) out.push('期間のバッジに入れる文字がありません（日付を選び直すか、文字を入れてください）');
+  return out;
 }
 
-/** 同じ組み合わせを2回残さないための印。日付を入れる日は、日が変われば別の画像になる。 */
-export function adShotKey(ad, now = new Date()) {
-  const day = ad.showDate ? `@${localStamp(now)}` : '';
+/** 同じ組み合わせを2回残さないための印。期間のバッジの文字が違えば別の画像になる。 */
+export function adShotKey(ad) {
+  const period = periodOf(ad) ? `@${periodOf(ad)}` : '';
   const frame = ad.frameId === CUSTOM_ID
     ? `${CUSTOM_ID}:${usedRows(ad.customRows).join('-')}:${customColorOf(ad.customColor).id}` : ad.frameId;
-  return `ad:${frame}|${ad.slots.join(',')}|${ad.title}${day}`;
+  return `ad:${frame}|${ad.slots.join(',')}|${ad.title}${period}`;
 }
 
 export function shotFromAd(ad, frame, { thumb }, now = new Date()) {
   return {
-    id: newId(), kind: 'ad', title: `広告（${frame.label}）`, key: adShotKey(ad, now), w: frame.w, h: frame.h,
+    id: newId(), kind: 'ad', title: `広告（${frame.label}）`, key: adShotKey(ad), w: frame.w, h: frame.h,
     thumb, createdAt: now.toISOString(),
   };
 }
