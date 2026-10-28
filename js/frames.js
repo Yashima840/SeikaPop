@@ -12,7 +12,7 @@ import { newId } from './model.js';
 
 // どのフレームも、写真どうし・左右の端・上下の帯との隙間は 5px（余白は作らない）。枠は正方形（ポップは正方形が多い）で、
 // 各行は横幅いっぱいに n 枚を並べ、縦は中身に合わせて伸ばす。同梱のフレームもカスタムも rowsFrame で作る。
-const LAYOUT = { w: 1080, gap: 5, headerH: 200, footerH: 90 };
+const LAYOUT = { w: 1080, gap: 5, headerH: 200, footerH: 64 };
 // 下の帯に入れる決まり文句（日付・店名は入れない）
 export const FOOTER_TEXT = 'なくなり次第終了いたします。画像はイメージです';
 // 期間のバッジ（「10/17(土)～10/19(月) 3日間限り」）。入れたいときだけ、見出しの帯のすぐ下に帯で差し込む
@@ -117,20 +117,27 @@ export function customFrame(rows, name = '', color = CUSTOM_COLOR_DEFAULT, { ban
   return { ...f, note: `${used.join('・')}枚` };
 }
 
-/** 広告で使うフレーム（カスタムなら行の指定から作る。期間のバッジを入れるなら、その帯の分だけ下へずらす）。無ければ null。 */
+/**
+ * 広告で使うフレーム（カスタムなら行の指定から作る）。無ければ null。
+ * 期間のバッジを入れるなら、その帯の分だけ下へずらす。ad.headColor（CUSTOM_COLORS の id）があれば見出しの帯と下の帯の文字をその色にする。
+ */
 export function frameFor(ad) {
   const band = !!periodOf(ad);
-  return ad.frameId === CUSTOM_ID ? customFrame(ad.customRows, ad.customName || '', ad.customColor, { band }) : builtIn(ad.frameId, band);
+  const f = ad.frameId === CUSTOM_ID ? customFrame(ad.customRows, ad.customName || '', ad.customColor, { band }) : builtIn(ad.frameId, band);
+  const c = f && CUSTOM_COLORS.find(x => x.id === ad.headColor);
+  return c ? { ...f, header: { ...f.header, bg: c.bg }, footer: { ...f.footer, color: c.foot } } : f;
 }
 
-// ---- 期間のバッジ（ad.period = { on, from, to, text }。from・to は 'YYYY-MM-DD'（端末の日付））----
+// ---- 期間のバッジ（ad.period = { on, from, days }。from は 'YYYY-MM-DD'（端末の日付）、days は何日間か）----
 
+export const PERIOD_DAYS = [1, 2, 3, 4, 5, 6, 7, 10, 14];   // 日数の候補
+const DAYS_MAX = 31;
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 const parseDay = s => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
 };
-const dayLabel = d => `${d.getMonth() + 1}/${d.getDate()}(${WEEK[d.getDay()]})`;
+const validDays = n => Number.isInteger(n) && n >= 1 && n <= DAYS_MAX;
 
 /** 端末の日付の 'YYYY-MM-DD'（toISOString は UTC なので使わない）。 */
 export function dayInput(d) {
@@ -138,36 +145,48 @@ export function dayInput(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** 期間から入れる文字を作る:「10/17(土)～10/19(月) 3日間限り」・1日だけなら「10/17(土) 限り」。読めない・逆順なら ''。 */
-export function periodText(from, to) {
-  const a = parseDay(from), b = parseDay(to || from);
-  if (!a || !b || b < a) return '';
-  const days = Math.round((b - a) / 86400000) + 1;
-  return days === 1 ? `${dayLabel(a)} 限り` : `${dayLabel(a)}～${dayLabel(b)} ${days}日間限り`;
+/** 始まりの日から days 日間の終わりの日（'YYYY-MM-DD'）。読めなければ ''。 */
+export function periodEnd(from, days) {
+  const a = parseDay(from);
+  if (!a || !validDays(days)) return '';
+  return dayInput(new Date(a.getFullYear(), a.getMonth(), a.getDate() + days - 1));
+}
+
+/**
+ * バッジの文字を、大きさの違う切れ目に分ける（月は小さく・日は大きく）。読めなければ []。
+ * k: 'month'（10/）・'day'（17）・'week'（(土)）・'sep'（～）・'tail'（ 3日間限り）。
+ */
+export function periodParts(from, days) {
+  const a = parseDay(from), end = periodEnd(from, days);
+  if (!a || !end) return [];
+  const date = d => [{ t: `${d.getMonth() + 1}/`, k: 'month' }, { t: String(d.getDate()), k: 'day' }, { t: `(${WEEK[d.getDay()]})`, k: 'week' }];
+  if (days === 1) return [...date(a), { t: ' 限り', k: 'tail' }];
+  return [...date(a), { t: '～', k: 'sep' }, ...date(parseDay(end)), { t: ` ${days}日間限り`, k: 'tail' }];
+}
+
+/** バッジの文字:「10/17(土)～10/19(月) 3日間限り」・1日だけなら「10/17(土) 限り」。読めなければ ''。 */
+export function periodText(from, days) {
+  return periodParts(from, days).map(p => p.t).join('');
 }
 
 /** 期間のバッジの初めの値（今日から3日間。入れるかどうかは「入れない」）。 */
 export function defaultPeriod(now = new Date()) {
-  const from = dayInput(now);
-  const to = dayInput(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2));
-  return { on: false, from, to, text: periodText(from, to) };
+  return { on: false, from: dayInput(now), days: 3 };
 }
 
-/** 保存してある期間を読める形にそろえる（無い古い作りかけは「入れない」）。 */
+/** 保存してある期間を読める形にそろえる（無い・壊れた作りかけは「入れない」。前の { from, to } は日数に直す）。 */
 export function normalizePeriod(p, now = new Date()) {
   const d = defaultPeriod(now);
   if (!p || typeof p !== 'object') return d;
-  return {
-    on: p.on === true,
-    from: parseDay(p.from) ? p.from : d.from,
-    to: parseDay(p.to) ? p.to : d.to,
-    text: typeof p.text === 'string' ? p.text : d.text,
-  };
+  const from = parseDay(p.from) ? p.from : d.from;
+  let days = Number(p.days);
+  if (!validDays(days) && parseDay(p.to) && parseDay(p.from)) days = Math.round((parseDay(p.to) - parseDay(p.from)) / 86400000) + 1;
+  return { on: p.on === true, from, days: validDays(days) ? days : d.days };
 }
 
 /** バッジに入れる文字（入れないなら ''）。 */
 export function periodOf(ad) {
-  return ad?.period?.on ? String(ad.period.text || '').trim() : '';
+  return ad?.period?.on ? periodText(ad.period.from, Number(ad.period.days)) : '';
 }
 
 // ---- 名前を付けて保存したカスタムフレーム（{ id, name, rows, color, updatedAt } の一覧）----
@@ -239,7 +258,7 @@ export function createAd(now = new Date()) {
   return {
     // カスタムのときは、使っている保存済みのもの（customId・customName）と形（customRows）を持つ
     frameId: FRAME_ORDER[0], customId: null, customName: '', customRows: normalizeRows([]), customColor: CUSTOM_COLOR_DEFAULT,
-    title: AD_TITLES[0], period: defaultPeriod(now), slots: [],
+    title: AD_TITLES[0], headColor: '', period: defaultPeriod(now), slots: [],
     updatedAt: now.toISOString(),
   };
 }
@@ -280,16 +299,17 @@ export function adProblems(ad, frame) {
   const out = [];
   const empty = ad.slots.filter(s => !s).length;
   if (empty) out.push(`あと ${empty} 枚、「② ポップを選ぶ」から選んでください`);
-  if (ad.period?.on && !periodOf(ad)) out.push('期間のバッジに入れる文字がありません（日付を選び直すか、文字を入れてください）');
+  if (ad.period?.on && !periodOf(ad)) out.push('期間のバッジの始まりの日・日数を選び直してください');
   return out;
 }
 
-/** 同じ組み合わせを2回残さないための印。期間のバッジの文字が違えば別の画像になる。 */
+/** 同じ組み合わせを2回残さないための印。見出しの色・期間のバッジの文字が違えば別の画像になる。 */
 export function adShotKey(ad) {
   const period = periodOf(ad) ? `@${periodOf(ad)}` : '';
   const frame = ad.frameId === CUSTOM_ID
     ? `${CUSTOM_ID}:${usedRows(ad.customRows).join('-')}:${customColorOf(ad.customColor).id}` : ad.frameId;
-  return `ad:${frame}|${ad.slots.join(',')}|${ad.title}${period}`;
+  const color = ad.headColor ? `#${ad.headColor}` : '';
+  return `ad:${frame}${color}|${ad.slots.join(',')}|${ad.title}${period}`;
 }
 
 export function shotFromAd(ad, frame, { thumb }, now = new Date()) {

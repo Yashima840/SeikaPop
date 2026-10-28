@@ -9,7 +9,7 @@ import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.
 import { PRICE_FONTS } from './price-design.js';
 import { canvasMeasure, labelFontList } from './labels.js';
 import { LABEL_DESIGN } from './label-design.js';
-import { FOOTER_TEXT, periodOf } from './frames.js';
+import { FOOTER_TEXT, periodOf, periodParts } from './frames.js';
 
 export function sizeOf(pop) {
   return SIZES[pop.size] || SIZES.square;
@@ -176,15 +176,7 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
   }
 
   // 期間のバッジ（入れたときだけ、見出しの帯のすぐ下の帯）
-  const band = frame.band, period = periodOf(ad);
-  if (band?.h && period) {
-    ctx.fillStyle = band.bg;
-    ctx.fillRect(0, band.y, W, band.h);
-    const size = fitFontSize(period, W - 80, measurer(ctx, FONTS.impact), band.h * 0.58, band.h * 0.3);
-    ctx.font = font(FONTS.impact, size);
-    ctx.fillStyle = band.color;
-    ctx.fillText(period, W / 2, band.y + band.h / 2);
-  }
+  if (frame.band?.h && periodOf(ad)) drawPeriod(ctx, frame.band, W, periodParts(ad.period.from, Number(ad.period.days)));
 
   frame.slots.forEach((slot, i) => {
     const img = images[i];
@@ -222,10 +214,39 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
     const y0 = H - foot.h;
     if (foot.bg) { ctx.fillStyle = foot.bg; ctx.fillRect(0, y0, W, foot.h); }
     // 決まり文句だけ（作った日付・店名は入れない）
-    const size = fitFontSize(FOOTER_TEXT, W - 80, measurer(ctx, FONTS.round), foot.h * 0.4, foot.h * 0.2);
+    const size = fitFontSize(FOOTER_TEXT, W - 80, measurer(ctx, FONTS.round), Math.min(26, foot.h * 0.42), 16);   // 小さく添える程度
     ctx.fillStyle = foot.color || '#333333';
     ctx.font = font(FONTS.round, size);
     ctx.fillText(FOOTER_TEXT, W / 2, y0 + foot.h / 2);
+  }
+  ctx.restore();
+}
+
+// 期間のバッジの文字の大きさ（日を 1 として）。月は小さく（日にちの方が大事）
+const PERIOD_SCALE = { month: 0.55, day: 1, week: 0.6, sep: 0.7, tail: 0.72 };
+
+/** 期間のバッジを帯の右へ寄せて描く。大きさの違う字は下の線（ベースライン）をそろえる。入り切らなければ全体を縮める。 */
+function drawPeriod(ctx, band, W, parts) {
+  ctx.save();
+  ctx.fillStyle = band.bg;
+  ctx.fillRect(0, band.y, W, band.h);
+  const pad = 44;
+  const widthAt = base => parts.reduce((sum, p) => {
+    ctx.font = font(FONTS.impact, base * PERIOD_SCALE[p.k]);
+    return sum + ctx.measureText(p.t).width;
+  }, 0);
+  let base = band.h * 0.7;
+  const total = widthAt(base);
+  if (total > W - 2 * pad) base *= (W - 2 * pad) / total;
+  let x = W - pad - widthAt(base);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = band.color;
+  const baseline = band.y + band.h / 2 + base * 0.36;
+  for (const p of parts) {
+    ctx.font = font(FONTS.impact, base * PERIOD_SCALE[p.k]);
+    ctx.fillText(p.t, x, baseline);
+    x += ctx.measureText(p.t).width;
   }
   ctx.restore();
 }

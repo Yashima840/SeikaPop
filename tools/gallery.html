@@ -75,7 +75,7 @@
       const f = FRAMES[id];
       for (const [label, ad, imgs, preview] of [
         ['全部埋めた', { title: '本日のおすすめ' }, f.slots.map((_, i) => pops[i % pops.length]), false],
-        ['長い見出し・空き枠（プレビュー）', { title: '朝採れ入荷！産地直送の旬の味覚フェア開催中', period: { on: true, text: '10/17(土)～10/19(月) 3日間限り' } }, f.slots.map((_, i) => (i ? null : pops[1])), true],
+        ['長い見出し・空き枠（プレビュー）', { title: '朝採れ入荷！産地直送の旬の味覚フェア開催中', period: { on: true, from: '2026-10-17', days: 3 } }, f.slots.map((_, i) => (i ? null : pops[1])), true],
       ]) {
         const cv = document.createElement('canvas');
         await ensureAdFonts(ad, settings);
