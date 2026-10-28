@@ -19,6 +19,8 @@
 // 保管したポップ（「青果ポップ 成果物」フォルダ）: どの端末からでも呼び出して、価格などを直して使い回す。
 //   action: 'saved-list'（作り直し用のデータ .json がある分の一覧）／'saved-thumbs'・'saved-thumbs-put'（見本。写真ストックと同じ仕組み）／
 //   'saved-get'（作り直し用のデータ）。返事には saved: 1 を付ける（この版の受け取り口だと分かるように）。
+//   'saved-lock'（消してはいけないものに鍵をかける・外す。.json の「説明」欄に SAVED_LOCK を書く＝ドライブでも見える）／
+//   'saved-trash'（.json と .jpg をゴミ箱へ。鍵のかかったものは断る。30日はドライブのゴミ箱から戻せる）。
 
 var FOLDER_NAME = '青果ポップ 成果物';
 var STOCK_FOLDER_NAME = '青果ポップ 写真ストック';
@@ -30,6 +32,7 @@ var THUMBS_FILE_NAME = '青果ポップ 写真ストックの見本（消して�
 var STOCK_THUMB_MAX_CHARS = 60000;   // 見本1枚の上限（base64 の文字数。アプリの見本はふつう 1万文字ほど）
 var SAVED_THUMBS_FILE_NAME = '青果ポップ 成果物の見本（消しても作り直されます）.json';
 var SAVED_MAX_BYTES = 30 * 1024 * 1024;   // 作り直し用のデータ1件の上限（写真が入っている）
+var SAVED_LOCK = '🔒 ロック中（青果ポップのアプリからは消せません）';   // 鍵のかかった .json の「説明」欄
 
 // 見本をまとめて持つ先。写真ストックと保管したポップで、同じ仕組みを別のファイルで使う
 var STOCK_THUMBS = { prop: 'STOCK_THUMBS_FILE_ID', name: THUMBS_FILE_NAME, folder: stockFolder_ };
@@ -58,6 +61,8 @@ function doPost(e) {
     if (body.action === 'saved-thumbs') return reply_(thumbs_(props, SAVED_THUMBS, body.ids));
     if (body.action === 'saved-thumbs-put') return reply_(thumbsPut_(props, SAVED_THUMBS, body.thumbs));
     if (body.action === 'saved-get') return reply_(savedGet_(props, body.id));
+    if (body.action === 'saved-lock') return reply_(savedLock_(props, body.id, body.locked === true));
+    if (body.action === 'saved-trash') return reply_(savedTrash_(props, body.id));
     if (body.action === 'stock-rename') return reply_(stockRename_(props, body.id, body.name));
     if (body.action === 'stock-trash') return reply_(stockTrash_(props, body.ids));
     if (!body.key || !body.name || !body.image || !body.image.data) return reply_({ ok: false, message: '画像が入っていません' });
@@ -68,10 +73,13 @@ function doPost(e) {
       var folder = body.kind === 'stock' ? stockFolder_(props) : folder_(props);
       var slot = 'sent:' + digest_(body.key);
       var old = props.getProperty(slot);
+      var wasLocked = false;   // 鍵をかけたポップを出し直したら、新しい方にも鍵をかける
       if (old) {
         JSON.parse(old).forEach(function (id) {
           try {
-            DriveApp.getFileById(id).setTrashed(true);
+            var f = DriveApp.getFileById(id);
+            if (!f.isTrashed() && f.getDescription() === SAVED_LOCK) wasLocked = true;
+            f.setTrashed(true);
           } catch (err) {
             // 事務所で既に消した・別の場所へ移したもの。新しい方を置くだけなので続ける
           }
@@ -88,7 +96,9 @@ function doPost(e) {
           createdAt: body.createdAt, receivedAt: new Date().toISOString(),
           pop: body.pop, photo: body.photo || null,
         };
-        ids.push(folder.createFile(Utilities.newBlob(JSON.stringify(asset), 'application/json', body.name + '.json')).getId());
+        var data = folder.createFile(Utilities.newBlob(JSON.stringify(asset), 'application/json', body.name + '.json'));
+        if (wasLocked) data.setDescription(SAVED_LOCK);
+        ids.push(data.getId());
       }
       props.setProperty(slot, JSON.stringify(ids));
       if (body.kind === 'stock') {
@@ -314,7 +324,10 @@ function savedList_(props) {
     var base = d.getName().replace(/\.json$/i, '');
     var img = images[base];
     if (!img) return;
-    items.push({ id: img.getId(), data: d.getId(), name: base, size: d.getSize(), updated: d.getLastUpdated().toISOString() });
+    items.push({
+      id: img.getId(), data: d.getId(), name: base, size: d.getSize(), updated: d.getLastUpdated().toISOString(),
+      locked: d.getDescription() === SAVED_LOCK,
+    });
   });
   items.sort(function (a, b) { return a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0; });
   return { ok: true, stock: 1, saved: 1, items: items.slice(0, STOCK_LIST_MAX), more: Math.max(0, items.length - STOCK_LIST_MAX) };
@@ -322,8 +335,8 @@ function savedList_(props) {
 
 // 作り直し用のデータ（中身を読み、そのまま返す）
 function savedGet_(props, id) {
-  var f = fileIn_(folder_(props), id);
-  if (!f || !/\.json$/i.test(f.getName())) return { ok: false, message: '保管したポップが見つかりません（消されたかもしれません）' };
+  var f = savedData_(props, id);
+  if (!f) return { ok: false, message: '保管したポップが見つかりません（消されたかもしれません）' };
   if (f.getSize() > SAVED_MAX_BYTES) return { ok: false, message: '保管したポップのデータが大きすぎます' };
   var asset;
   try {
@@ -332,6 +345,39 @@ function savedGet_(props, id) {
     return { ok: false, message: '保管したポップのデータが壊れていて読めません' };
   }
   return { ok: true, stock: 1, saved: 1, asset: asset };
+}
+
+// 保管したポップの作り直し用のデータ（.json）。違えば null
+function savedData_(props, id) {
+  var f = fileIn_(folder_(props), id);
+  return f && /\.json$/i.test(f.getName()) ? f : null;
+}
+
+// 鍵をかける・外す（.json の「説明」欄。ドライブの詳細でも見える）
+function savedLock_(props, id, locked) {
+  var f = savedData_(props, id);
+  if (!f) return { ok: false, message: '保管したポップが見つかりません（消されたかもしれません）' };
+  f.setDescription(locked ? SAVED_LOCK : '');
+  return { ok: true, stock: 1, saved: 1, locked: locked };
+}
+
+// .json と、同じ名前の .jpg をゴミ箱へ（30日はドライブのゴミ箱から戻せる）。鍵のかかったものは消さない
+function savedTrash_(props, id) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);   // 出し直しの置き換えと食い違わないように
+  try {
+    var f = savedData_(props, id);
+    if (!f) return { ok: false, message: '保管したポップが見つかりません（もう消されたかもしれません）' };
+    if (f.getDescription() === SAVED_LOCK) return { ok: false, saved: 1, locked: true, message: 'ロックしてあるので消せません（先にロックを外してください）' };
+    var base = f.getName().replace(/\.json$/i, '');
+    var images = folder_(props).getFilesByName(base + '.jpg');
+    while (images.hasNext()) images.next().setTrashed(true);
+    f.setTrashed(true);
+    updateThumbs_(props, SAVED_THUMBS, function () {});   // ゴミ箱へ移した画像の見本は、ここで捨てられる
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true, stock: 1, saved: 1, trashed: 1 };
 }
 
 function digest_(s) {

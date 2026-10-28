@@ -151,6 +151,9 @@ test('保管したポップの返事・一覧・作り直し用のデータ: 古
   assert.match(readSavedReply({ ok: false, saved: 1, message: '保管したポップが見つかりません' }).message, /見つかりません/);
   const items = savedItems([{ id: 'img1', data: 'json1', name: '20261027-0830_田中_トマト_1a2b3c', size: '5' }, { id: 'img2' }, null]);
   assert.deepEqual(items.map(i => [i.id, i.data, i.name, i.product, i.size]), [['img1', 'json1', 'トマト（田中）', 'トマト', 5]]);
+  assert.equal(items[0].locked, false);
+  assert.equal(savedItems([{ id: 'a', data: 'b', name: 'x', locked: true }])[0].locked, true, 'ロックは受け取り口の印のまま');
+  assert.equal(savedItems([{ id: 'a', data: 'b', name: 'x', locked: 'yes' }])[0].locked, false, '形の違う印はロックとみなさない');
   const pop = popOutboxRecord({ ...createPop(), name: 'トマト', price: 298 }, { id: 'r1', sender: '田中' }).pop;
   const asset = { format: 'seikapop-asset', version: 1, pop, photo: { type: 'image/jpeg', data: 'QUJD' } };
   const r = readSavedAsset(asset);

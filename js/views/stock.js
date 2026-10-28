@@ -5,10 +5,10 @@ import * as store from '../store.js';
 import { filterStock } from '../collect.js';
 import {
   fetchSavedList, fetchSavedPop, fetchSavedThumbs, fetchStockImage, fetchStockList, fetchStockThumbs,
-  lightenSavedThumbs, lightenStockThumbs,
+  lightenSavedThumbs, lightenStockThumbs, lockSavedPop, trashSavedPop,
 } from '../sender.js';
 import { recordError } from '../crash.js';
-import { h } from '../ui.js';
+import { confirmBox, h } from '../ui.js';
 
 const THUMBS_PER_ASK = 30;   // 受け取り口が1回に返す見本の数（Code.gs の STOCK_THUMBS_MAX）
 
@@ -43,6 +43,29 @@ const SAVED = {
     return r;
   },
   count: r => r.items.length ? `${r.items.length} 件` : 'まだ保管したポップがありません（出すときに「みんなで使える場所に保管」に印を付けると入ります）',
+  // 消してはいけないものはロック（鍵のかかったものは削除のボタンが押せず、受け取り口も断る）
+  actions: (item, view) => [
+    h('button', {
+      type: 'button', class: item.locked ? 'mini on' : 'mini',
+      title: item.locked ? '押すとロックを外します' : '押すと消せなくなります',
+      onclick: () => view.run(async () => {
+        const r = await lockSavedPop(item.data, !item.locked);
+        if (!r.ok) throw new Error(r.message);
+        item.locked = !item.locked;
+        view.update(item.locked ? `「${item.name}」をロックしました（消せなくなります）` : `「${item.name}」のロックを外しました`);
+      }),
+    }, item.locked ? '🔒 ロック中' : '🔓 ロックする'),
+    h('button', {
+      type: 'button', class: 'mini danger', disabled: item.locked, title: item.locked ? 'ロック中は消せません' : null,
+      onclick: () => view.run(async () => {
+        if (!await confirmBox(`「${item.name}」を消します。どの端末の一覧からも消えます（30日はドライブのゴミ箱から戻せます）。`, '削除する')) return;
+        const r = await trashSavedPop(item.data);
+        if (r.locked) { item.locked = true; view.update(); }   // 他の端末でロックされていた
+        if (!r.ok) throw new Error(r.message);
+        view.drop(item, `「${item.name}」を消しました`);
+      }),
+    }, '削除'),
+  ],
 };
 
 /**
@@ -87,9 +110,35 @@ function openDrivePicker(src, onPick) {
     grid.replaceChildren(...shown.map(item => h('div', { class: 'card shot' },
       h('button', { class: 'card-main', 'aria-label': item.name, onclick: () => pick(item) },
         thumbs[item.id] ? h('img', { src: thumbs[item.id], alt: '', loading: 'lazy' }) : h('div', { class: 'thumb-empty', text: src.icon }),
-        h('span', { class: 'card-title', text: item.name })))));
+        h('span', { class: 'card-title', text: item.name })),
+      src.actions ? h('div', { class: 'card-actions' }, src.actions(item, view)) : null)));
     if (items.length && !shown.length) grid.replaceChildren(h('p', { class: 'empty', text: src.noMatch(query) }));
   }
+
+  // カードのボタン（ロック・削除）から使う。読み込み中・操作中は重ねて動かさない。失敗は理由を出す
+  const view = {
+    async run(fn) {
+      if (busy) return;
+      busy = true;
+      try {
+        await fn();
+      } catch (err) {
+        setStatus(`できませんでした: ${err.message}`, true);
+      } finally {
+        busy = false;
+      }
+    },
+    update(message) {
+      if (message) setStatus(message);
+      renderGrid();
+      saveCache();
+    },
+    drop(item, message) {
+      items = items.filter(x => x !== item);
+      delete thumbs[item.id];
+      view.update(message);
+    },
+  };
 
   async function pick(item) {
     if (busy) return;

@@ -213,7 +213,7 @@ export function savedItems(list) {
   if (!Array.isArray(list)) return [];
   return list.filter(x => x && typeof x.id === 'string' && typeof x.data === 'string').map(x => ({
     id: x.id, data: x.data, name: stockLabel(x.name), product: stockProductName(x.name), origin: splitStockName(x.name).origin,
-    size: Number(x.size) || 0, updated: String(x.updated || ''),
+    size: Number(x.size) || 0, updated: String(x.updated || ''), locked: x.locked === true,
   }));
 }
 

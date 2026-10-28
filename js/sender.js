@@ -207,6 +207,16 @@ export function lightenSavedThumbs(thumbs, ids) {
   return lightenThumbs('saved-thumbs-put', thumbs, ids, null, readSavedReply);
 }
 
+/** 消してはいけないものに鍵をかける・外す（dataId＝作り直し用のデータの id）。{ ok } */
+export function lockSavedPop(dataId, locked) {
+  return askStock('saved-lock', { id: dataId, locked }, null, readSavedReply);
+}
+
+/** 保管したポップをドライブのゴミ箱へ移す（画像も一緒に。30日はドライブから戻せる）。鍵のかかったものは受け取り口が断る。{ ok } */
+export function trashSavedPop(dataId) {
+  return askStock('saved-trash', { id: dataId }, null, readSavedReply);
+}
+
 /** 作り直し用のデータを読む。{ ok, content（ポップの中身）, photo（Blob か null）} */
 export async function fetchSavedPop(dataId) {
   const r = await askStock('saved-get', { id: dataId }, null, readSavedReply);
