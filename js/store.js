@@ -170,6 +170,16 @@ export async function putStockCache(value) {
   await run(['meta'], 'readwrite', tx => reqDone(tx.objectStore('meta').put({ key: 'stockCache', value })));
 }
 
+// 保管したポップ（みんなで使える場所）の一覧と見本の控え。形は写真ストックと同じ
+export async function getSavedCache() {
+  const rec = await run(['meta'], 'readonly', tx => reqDone(tx.objectStore('meta').get('savedCache')));
+  return rec?.value || { items: [], thumbs: {}, fetchedAt: null };
+}
+
+export async function putSavedCache(value) {
+  await run(['meta'], 'readwrite', tx => reqDone(tx.objectStore('meta').put({ key: 'savedCache', value })));
+}
+
 // ---- 事務所へ送る控え ----
 // 送り終わるまで画像（と写真）を端末に持つ。届いたら消す。
 

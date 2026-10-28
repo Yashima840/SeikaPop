@@ -3,8 +3,8 @@
 
 import * as store from './store.js';
 import {
-  adOutboxRecord, collectorOf, deliveryBody, pingBody, popOutboxRecord, readReply, readStockReply, stockItems,
-  STOCK_THUMB, stockOutboxRecord, stockRequestBody,
+  adOutboxRecord, collectorOf, deliveryBody, pingBody, popOutboxRecord, readReply, readSavedAsset, readSavedReply, readStockReply,
+  savedItems, stockItems, STOCK_THUMB, stockOutboxRecord, stockRequestBody,
 } from './collect.js';
 import { shrinkPhoto } from './image.js';
 import { newId } from './model.js';
@@ -105,10 +105,10 @@ export function stockThumbOf(blob) {
  * ストックに問い合わせる（控えずにその場で）。{ ok, data } か { ok:false, message }。
  * admin＝PC の作業場で打った送り先 { url, passcode }（無ければこの端末の設定のもの）。
  */
-async function askStock(action, extra, admin = null) {
+async function askStock(action, extra, admin = null, read = readStockReply) {
   const c = admin || collectorOf(await store.getSettings());
   if (!admin && !c.ready) return { ok: false, notSet: true, message: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」）' };
-  return post(c.url, stockRequestBody(c.passcode, action, extra), readStockReply);
+  return post(c.url, stockRequestBody(c.passcode, action, extra), read);
 }
 
 /** ストックの一覧。{ ok, items, skipped（一覧に出せない形の写真の数）} */
@@ -121,8 +121,12 @@ export async function fetchStockList(admin = null) {
  * 小さい見本（id → data URL）。無いものは入らない。
  * heavy＝受け取り口に軽い見本がまだ無く、ドライブが作った重い見本を返してきた id（端末で縮めて putStockThumbs で返す）。
  */
-export async function fetchStockThumbs(ids, admin = null) {
-  const r = await askStock('stock-thumbs', { ids }, admin);
+export function fetchStockThumbs(ids, admin = null) {
+  return askThumbs('stock-thumbs', ids, admin, readStockReply);
+}
+
+async function askThumbs(action, ids, admin, read) {
+  const r = await askStock(action, { ids }, admin, read);
   if (!r.ok) return r;
   const thumbs = {}, heavy = [];
   for (const [id, t] of Object.entries(r.data.thumbs || {})) {
@@ -138,7 +142,11 @@ export async function fetchStockThumbs(ids, admin = null) {
  * 受け取り口へ預け直す（次からはどの端末にも軽い見本が届く）。縮めた見本（id → data URL）を返す。
  * 預けられなくても縮めた見本はこの端末で使えるので、失敗は記録だけ残す。
  */
-export async function lightenStockThumbs(thumbs, ids, admin = null) {
+export function lightenStockThumbs(thumbs, ids, admin = null) {
+  return lightenThumbs('stock-thumbs-put', thumbs, ids, admin, readStockReply);
+}
+
+async function lightenThumbs(action, thumbs, ids, admin, read) {
   const small = {}, body = {};
   for (const id of ids) {
     const data = await store.blobToBase64(await stockThumbOf(await (await fetch(thumbs[id])).blob()));
@@ -146,8 +154,8 @@ export async function lightenStockThumbs(thumbs, ids, admin = null) {
     body[id] = { type: 'image/jpeg', data };
   }
   if (ids.length) {
-    const r = await askStock('stock-thumbs-put', { thumbs: body }, admin);
-    if (!r.ok) recordError('stock thumbs put', new Error(r.message));
+    const r = await askStock(action, { thumbs: body }, admin, read);
+    if (!r.ok) recordError(action, new Error(r.message));
   }
   return small;
 }
@@ -170,10 +178,42 @@ export async function fetchStockImage(id) {
   if (!r.ok) return r;
   const img = r.data.image;
   if (!img?.data) return { ok: false, message: '写真の中身が届きませんでした' };
+  return { ok: true, blob: blobOf(img) };
+}
+
+/** { type, data(base64) } を Blob に戻す。 */
+function blobOf(img) {
   const bin = atob(img.data);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return { ok: true, blob: new Blob([bytes], { type: img.type || 'image/jpeg' }) };
+  return new Blob([bytes], { type: img.type || 'image/jpeg' });
+}
+
+// ---- 保管したポップ（みんなで使える場所に保管したものを、どの端末からでも呼び出して直す）----
+
+/** 保管したポップの一覧（新しい順）。{ ok, items } */
+export async function fetchSavedList() {
+  const r = await askStock('saved-list', {}, null, readSavedReply);
+  return r.ok ? { ok: true, items: savedItems(r.data.items) } : r;
+}
+
+/** 保管したポップの見本（出した画像の id → data URL）。形は fetchStockThumbs と同じ。 */
+export function fetchSavedThumbs(ids) {
+  return askThumbs('saved-thumbs', ids, null, readSavedReply);
+}
+
+/** 重い見本を縮めて受け取り口へ預け直す（lightenStockThumbs と同じ）。 */
+export function lightenSavedThumbs(thumbs, ids) {
+  return lightenThumbs('saved-thumbs-put', thumbs, ids, null, readSavedReply);
+}
+
+/** 作り直し用のデータを読む。{ ok, content（ポップの中身）, photo（Blob か null）} */
+export async function fetchSavedPop(dataId) {
+  const r = await askStock('saved-get', { id: dataId }, null, readSavedReply);
+  if (!r.ok) return r;
+  const a = readSavedAsset(r.data.asset);
+  if (!a.ok) return a;
+  return { ok: true, content: a.content, photo: a.photo ? blobOf(a.photo) : null };
 }
 
 async function asData(blob) {

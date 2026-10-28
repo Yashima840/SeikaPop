@@ -15,6 +15,10 @@
 //   小さい見本はアプリが写真と一緒に送ってくる（200px の JPEG）。1つのファイル（THUMBS_FILE_NAME）にまとめて持ち、まとめて返す
 //   （ドライブが作る見本は PNG で重く、1枚ずつ取り出すので遅いため）。無い写真だけドライブの見本を返し、アプリが縮めて預け直す。
 //   読めるのはこのフォルダの中のファイルだけ（id を指定されても、ほかの場所のファイルは返さない）。
+//
+// 保管したポップ（「青果ポップ 成果物」フォルダ）: どの端末からでも呼び出して、価格などを直して使い回す。
+//   action: 'saved-list'（作り直し用のデータ .json がある分の一覧）／'saved-thumbs'・'saved-thumbs-put'（見本。写真ストックと同じ仕組み）／
+//   'saved-get'（作り直し用のデータ）。返事には saved: 1 を付ける（この版の受け取り口だと分かるように）。
 
 var FOLDER_NAME = '青果ポップ 成果物';
 var STOCK_FOLDER_NAME = '青果ポップ 写真ストック';
@@ -24,6 +28,12 @@ var STOCK_LIST_MAX = 500;
 var STOCK_THUMBS_MAX = 30;
 var THUMBS_FILE_NAME = '青果ポップ 写真ストックの見本（消しても作り直されます）.json';
 var STOCK_THUMB_MAX_CHARS = 60000;   // 見本1枚の上限（base64 の文字数。アプリの見本はふつう 1万文字ほど）
+var SAVED_THUMBS_FILE_NAME = '青果ポップ 成果物の見本（消しても作り直されます）.json';
+var SAVED_MAX_BYTES = 30 * 1024 * 1024;   // 作り直し用のデータ1件の上限（写真が入っている）
+
+// 見本をまとめて持つ先。写真ストックと保管したポップで、同じ仕組みを別のファイルで使う
+var STOCK_THUMBS = { prop: 'STOCK_THUMBS_FILE_ID', name: THUMBS_FILE_NAME, folder: stockFolder_ };
+var SAVED_THUMBS = { prop: 'SAVED_THUMBS_FILE_ID', name: SAVED_THUMBS_FILE_NAME, folder: folder_ };
 
 function doPost(e) {
   try {
@@ -41,9 +51,13 @@ function doPost(e) {
     // stock: 1 ＝写真ストックに対応した版（古い版の受け取り口と見分けるため、アプリがこれを見る）
     if (body.ping) return reply_({ ok: true, stock: 1 });   // 「送り先を確かめる」。何も置かない
     if (body.action === 'stock-list') return reply_(stockList_(props));
-    if (body.action === 'stock-thumbs') return reply_(stockThumbs_(props, body.ids));
+    if (body.action === 'stock-thumbs') return reply_(thumbs_(props, STOCK_THUMBS, body.ids));
     if (body.action === 'stock-get') return reply_(stockGet_(props, body.id));
-    if (body.action === 'stock-thumbs-put') return reply_(stockThumbsPut_(props, body.thumbs));
+    if (body.action === 'stock-thumbs-put') return reply_(thumbsPut_(props, STOCK_THUMBS, body.thumbs));
+    if (body.action === 'saved-list') return reply_(savedList_(props));
+    if (body.action === 'saved-thumbs') return reply_(thumbs_(props, SAVED_THUMBS, body.ids));
+    if (body.action === 'saved-thumbs-put') return reply_(thumbsPut_(props, SAVED_THUMBS, body.thumbs));
+    if (body.action === 'saved-get') return reply_(savedGet_(props, body.id));
     if (body.action === 'stock-rename') return reply_(stockRename_(props, body.id, body.name));
     if (body.action === 'stock-trash') return reply_(stockTrash_(props, body.ids));
     if (!body.key || !body.name || !body.image || !body.image.data) return reply_({ ok: false, message: '画像が入っていません' });
@@ -79,7 +93,7 @@ function doPost(e) {
       props.setProperty(slot, JSON.stringify(ids));
       if (body.kind === 'stock') {
         var gone = old ? JSON.parse(old) : [];
-        updateThumbs_(props, function (index) {
+        updateThumbs_(props, STOCK_THUMBS, function (index) {
           gone.forEach(function (id) { delete index[id]; });
           if (isThumb_(body.thumb)) index[ids[0]] = { type: body.thumb.type, data: body.thumb.data };
         });
@@ -144,8 +158,13 @@ function stockList_(props) {
 
 // ストックの中のファイルか（違う場所のファイルの id を渡されても読ませない）
 function stockFile_(props, id) {
+  return fileIn_(stockFolder_(props), id);
+}
+
+// フォルダの中のファイルか。違えば null
+function fileIn_(folder, id) {
   if (typeof id !== 'string' || !/^[\w-]{10,}$/.test(id)) return null;
-  var folderId = stockFolder_(props).getId();
+  var folderId = folder.getId();
   try {
     var f = DriveApp.getFileById(id);
     if (f.isTrashed()) return null;
@@ -157,12 +176,14 @@ function stockFile_(props, id) {
   return null;
 }
 
-function stockThumbs_(props, ids) {
+// 見本を返す（box＝STOCK_THUMBS か SAVED_THUMBS。保管したポップは、出した画像の id で見本を持つ）
+function thumbs_(props, box, ids) {
   var thumbs = {};
-  var index = readThumbs_(props);
+  var index = readThumbs_(props, box);
+  var folder = box.folder(props);
   (Array.isArray(ids) ? ids : []).slice(0, STOCK_THUMBS_MAX).forEach(function (id) {
     if (typeof id === 'string' && index[id]) { thumbs[id] = index[id]; return; }   // 預かっている軽い見本
-    var f = stockFile_(props, id);
+    var f = fileIn_(folder, id);
     if (!f) return;
     try {
       var t = f.getThumbnail();   // ドライブが作る見本（重い。まだ作られていないと null）。drive: アプリに縮めて預け直してもらう印
@@ -171,25 +192,26 @@ function stockThumbs_(props, ids) {
       // 見本が作れないファイル。アプリは名前だけで出す
     }
   });
-  return { ok: true, stock: 1, thumbs: thumbs };
+  return { ok: true, stock: 1, saved: 1, thumbs: thumbs };
 }
 
-// 端末で縮めた見本を預かる（ストックの中の写真の分だけ）
-function stockThumbsPut_(props, thumbs) {
+// 端末で縮めた見本を預かる（そのフォルダの中のファイルの分だけ）
+function thumbsPut_(props, box, thumbs) {
+  var folder = box.folder(props);
   var ids = Object.keys(thumbs && typeof thumbs === 'object' ? thumbs : {}).slice(0, STOCK_THUMBS_MAX).filter(function (id) {
-    return isThumb_(thumbs[id]) && stockFile_(props, id);
+    return isThumb_(thumbs[id]) && fileIn_(folder, id);
   });
-  if (!ids.length) return { ok: true, stock: 1, saved: 0 };
+  if (!ids.length) return { ok: true, stock: 1, saved: 1, put: 0 };
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    updateThumbs_(props, function (index) {
+    updateThumbs_(props, box, function (index) {
       ids.forEach(function (id) { index[id] = { type: thumbs[id].type, data: thumbs[id].data }; });
     });
   } finally {
     lock.releaseLock();
   }
-  return { ok: true, stock: 1, saved: ids.length };
+  return { ok: true, stock: 1, saved: 1, put: ids.length };
 }
 
 // 名前を変える（拡張子は元のまま。ドライブで使えない記号は「_」に）
@@ -212,7 +234,7 @@ function stockTrash_(props, ids) {
   lock.waitLock(30000);
   try {
     files.forEach(function (f) { f.setTrashed(true); });
-    updateThumbs_(props, function () {});   // ゴミ箱へ移した写真の見本は、ここで捨てられる
+    updateThumbs_(props, STOCK_THUMBS, function () {});   // ゴミ箱へ移した写真の見本は、ここで捨てられる
   } finally {
     lock.releaseLock();
   }
@@ -223,8 +245,8 @@ function isThumb_(t) {
   return !!t && t.type === 'image/jpeg' && typeof t.data === 'string' && t.data.length > 0 && t.data.length <= STOCK_THUMB_MAX_CHARS;
 }
 
-function thumbsFile_(props) {
-  var id = props.getProperty('STOCK_THUMBS_FILE_ID');
+function thumbsFile_(props, box) {
+  var id = props.getProperty(box.prop);
   if (!id) return null;
   try {
     var f = DriveApp.getFileById(id);
@@ -234,9 +256,9 @@ function thumbsFile_(props) {
   }
 }
 
-// 預かっている見本 { 写真の id: { type, data } }。読めなければ空（アプリはドライブの見本で並べ、預け直す）
-function readThumbs_(props) {
-  var f = thumbsFile_(props);
+// 預かっている見本 { ファイルの id: { type, data } }。読めなければ空（アプリはドライブの見本で並べ、預け直す）
+function readThumbs_(props, box) {
+  var f = thumbsFile_(props, box);
   if (!f) return {};
   try {
     var index = JSON.parse(f.getBlob().getDataAsString());
@@ -246,24 +268,24 @@ function readThumbs_(props) {
   }
 }
 
-// 見本を書き換える（呼ぶ側でロックを取る）。ストックから消えた写真の分は捨てる（ファイルが膨らまないように）
-function updateThumbs_(props, change) {
-  var index = readThumbs_(props);
+// 見本を書き換える（呼ぶ側でロックを取る）。フォルダから消えたファイルの分は捨てる（ファイルが膨らまないように）
+function updateThumbs_(props, box, change) {
+  var index = readThumbs_(props, box);
   change(index);
   var alive = {};
-  var it = stockFolder_(props).getFiles();
+  var it = box.folder(props).getFiles();
   while (it.hasNext()) {
     var f = it.next();
     if (!f.isTrashed()) alive[f.getId()] = true;
   }
   Object.keys(index).forEach(function (id) { if (!alive[id]) delete index[id]; });
   var text = JSON.stringify(index);
-  var file = thumbsFile_(props);
+  var file = thumbsFile_(props, box);
   if (file) {
     file.setContent(text);
   } else {
-    file = DriveApp.createFile(THUMBS_FILE_NAME, text, 'application/json');
-    props.setProperty('STOCK_THUMBS_FILE_ID', file.getId());
+    file = DriveApp.createFile(box.name, text, 'application/json');
+    props.setProperty(box.prop, file.getId());
   }
 }
 
@@ -273,6 +295,43 @@ function stockGet_(props, id) {
   if (f.getSize() > STOCK_MAX_BYTES) return { ok: false, message: '写真が大きすぎます（20MB まで）' };
   var b = f.getBlob();
   return { ok: true, stock: 1, image: { type: f.getMimeType(), data: Utilities.base64Encode(b.getBytes()) }, name: f.getName() };
+}
+
+// 保管したポップの一覧（新しい順）。作り直し用のデータ（.json）と出した画像（.jpg）がそろっている分だけ
+// （広告は画像だけなので出ない）。id＝画像（見本もこの id で持つ）、data＝作り直し用のデータ
+function savedList_(props) {
+  var it = folder_(props).getFiles();
+  var images = {}, datas = [];
+  while (it.hasNext()) {
+    var f = it.next();
+    if (f.isTrashed()) continue;
+    var name = f.getName();
+    if (/\.json$/i.test(name)) datas.push(f);
+    else if (/\.jpg$/i.test(name)) images[name.replace(/\.jpg$/i, '')] = f;
+  }
+  var items = [];
+  datas.forEach(function (d) {
+    var base = d.getName().replace(/\.json$/i, '');
+    var img = images[base];
+    if (!img) return;
+    items.push({ id: img.getId(), data: d.getId(), name: base, size: d.getSize(), updated: d.getLastUpdated().toISOString() });
+  });
+  items.sort(function (a, b) { return a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0; });
+  return { ok: true, stock: 1, saved: 1, items: items.slice(0, STOCK_LIST_MAX), more: Math.max(0, items.length - STOCK_LIST_MAX) };
+}
+
+// 作り直し用のデータ（中身を読み、そのまま返す）
+function savedGet_(props, id) {
+  var f = fileIn_(folder_(props), id);
+  if (!f || !/\.json$/i.test(f.getName())) return { ok: false, message: '保管したポップが見つかりません（消されたかもしれません）' };
+  if (f.getSize() > SAVED_MAX_BYTES) return { ok: false, message: '保管したポップのデータが大きすぎます' };
+  var asset;
+  try {
+    asset = JSON.parse(f.getBlob().getDataAsString());
+  } catch (err) {
+    return { ok: false, message: '保管したポップのデータが壊れていて読めません' };
+  }
+  return { ok: true, stock: 1, saved: 1, asset: asset };
 }
 
 function digest_(s) {

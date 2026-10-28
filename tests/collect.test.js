@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   adOutboxRecord, collectorOf, deliveryBaseName, deliveryBody, makeSetupLink, outboxReplaced,
-  filterStock, parseSetupCode, popOutboxRecord, readReply, readStockReply, sortOutbox, stockItems, stockLabel, stockProductName,
+  filterStock, parseSetupCode, popOutboxRecord, readReply, readSavedAsset, readSavedReply, readStockReply, savedItems, sortOutbox, stockItems, stockLabel, stockProductName,
   BUILT_IN_COLLECTOR_URL, makeEasyPasscode, parsePasscodeInput, saveTargets, stockOutboxRecord, stockRequestBody, stockTitleOf, stockFileKey, cleanStockName, DELIVERY_FORMAT,
 } from '../js/collect.js';
 import { createPop } from '../js/model.js';
@@ -140,6 +140,25 @@ test('写真ストックの問い合わせの本文と返事: 古い受け取り
   assert.match(readStockReply({ ok: false, message: '画像が入っていません' }).message, /古い版/);
   assert.match(readStockReply({ ok: false, code: 'passcode', message: 'x' }).message, /合言葉/);
   assert.match(readStockReply({ ok: false, stock: 1, message: 'ストックにその写真がありません' }).message, /ありません/);
+});
+
+test('保管したポップの返事・一覧・作り直し用のデータ: 古い受け取り口・広告・壊れたデータは理由を出す', () => {
+  assert.equal(readSavedReply({ ok: true, stock: 1, saved: 1, items: [] }).ok, true);
+  assert.match(readSavedReply({ ok: true, stock: 1 }).message, /古い版/, '写真ストックだけ対応の版');
+  assert.match(readSavedReply({ ok: false, message: '画像が入っていません' }).message, /古い版/);
+  assert.match(readSavedReply({ ok: false, saved: 1, message: '保管したポップが見つかりません' }).message, /見つかりません/);
+  const items = savedItems([{ id: 'img1', data: 'json1', name: '20261027-0830_田中_トマト_1a2b3c', size: '5' }, { id: 'img2' }, null]);
+  assert.deepEqual(items.map(i => [i.id, i.data, i.name, i.product, i.size]), [['img1', 'json1', 'トマト（田中）', 'トマト', 5]]);
+  const pop = popOutboxRecord({ ...createPop(), name: 'トマト', price: 298 }, { id: 'r1', sender: '田中' }).pop;
+  const asset = { format: 'seikapop-asset', version: 1, pop, photo: { type: 'image/jpeg', data: 'QUJD' } };
+  const r = readSavedAsset(asset);
+  assert.equal(r.ok, true);
+  assert.equal(r.content.name, 'トマト');
+  assert.deepEqual(r.photo, { type: 'image/jpeg', data: 'QUJD' });
+  assert.equal(readSavedAsset({ ...asset, photo: null }).photo, null, '写真の無いポップも呼び出せる');
+  assert.match(readSavedAsset({ ...asset, pop: null }).message, /広告/);
+  assert.match(readSavedAsset({ ...asset, version: 2 }).message, /新しい形/);
+  assert.equal(readSavedAsset(null).ok, false);
 });
 
 test('写真ストックの名前: アプリが付けた日時・印は見せず「商品名（送った人）」、PC で入れた名前はそのまま', () => {

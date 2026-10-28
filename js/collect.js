@@ -184,12 +184,45 @@ export function stockRequestBody(passcode, action, extra = {}) {
 // 写真ストックに対応する前の受け取り口は、ストックの問い合わせを「画像の無い送信」として断る
 const OLD_COLLECTOR = '事務所の受け取り口が古い版です（事務所で Code.gs を差し替えて「新バージョン」でデプロイしてください）';
 
-/** ストックの問い合わせの返事を読む。ok なら reply をそのまま data に入れて返す。 */
-export function readStockReply(reply) {
+/**
+ * ストック・保管したポップの問い合わせの返事を読む。ok なら reply をそのまま data に入れて返す。
+ * mark＝その問い合わせに対応した版の受け取り口が付ける印（'stock'＝写真ストック／'saved'＝保管したポップ）。
+ */
+export function readStockReply(reply, mark = 'stock') {
   const r = readReply(reply);
-  if (!r.ok) return reply && typeof reply === 'object' && !reply.stock && reply.message === '画像が入っていません' ? { ok: false, message: OLD_COLLECTOR } : r;
-  if (!reply.stock) return { ok: false, message: OLD_COLLECTOR };
+  if (!r.ok) return reply && typeof reply === 'object' && !reply[mark] && reply.message === '画像が入っていません' ? { ok: false, message: OLD_COLLECTOR } : r;
+  if (!reply[mark]) return { ok: false, message: OLD_COLLECTOR };
   return { ok: true, data: reply };
+}
+
+/** 保管したポップの問い合わせの返事を読む（readStockReply の 'saved' 版）。 */
+export function readSavedReply(reply) {
+  return readStockReply(reply, 'saved');
+}
+
+/**
+ * 保管したポップの一覧を、画面で使う形にそろえる。id＝出した画像（見本はこの id で持つ）、data＝作り直し用のデータ。
+ * 名前は写真ストックと同じ「商品名（送った人）」、sub に送った日時。
+ */
+export function savedItems(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter(x => x && typeof x.id === 'string' && typeof x.data === 'string').map(x => ({
+    id: x.id, data: x.data, name: stockLabel(x.name), product: stockProductName(x.name),
+    size: Number(x.size) || 0, updated: String(x.updated || ''),
+  }));
+}
+
+/**
+ * 受け取り口から届いた作り直し用のデータ（Code.gs が置く seikapop-asset）を読む。
+ * { ok, content（ポップの中身。model.js の popFromShared へ渡す）, photo（{ type, data } か null）} か { ok:false, message }。
+ */
+export function readSavedAsset(asset) {
+  if (!asset || typeof asset !== 'object' || asset.format !== 'seikapop-asset') return { ok: false, message: '青果ポップの保管データではありません' };
+  if (asset.version !== 1) return { ok: false, message: 'このアプリより新しい形の保管データです（アプリを再読み込みしてください）' };
+  if (!asset.pop || typeof asset.pop !== 'object') return { ok: false, message: '保管データにポップの中身がありません（広告は呼び出せません）' };
+  const photo = asset.photo && typeof asset.photo.data === 'string' && asset.photo.data
+    ? { type: String(asset.photo.type || 'image/jpeg'), data: asset.photo.data } : null;
+  return { ok: true, content: asset.pop, photo };
 }
 
 /** ストックの一覧を、画面で使う形にそろえる（名前の拡張子と、アプリが付けた日時・名前の前置きは見せない）。 */

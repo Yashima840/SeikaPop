@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   createPop, exportFileName, exportProblems, formatDate, formatPrice, isBlankPop, localStamp,
-  isBurstLayout, nextPriceBadge, parsePriceInput, upgradeDesign, popFromRegular, PRICE_BADGES, priceBadgeOf, regularFromPop, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
+  isBurstLayout, moveToRegular, needsCheck, nextPriceBadge, parsePriceInput, upgradeDesign, popFromRegular, popFromShared, PRICE_BADGES, priceBadgeOf, regularFromPop, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
 } from '../js/model.js';
 
 const T0 = new Date('2026-10-20T06:30:00Z');
@@ -55,6 +55,27 @@ test('出力は商品名が空・レギュラー由来で未確認のときだ�
   const today = popFromRegular(regularFromPop(filled(), T0), T1);
   assert.equal(exportProblems(today).length, 1);
   assert.deepEqual(exportProblems({ ...today, confirmed: true }), []);
+});
+
+test('保管したポップから作ると、中身は引き継ぎ・写真は入れ直した id・確認が済むまで出さない', () => {
+  // 受け取り口に届く中身（popOutboxRecord の pop。photoId・thumb は送らない）
+  const { photoId: _p, thumb: _t, ...sent } = { ...filled(), id: 'old-id', priceTax: 'excl' };
+  const today = popFromShared(JSON.parse(JSON.stringify(sent)), { photoId: 'new-photo' }, T1);
+  assert.notEqual(today.id, 'old-id', '新しいポップとして作る（元を書き換えない）');
+  assert.deepEqual([today.name, today.price, today.priceTax, today.unit, today.origin, today.photoId], ['完熟トマト', 298, 'excl', '1袋', '熊本県産', 'new-photo']);
+  assert.deepEqual(today.crop, { x: 0.2, y: 0, zoom: 1.5 });
+  assert.equal(today.createdAt, T1.toISOString());
+  assert.equal(needsCheck(today), true);
+  assert.equal(exportProblems(today).length, 1, '前に出した価格・産地のまま出さない');
+  assert.deepEqual(exportProblems({ ...today, confirmed: true }), []);
+  // 他の端末から届いた中身なので、知らない項目・形の違う値は取り込まない
+  const odd = popFromShared({ name: 'なす', price: '298', isRegular: true, fromRegularId: 'x', confirmed: true, crop: 'bad', each: 'yes' });
+  assert.deepEqual([odd.name, odd.price, odd.isRegular, odd.fromRegularId, odd.confirmed, odd.each], ['なす', null, false, null, false, false]);
+  assert.deepEqual(odd.crop, createPop().crop);
+  // priceTax の無い古いポップは税込で入れたもの
+  assert.equal(popFromShared({ name: 'なす', price: 98 }).priceTax, 'incl');
+  // レギュラーへ移したら確認の印は要らなくなる（レギュラーの元は出すものではない）
+  assert.equal(needsCheck(moveToRegular(today)), false);
 });
 
 test('価格の読み取り', async t => {

@@ -57,7 +57,8 @@ export function createPop(now = new Date()) {
     thumb: null,
     isRegular: false,
     fromRegularId: null,  // レギュラーから作ったときの元
-    confirmed: false,     // レギュラー由来のとき「今日の価格・産地を確認した」か
+    fromShared: false,    // みんなで使える場所（事務所のドライブ）に保管したポップから呼び出した
+    confirmed: false,     // レギュラー・保管から呼び出したとき「今日の価格・産地を確認した」か
     createdAt: t,
     updatedAt: t,
   };
@@ -77,6 +78,31 @@ export function popFromRegular(regular, now = new Date()) {
   return { ...createPop(now), ...contentOf(regular), fromRegularId: regular.id, confirmed: false };
 }
 
+/**
+ * みんなで使える場所に保管したポップ（collect.js の readSavedAsset の content）から、今日のポップを作る。
+ * 写真は端末に入れ直したもの（photoId）を使う。前に出した価格・産地のままなので、確認が済むまで出力させない。
+ * 中身は他の端末から届いたものなので、知っている項目だけ・形の合うものだけ取り込む。
+ */
+export function popFromShared(content, { photoId = null } = {}, now = new Date()) {
+  const base = createPop(now);
+  // priceTax の無い古いポップは税込で入れたもの（isTaxExcluded）。新しいポップの既定（税抜）にしない
+  const out = { ...base, priceTax: 'incl', photoId, fromShared: true, confirmed: false };
+  for (const k of CONTENT_FIELDS) {
+    if (k === 'photoId' || k === 'thumb' || !(k in content)) continue;
+    const v = content[k], d = base[k];
+    if (k === 'price') out.price = typeof v === 'number' && Number.isFinite(v) ? v : null;
+    else if (k === 'badgePos') out.badgePos = v && typeof v === 'object' && Number.isFinite(v.x) && Number.isFinite(v.y) ? { x: v.x, y: v.y } : null;
+    else if (d && typeof d === 'object') out[k] = v && typeof v === 'object' ? { ...d, ...v } : { ...d };
+    else if (typeof v === typeof d) out[k] = v;
+  }
+  return out;
+}
+
+/** 前の価格・産地のまま出す事故を防ぐため、確認の印が要るポップか（レギュラー・保管から呼び出したもの）。 */
+export function needsCheck(pop) {
+  return !!(pop.fromRegularId || pop.fromShared);
+}
+
 /** 今のポップを元に、新しいレギュラーを作る。 */
 export function regularFromPop(pop, now = new Date()) {
   return { ...createPop(now), ...contentOf(pop), isRegular: true };
@@ -87,7 +113,7 @@ export function regularFromPop(pop, now = new Date()) {
  * 同じ id のまま移すので、このポップから出した画像は、そのままレギュラーの画像として広告に並ぶ。
  */
 export function moveToRegular(pop, now = new Date()) {
-  return { ...pop, isRegular: true, fromRegularId: null, confirmed: false, updatedAt: now.toISOString() };
+  return { ...pop, isRegular: true, fromRegularId: null, fromShared: false, confirmed: false, updatedAt: now.toISOString() };
 }
 
 /** レギュラーの中身を今のポップで上書きする（id・作成日は残す）。 */
@@ -300,7 +326,7 @@ export function formatDate(d) {
 export function exportProblems(pop) {
   const out = [];
   if (!String(pop.name).trim()) out.push('商品名を入れてください');
-  if (pop.fromRegularId && !pop.confirmed) out.push('今日の価格・産地を確認してチェックを入れてください');
+  if (needsCheck(pop) && !pop.confirmed) out.push('今日の価格・産地を確認してチェックを入れてください');
   return out;
 }
 

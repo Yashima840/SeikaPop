@@ -1,10 +1,11 @@
-// はじめの画面: 1枚作る／フレームにまとめる（広告）の入口と、レギュラー・履歴の2つの欄
+// はじめの画面: 1枚作る／フレームにまとめる（広告）／保管したポップから作る、の入口と、レギュラー・履歴の2つの欄
 
 import * as store from '../store.js';
-import { createPop, formatShotTime, isBlankPop, moveToRegular, popFromRegular, popLists, popTitle } from '../model.js';
+import { createPop, formatShotTime, isBlankPop, moveToRegular, popFromRegular, popFromShared, popLists, popTitle } from '../model.js';
 import { confirmBox, h, toast } from '../ui.js';
 import { onOutboxChange, outboxStatus } from '../sender.js';
 import { recordError } from '../crash.js';
+import { openSavedPicker } from './stock.js';
 
 function card(pop, { onOpen, actions, sub = '' }) {
   return h('div', { class: 'card' },
@@ -40,6 +41,16 @@ export async function showHome(root, app) {
     await store.putPop(pop);
     app.go(`#/make/${pop.id}`);   // 価格・産地を確かめて出すだけの短い流れ
   };
+  // みんなで使える場所に保管したポップ（他の端末で作ったものも）から、同じ中身で今日のポップを作る。
+  // 写真を先に端末へ入れてから、それを指すポップを保存する。失敗は一覧の画面に出す（投げると閉じずに残る）
+  const useSaved = () => openSavedPicker({
+    onPick: async ({ content, photo }) => {
+      const photoId = photo ? await store.putPhoto(photo) : null;
+      const pop = popFromShared(content, { photoId });
+      await store.putPop(pop);
+      app.go(`#/make/${pop.id}`);   // レギュラーと同じく、価格・産地を確かめて出すだけの短い流れ
+    },
+  });
   const makeRegular = async pop => {
     try {
       await store.putPop(moveToRegular(pop));
@@ -83,6 +94,7 @@ export async function showHome(root, app) {
       h('button', { class: 'start', onclick: () => app.go('#/ad') },
         h('span', { class: 'start-icon', text: '🧩' }), h('b', { text: 'フレームにまとめる' }), h('small', { text: '作った画像を並べて1枚' })),
     ),
+    h('button', { class: 'big', onclick: useSaved }, '📂 保管したポップから作る（価格などを直して使い回す）'),
     isStandalone() ? null : h('p', { class: 'hint' },
       'ホーム画面に追加すると、アプリのように開けて保存も消えにくくなります',
       h('br'), '（iPhone: 共有ボタン →「ホーム画面に追加」／Android: メニュー →「ホーム画面に追加」）'),

@@ -3,7 +3,7 @@
 import * as store from '../store.js';
 import {
   DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, NAME_FONTS, parsePriceInput,
-  isBurstLayout, nextPriceBadge, PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, taxRateOf, updateRegularFrom, withSample,
+  isBurstLayout, needsCheck, nextPriceBadge, PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, taxRateOf, updateRegularFrom, withSample,
 } from '../model.js';
 import { dragCrop, moveBadge, zoomCrop, ZOOM_MAX } from '../layout.js';
 import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.js';
@@ -33,7 +33,7 @@ const STEPS = {
   name: { label: '名前', title: '商品名と産地', hint: '産地は食品ならメーカー名。入れなくても作れます。' },
   price: { label: '価格', title: '価格と単位', hint: '税抜で入れると、設定の税率で計算した税込も入ります。' },
   design: { label: 'デザイン', title: 'デザインを選ぶ', hint: 'まだ入れていない所は見本（じゃが芋・長崎県・98円）で描いています。写真・名前・価格はこの後で入れます。' },
-  check: { label: '確認', title: '今日の価格・産地を確かめる', hint: 'レギュラーから呼び出したので、前回の内容が入っています。' },
+  check: { label: '確認', title: '今日の価格・産地を確かめる', hint: '前回の内容が入っています。' },   // 頭に呼び出し元を付けて出す
   out: { label: '出す', title: '仕上がりを確かめて出す', hint: '' },
 };
 const NEW_STEPS = ['design', 'photo', 'name', 'price', 'out'];
@@ -262,7 +262,8 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
   };
 
   // ---- かんたん作成の段 ----
-  const steps = pop.fromRegularId ? REGULAR_STEPS : NEW_STEPS;
+  const steps = needsCheck(pop) ? REGULAR_STEPS : NEW_STEPS;
+  const calledFrom = pop.fromShared ? 'みんなで使える場所から呼び出した' : 'レギュラーから呼び出した';
   let step = 0;
   const goStep = i => {
     step = Math.max(0, Math.min(steps.length - 1, i));
@@ -376,7 +377,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
         }, h('b', { text: String(i + 1) }), STEPS[k].label))),
         h('section', {},
           h('h3', {}, `${step + 1}. ${info.title}`),
-          info.hint ? h('p', { class: 'hint', text: info.hint }) : null,
+          info.hint ? h('p', { class: 'hint', text: key === 'check' ? `${calledFrom}ので、${info.hint}` : info.hint }) : null,
           ...body,
         ),
         h('div', { class: 'row wizard-nav' },
@@ -457,9 +458,9 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     h('b', { text: t.label }), h('small', { text: SIZES[t.size].label })));
   const saveBtn = h('button', { class: 'big', onclick: () => doSave() }, '保存する');
   const problemsEl = h('ul', { class: 'problems' });
-  const confirmRow = pop.fromRegularId ? h('label', { class: 'check confirm' },
+  const confirmRow = needsCheck(pop) ? h('label', { class: 'check confirm' },
     h('input', { type: 'checkbox', checked: pop.confirmed, onchange: ev => { pop.confirmed = ev.target.checked; changed(); } }),
-    '今日の価格・産地を確認しました（レギュラーから呼び出したので前回のままかもしれません）') : null;
+    `今日の価格・産地を確認しました（${calledFrom}ので前回のままかもしれません）`) : null;
 
   function updateExportState() {
     const problems = exportProblems(pop);
