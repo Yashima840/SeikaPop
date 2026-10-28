@@ -151,6 +151,17 @@ export function stockOutboxRecord(photoId, title, { id, sender, now = new Date()
  */
 export const STOCK_THUMB = Object.freeze({ side: 200, quality: 0.7 });
 
+/**
+ * ストックの写真の新しい名前（PC の作業場で変えるとき）。ドライブで使えない記号は「_」にし、60文字まで（受け取り口と同じ決まり）。
+ * { ok, name } か { ok:false, message }。
+ */
+export function cleanStockName(name) {
+  // 改行・タブなどの制御文字もファイル名に入れない（ドライブで扱いにくい）ので、わざと制御文字を拾う
+  // oxlint-disable-next-line no-control-regex
+  const clean = String(name ?? '').normalize('NFC').trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').slice(0, 60);
+  return clean ? { ok: true, name: clean } : { ok: false, message: '名前を入れてください' };
+}
+
 /** PC からストックへ送る写真の名前（ファイル名から拡張子を外したもの。空なら「写真」）。 */
 export function stockTitleOf(fileName) {
   return String(fileName || '').trim().replace(/\.[a-z0-9]{2,5}$/i, '').trim() || '写真';

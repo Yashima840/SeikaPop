@@ -1,10 +1,14 @@
-// 写真をストックへ送る（PC の作業場）。選んだ写真を縮めて1枚ずつ送り、送れなかったものは理由を出して一覧に残す。
-// 送るのは sender.js、名前と印は collect.js。合言葉はこの画面に入れるだけで、どこにも保存しない。
+// 写真ストックの管理（PC の作業場）。
+// 送る: 選んだ写真を縮めて1枚ずつ送り、送れなかったものは理由を出して一覧に残す。
+// 今のストック: 一覧を読み、名前を変える・ゴミ箱へ移す（30日はドライブから戻せる）。
+// 送る・問い合わせるのは sender.js、名前と印は collect.js。合言葉はこの画面に入れるだけで、どこにも保存しない。
 
 import * as store from '../js/store.js';
-import { collectorOf, parsePasscodeInput, stockFileKey, stockTitleOf } from '../js/collect.js';
+import { cleanStockName, collectorOf, filterStock, parsePasscodeInput, stockFileKey, stockLabel, stockTitleOf } from '../js/collect.js';
 import { shrinkPhoto } from '../js/image.js';
-import { pingCollector, sendStockPhoto } from '../js/sender.js';
+import {
+  fetchStockList, fetchStockThumbs, lightenStockThumbs, pingCollector, renameStockPhoto, sendStockPhoto, trashStockPhotos,
+} from '../js/sender.js';
 
 const $ = id => document.getElementById(id);
 const passInput = $('passcode'), senderInput = $('sender');
@@ -164,6 +168,7 @@ $('send').onclick = async () => {
     sending = false;
     refresh();
   }
+  if (stock.loaded && items.some(x => x.state === 'done')) loadStock();   // 送った写真を今のストックにも出す
 };
 
 /** 写真の印。中身から作る（同じ写真の送り直しは置き換えになる）。暗号の機能が無い開き方（LAN の http）では名前・大きさ・日時から。 */
@@ -187,7 +192,168 @@ async function sendOne(c, item) {
   }
 }
 
-// 送っていない写真があるまま閉じようとしたら止める（選び直しの手間を黙って増やさない）
+// ---- 今のストック ----
+const THUMBS_PER_ASK = 30;   // 受け取り口が1回に返す見本の数（Code.gs の STOCK_THUMBS_MAX）
+// list: stockItems の形に、edited（打ちかけの名前）・picked（ゴミ箱へ移す印）を足したもの
+const stock = { list: [], thumbs: {}, loaded: false, busy: false, query: '' };
+const stockMsg = (text, ok = true) => setMsg($('stockMsg'), text, ok);
+const stockBusyMsg = text => { $('stockMsg').textContent = text; $('stockMsg').className = 'msg'; };
+
+$('load').onclick = () => loadStock();
+$('q').oninput = () => { stock.query = $('q').value; renderStock(); };
+$('pickAll').onchange = ev => {
+  for (const x of shownStock()) x.picked = ev.target.checked;
+  renderStock();
+};
+
+const shownStock = () => filterStock(stock.list, stock.query);
+
+async function loadStock() {
+  const c = collector();
+  if (!c || stock.busy) return;
+  if (stock.list.some(x => x.edited != null) && !confirm('保存していない名前があります。読み直すと消えますが、よろしいですか？')) return;
+  stock.busy = true;
+  stockBusyMsg('一覧を読み込み中…');
+  try {
+    const r = await fetchStockList(c);
+    if (!r.ok) { stockMsg(r.message, false); return; }
+    stock.list = r.items;
+    stock.loaded = true;
+    const skipped = r.skipped ? `（HEIC など、スマホで開けない形の写真 ${r.skipped} 枚はここにも出ません。ドライブで直接扱ってください）` : '';
+    stockMsg(r.items.length ? `${r.items.length} 枚${skipped}` : `ストックはまだ空です${skipped}`);
+    renderStock();
+    await loadThumbs(c);
+  } finally {
+    stock.busy = false;
+    $('load').textContent = '一覧を読み直す';
+    renderStock();
+  }
+}
+
+async function loadThumbs(c) {
+  const missing = stock.list.map(x => x.id).filter(id => !stock.thumbs[id]);
+  for (let i = 0; i < missing.length; i += THUMBS_PER_ASK) {
+    const r = await fetchStockThumbs(missing.slice(i, i + THUMBS_PER_ASK), c);
+    if (!r.ok) { stockMsg(`見本を読み込めませんでした: ${r.message}`, false); return; }
+    Object.assign(stock.thumbs, r.thumbs);
+    renderStock();
+    // ドライブに直接入れた写真の重い見本は、縮めて預け直す（次からスマホでも軽く出る）
+    if (r.heavy.length) {
+      try {
+        Object.assign(stock.thumbs, await lightenStockThumbs(stock.thumbs, r.heavy, c));
+      } catch (err) {
+        console.warn('見本を縮められませんでした', err);   // 重い見本のまま並べるだけ
+      }
+    }
+  }
+}
+
+function renderStock() {
+  const shown = shownStock();
+  $('stock').replaceChildren(...shown.map(stockView));
+  if (stock.loaded && stock.list.length && !shown.length) {
+    const p = document.createElement('p');
+    p.className = 'help';
+    p.textContent = `「${stock.query}」に合う写真はありません`;
+    $('stock').append(p);
+  }
+  const picked = stock.list.filter(x => x.picked).length;
+  $('trash').disabled = stock.busy || !picked;
+  $('trash').textContent = picked ? `選んだ ${picked} 枚をゴミ箱へ` : '選んだ写真をゴミ箱へ';
+  $('pickAll').checked = shown.length > 0 && shown.every(x => x.picked);
+}
+
+function stockView(x) {
+  const el = document.createElement('div');
+  el.className = `item ${x.picked ? 'picked' : ''}`;
+  const check = document.createElement('label');
+  check.className = 'check';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = !!x.picked;
+  box.onchange = () => { x.picked = box.checked; renderStock(); };
+  check.append(box, 'ゴミ箱へ移すものに選ぶ');
+  let pic;
+  if (stock.thumbs[x.id]) {
+    pic = document.createElement('img');
+    pic.src = stock.thumbs[x.id];
+    pic.alt = '';
+  } else {
+    pic = document.createElement('div');
+    pic.className = 'thumb-none';
+    pic.textContent = '🖼';
+  }
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.value = x.edited ?? x.name;
+  const save = document.createElement('button');
+  save.textContent = '保存';
+  save.disabled = x.edited == null;
+  name.oninput = () => {
+    x.edited = name.value === x.name ? null : name.value;
+    save.disabled = x.edited == null;
+  };
+  name.onkeydown = ev => { if (ev.key === 'Enter' && !ev.isComposing && x.edited != null) save.click(); };
+  const state = document.createElement('div');
+  state.className = 'state';
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  const when = x.updated ? new Date(x.updated).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  const showMeta = () => { meta.textContent = `${x.file}${when ? `・${when}` : ''}・${Math.round(x.size / 1024)}KB`; };
+  showMeta();
+  save.onclick = async () => {
+    const clean = cleanStockName(name.value);
+    if (!clean.ok) { state.className = 'state err'; state.textContent = `✗ ${clean.message}`; return; }
+    const c = collector();
+    if (!c) return;
+    save.disabled = true;
+    state.className = 'state';
+    state.textContent = '名前を変えています…';
+    const r = await renameStockPhoto(c, x.id, clean.name);
+    if (!r.ok) {
+      save.disabled = false;
+      state.className = 'state err';
+      state.textContent = `✗ 名前を変えられませんでした: ${r.message}`;
+      return;
+    }
+    x.file = r.name;
+    x.name = stockLabel(r.name);
+    x.edited = null;
+    name.value = x.name;
+    showMeta();
+    state.className = 'state ok';
+    state.textContent = '✓ 名前を変えました';
+  };
+  const rename = document.createElement('div');
+  rename.className = 'rename';
+  rename.append(name, save);
+  el.append(check, pic, rename, state, meta);
+  return el;
+}
+
+$('trash').onclick = async () => {
+  const picked = stock.list.filter(x => x.picked);
+  const c = collector();
+  if (!c || !picked.length || stock.busy) return;
+  const names = picked.slice(0, 5).map(x => `・${x.name}`).join('\n') + (picked.length > 5 ? `\n…ほか ${picked.length - 5} 枚` : '');
+  if (!confirm(`${picked.length} 枚をドライブのゴミ箱へ移します（30日は戻せます）。\n\n${names}`)) return;
+  stock.busy = true;
+  renderStock();
+  stockBusyMsg(`${picked.length} 枚をゴミ箱へ移しています…`);
+  try {
+    const r = await trashStockPhotos(c, picked.map(x => x.id));
+    if (!r.ok) { stockMsg(`ゴミ箱へ移せませんでした: ${r.message}`, false); return; }
+    const gone = new Set(picked.map(x => x.id));
+    stock.list = stock.list.filter(x => !gone.has(x.id));
+    for (const id of gone) delete stock.thumbs[id];
+    stockMsg(`✓ ${r.trashed} 枚をゴミ箱へ移しました（残り ${stock.list.length} 枚）`);
+  } finally {
+    stock.busy = false;
+    renderStock();
+  }
+};
+
+// 送っていない写真・保存していない名前があるまま閉じようとしたら止める（打った内容を黙って失わない）
 addEventListener('beforeunload', ev => {
-  if (sending || items.some(x => x.state === 'wait' || x.state === 'failed')) ev.preventDefault();
+  if (sending || items.some(x => x.state === 'wait' || x.state === 'failed') || stock.list.some(x => x.edited != null)) ev.preventDefault();
 });

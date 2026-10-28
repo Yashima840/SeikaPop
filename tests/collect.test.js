@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   adOutboxRecord, collectorOf, deliveryBaseName, deliveryBody, makeSetupLink, outboxReplaced,
   filterStock, parseSetupCode, popOutboxRecord, readReply, readStockReply, sortOutbox, stockItems, stockLabel,
-  BUILT_IN_COLLECTOR_URL, makeEasyPasscode, parsePasscodeInput, saveTargets, stockOutboxRecord, stockRequestBody, stockTitleOf, stockFileKey, DELIVERY_FORMAT,
+  BUILT_IN_COLLECTOR_URL, makeEasyPasscode, parsePasscodeInput, saveTargets, stockOutboxRecord, stockRequestBody, stockTitleOf, stockFileKey, cleanStockName, DELIVERY_FORMAT,
 } from '../js/collect.js';
 import { createPop } from '../js/model.js';
 
@@ -202,4 +202,11 @@ test('stockFileKey: 中身の SHA-256 の頭16バイトから印を作る（同�
   const d = new Uint8Array(32).map((_, i) => i * 7);
   assert.equal(stockFileKey(d.buffer), 'file-00070e151c232a31383f464d545b6269');
   assert.equal(stockFileKey(d.buffer), stockFileKey(d.slice().buffer));
+});
+
+test('cleanStockName: ドライブで使えない記号は「_」、前後の空白は外す、60文字まで', () => {
+  assert.deepEqual(cleanStockName(' トマト 大玉 '), { ok: true, name: 'トマト 大玉' });
+  assert.equal(cleanStockName('a/b:c*d?e\\f').name, 'a_b_c_d_e_f');
+  assert.equal(cleanStockName('あ'.repeat(80)).name.length, 60);
+  assert.equal(cleanStockName('  ').ok, false);
 });

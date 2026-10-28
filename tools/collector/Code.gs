@@ -11,6 +11,7 @@
 // 写真ストック（「青果ポップ 写真ストック」フォルダ）: どの端末からでも呼び出して使う写真の置き場。
 //   PC の担当はドライブのフォルダへ写真を直接入れる。店員さんのスマホは kind: 'stock' で写真を送って足す。
 //   action: 'stock-list'（一覧）／'stock-thumbs'（小さい見本）／'stock-get'（写真の本体）／'stock-thumbs-put'（端末で縮めた見本を預かる）。
+//   PC の作業場の管理画面から: 'stock-rename'（名前を変える）／'stock-trash'（ゴミ箱へ移す。30日はドライブから戻せる）。
 //   小さい見本はアプリが写真と一緒に送ってくる（200px の JPEG）。1つのファイル（THUMBS_FILE_NAME）にまとめて持ち、まとめて返す
 //   （ドライブが作る見本は PNG で重く、1枚ずつ取り出すので遅いため）。無い写真だけドライブの見本を返し、アプリが縮めて預け直す。
 //   読めるのはこのフォルダの中のファイルだけ（id を指定されても、ほかの場所のファイルは返さない）。
@@ -43,6 +44,8 @@ function doPost(e) {
     if (body.action === 'stock-thumbs') return reply_(stockThumbs_(props, body.ids));
     if (body.action === 'stock-get') return reply_(stockGet_(props, body.id));
     if (body.action === 'stock-thumbs-put') return reply_(stockThumbsPut_(props, body.thumbs));
+    if (body.action === 'stock-rename') return reply_(stockRename_(props, body.id, body.name));
+    if (body.action === 'stock-trash') return reply_(stockTrash_(props, body.ids));
     if (!body.key || !body.name || !body.image || !body.image.data) return reply_({ ok: false, message: '画像が入っていません' });
 
     var lock = LockService.getScriptLock();
@@ -187,6 +190,33 @@ function stockThumbsPut_(props, thumbs) {
     lock.releaseLock();
   }
   return { ok: true, stock: 1, saved: ids.length };
+}
+
+// 名前を変える（拡張子は元のまま。ドライブで使えない記号は「_」に）
+function stockRename_(props, id, name) {
+  var f = stockFile_(props, id);
+  if (!f) return { ok: false, message: 'ストックにその写真がありません（消されたかもしれません）' };
+  var clean = String(name || '').trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').slice(0, 60);
+  if (!clean) return { ok: false, message: '名前が空です' };
+  var ext = (/\.[A-Za-z0-9]{2,5}$/.exec(f.getName()) || [''])[0];
+  f.setName(clean + ext);
+  return { ok: true, stock: 1, name: f.getName() };
+}
+
+// ゴミ箱へ移す（30日はドライブのゴミ箱から戻せる）。預かっている見本も捨てる
+function stockTrash_(props, ids) {
+  var files = (Array.isArray(ids) ? ids : []).slice(0, STOCK_LIST_MAX).map(function (id) { return stockFile_(props, id); })
+    .filter(function (f) { return f; });
+  if (!files.length) return { ok: true, stock: 1, trashed: 0 };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    files.forEach(function (f) { f.setTrashed(true); });
+    updateThumbs_(props, function () {});   // ゴミ箱へ移した写真の見本は、ここで捨てられる
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true, stock: 1, trashed: files.length };
 }
 
 function isThumb_(t) {

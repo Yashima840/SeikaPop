@@ -101,16 +101,19 @@ export function stockThumbOf(blob) {
   return shrinkPhoto(blob, STOCK_THUMB.side, STOCK_THUMB.quality);
 }
 
-/** ストックに問い合わせる（読むだけなので控えない）。{ ok, data } か { ok:false, message }。 */
-async function askStock(action, extra) {
-  const c = collectorOf(await store.getSettings());
-  if (!c.ready) return { ok: false, notSet: true, message: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」）' };
+/**
+ * ストックに問い合わせる（控えずにその場で）。{ ok, data } か { ok:false, message }。
+ * admin＝PC の作業場で打った送り先 { url, passcode }（無ければこの端末の設定のもの）。
+ */
+async function askStock(action, extra, admin = null) {
+  const c = admin || collectorOf(await store.getSettings());
+  if (!admin && !c.ready) return { ok: false, notSet: true, message: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」）' };
   return post(c.url, stockRequestBody(c.passcode, action, extra), readStockReply);
 }
 
 /** ストックの一覧。{ ok, items, skipped（一覧に出せない形の写真の数）} */
-export async function fetchStockList() {
-  const r = await askStock('stock-list');
+export async function fetchStockList(admin = null) {
+  const r = await askStock('stock-list', {}, admin);
   return r.ok ? { ok: true, items: stockItems(r.data.items), skipped: Number(r.data.skipped) || 0 } : r;
 }
 
@@ -118,8 +121,8 @@ export async function fetchStockList() {
  * 小さい見本（id → data URL）。無いものは入らない。
  * heavy＝受け取り口に軽い見本がまだ無く、ドライブが作った重い見本を返してきた id（端末で縮めて putStockThumbs で返す）。
  */
-export async function fetchStockThumbs(ids) {
-  const r = await askStock('stock-thumbs', { ids });
+export async function fetchStockThumbs(ids, admin = null) {
+  const r = await askStock('stock-thumbs', { ids }, admin);
   if (!r.ok) return r;
   const thumbs = {}, heavy = [];
   for (const [id, t] of Object.entries(r.data.thumbs || {})) {
@@ -130,14 +133,35 @@ export async function fetchStockThumbs(ids) {
   return { ok: true, thumbs, heavy };
 }
 
-/** 端末で縮めた見本（id → data URL）を受け取り口へ預ける（次からはどの端末にも軽い見本が届く）。 */
-export async function putStockThumbs(thumbs) {
-  const body = {};
-  for (const [id, url] of Object.entries(thumbs)) {
-    const [head, data] = url.split(',');
-    body[id] = { type: /^data:([^;]+)/.exec(head)?.[1] || 'image/jpeg', data };
+/**
+ * 受け取り口に軽い見本が無かった写真（fetchStockThumbs の heavy。ドライブに直接入れた写真など）の重い見本を端末で縮め、
+ * 受け取り口へ預け直す（次からはどの端末にも軽い見本が届く）。縮めた見本（id → data URL）を返す。
+ * 預けられなくても縮めた見本はこの端末で使えるので、失敗は記録だけ残す。
+ */
+export async function lightenStockThumbs(thumbs, ids, admin = null) {
+  const small = {}, body = {};
+  for (const id of ids) {
+    const data = await store.blobToBase64(await stockThumbOf(await (await fetch(thumbs[id])).blob()));
+    small[id] = `data:image/jpeg;base64,${data}`;
+    body[id] = { type: 'image/jpeg', data };
   }
-  return askStock('stock-thumbs-put', { thumbs: body });
+  if (ids.length) {
+    const r = await askStock('stock-thumbs-put', { thumbs: body }, admin);
+    if (!r.ok) recordError('stock thumbs put', new Error(r.message));
+  }
+  return small;
+}
+
+/** ストックの写真の名前を変える（PC の作業場から）。拡張子は受け取り口がそのまま残す。{ ok, name } */
+export async function renameStockPhoto(admin, id, name) {
+  const r = await askStock('stock-rename', { id, name }, admin);
+  return r.ok ? { ok: true, name: String(r.data.name || '') } : r;
+}
+
+/** ストックの写真をドライブのゴミ箱へ移す（PC の作業場から。30日はドライブから戻せる）。{ ok, trashed } */
+export async function trashStockPhotos(admin, ids) {
+  const r = await askStock('stock-trash', { ids }, admin);
+  return r.ok ? { ok: true, trashed: Number(r.data.trashed) || 0 } : r;
 }
 
 /** 写真の本体（Blob）。 */

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>写真をストックへ送る（SeikaPop）</title>
+  <title>写真ストックの管理（SeikaPop）</title>
   <style>
     :root { --line: #d6d2c6; --muted: #6b6a63; --accent: #2f7d43; --err: #c62828; }
     * { box-sizing: border-box; }
@@ -26,7 +26,7 @@
     .msg.err { color: var(--err); }
     #drop { border: 2px dashed var(--line); border-radius: 10px; padding: 26px; text-align: center; color: var(--muted); background: #fbfaf6; }
     #drop.over { border-color: var(--accent); background: #eef6ef; color: var(--accent); }
-    #list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    #list, .list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
     .item { background: #fff; border-radius: 10px; padding: 8px; border: 2px solid transparent; }
     .item.done { border-color: var(--accent); }
     .item.failed { border-color: var(--err); }
@@ -36,13 +36,23 @@
     .item .state.err { color: var(--err); font-weight: 700; }
     .item .state.ok { color: var(--accent); font-weight: 700; }
     .item .rm { font-size: 12px; padding: 2px 8px; margin-top: 4px; }
+    h2 { font-size: 15px; margin: 0 0 6px; }
+    input[type=search] { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; width: 14em; }
+    button.danger { border-color: var(--err); color: var(--err); }
+    .item.picked { border-color: #e0a100; background: #fffbea; }
+    .item .meta { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+    .item .check { display: flex; gap: 4px; align-items: center; font-size: 12px; margin-bottom: 4px; }
+    .item .rename { display: flex; gap: 4px; margin-top: 6px; }
+    .item .rename input { margin-top: 0; flex: 1; min-width: 0; }
+    .item .rename button { font-size: 12px; padding: 2px 8px; }
+    .item .thumb-none { aspect-ratio: 4 / 3; border-radius: 6px; background: #ddd; display: grid; place-items: center; color: var(--muted); }
   </style>
 </head>
 <body>
   <header>
     <a class="home" href="./">← 作業場</a>
-    <h1>写真をストックへ送る</h1>
-    <span class="help" style="color:#fffc">パソコンの写真をまとめて、どの端末の「📦 ストックから」にも出る置き場へ送る</span>
+    <h1>写真ストックの管理</h1>
+    <span class="help" style="color:#fffc">どの端末の「📦 ストックから」にも出る写真の置き場。まとめて送る・名前を変える・ゴミ箱へ移す</span>
   </header>
   <main>
     <div class="card">
@@ -58,6 +68,7 @@
     </div>
 
     <div class="card">
+      <h2>写真を送る</h2>
       <div id="drop">
         ここに写真をドラッグ＆ドロップ（何枚でも）<br>
         <button id="choose" style="margin-top:8px">写真を選ぶ…</button>
@@ -74,6 +85,20 @@
         <span id="sum" class="msg"></span>
       </div>
       <div id="list"></div>
+    </div>
+
+    <div class="card">
+      <h2>今のストック</h2>
+      <div class="row">
+        <button id="load">一覧を読み込む</button>
+        <input id="q" type="search" placeholder="名前で探す（例: トマト）">
+        <label><input id="pickAll" type="checkbox"> 見えている写真を全部選ぶ</label>
+        <button id="trash" class="danger" disabled>選んだ写真をゴミ箱へ</button>
+        <span id="stockMsg" class="msg"></span>
+      </div>
+      <p class="help">名前を直したら「保存」。名前はスマホのストックで探すときの名前になります（拡張子はそのまま残ります）。
+        ゴミ箱へ移した写真は、法人アカウントのドライブのゴミ箱から 30 日は戻せます。ポップに使い終わった写真を消しても、作ったポップの写真は消えません（各端末に入っています）。</p>
+      <div id="stock" class="list-grid"></div>
     </div>
   </main>
   <script type="module" src="stock-upload.js"></script>
