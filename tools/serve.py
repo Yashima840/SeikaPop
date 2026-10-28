@@ -1,7 +1,6 @@
 """PC で SeikaPop を開く（デザイン作業用のローカルサーバー）。
 
     python tools/serve.py          # 起動してブラウザで作業場（PC の作業の入口）を開く
-    python tools/serve.py --lan    # 同じ Wi-Fi のスマホからも見られるようにする
     pythonw tools/serve.py         # 黒い窓を出さずに動かす（start.bat はこれ。止めるのは作業場の「終了」）
 
 python -m http.server と違い、ブラウザにファイルを控えさせない（Cache-Control: no-store）。
@@ -148,14 +147,9 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        # 作業場が「スマホで開くアドレス」を出すのに使う（同じ Wi-Fi 向けに起動したか・この PC のアドレス）
+        # 作業場が受け取り口（Apps Script）のプロジェクトを直接開くのに使う
         if self.path == INFO_PATH:
-            lan = self.server.lan
-            info = {"lan": lan, "ip": lan_address() if lan else None, "port": PORT}
-            # 受け取り口のプロジェクトはこの PC の作業場にだけ教える（同じ Wi-Fi の他の端末には出さない）
-            if self.client_address[0] in ("127.0.0.1", "::1"):
-                info["scriptId"] = clasp_script_id()
-            self.send_json(200, info)
+            self.send_json(200, {"scriptId": clasp_script_id()})
             return
         super().do_GET()
 
@@ -200,7 +194,6 @@ class Server(http.server.ThreadingHTTPServer):
     # 標準は同じポートの使い回しを許す設定で、Windows ではこれだと2回起動したときに
     # 同じポートを二重に取れてしまい、どちらが応えるか分からなくなる。使用中なら失敗させる
     allow_reuse_address = False
-    lan = False   # 同じ Wi-Fi のスマホにも見せているか（--lan）
 
     def server_bind(self):
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):  # Windows だけにある
@@ -217,19 +210,8 @@ def clasp_script_id():
     return sid if isinstance(sid, str) and re.fullmatch(r"[\w-]{20,}", sid) else None
 
 
-def lan_address():
-    """同じ Wi-Fi から見るときの、この PC の IP アドレス（分からなければ None）。"""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("192.0.2.1", 80))  # 実際には送らない。経路から自分のアドレスを知るだけ
-            return s.getsockname()[0]
-    except OSError:
-        return None
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--lan", action="store_true", help="同じ Wi-Fi のスマホからも見られるようにする")
     ap.add_argument("--no-browser", action="store_true", help="ブラウザを開かない")
     args = ap.parse_args()
     if sys.stdout is None:
@@ -240,8 +222,7 @@ def main():
     base = f"http://127.0.0.1:{PORT}"
     handler = functools.partial(NoCacheHandler, directory=str(ROOT))
     try:
-        server = Server(("0.0.0.0" if args.lan else "127.0.0.1", PORT), handler)
-        server.lan = args.lan
+        server = Server(("127.0.0.1", PORT), handler)
     except OSError:
         # もう起動している（前の窓が開いたまま）なら、ブラウザだけ開く
         print(f"ポート {PORT} は使用中です。起動済みとみなしてブラウザだけ開きます。")
@@ -254,10 +235,6 @@ def main():
     print(f"SeikaPop を起動しました。{how}。\n")
     for label, path in PAGES.items():
         print(f"  {label:<16} {base}{path}")
-    if args.lan:
-        ip = lan_address()
-        print(f"\n  スマホから（同じ Wi-Fi）  http://{ip or '<この PC の IP アドレス>'}:{PORT}/")
-        print("  ※ http なので共有ボタン・ホーム画面への追加は動きません（画像の保存で代わりになります）")
     print("\n直したら、ブラウザで再読み込み（F5）すれば反映されます。")
 
     if not args.no_browser:

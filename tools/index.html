@@ -76,19 +76,6 @@
           <button type="button" data-copy>コピー</button>
           <span class="note">どこからでも開ける。共有ボタン・ホーム画面への追加も使える（Safari・Chrome の「ホーム画面に追加」でアプリのように使える）</span>
         </div>
-        <div class="url-row">
-          <b>この PC のお試し版（同じ Wi-Fi のときだけ）</b>
-          <code class="url" data-url id="lanUrl"></code>
-          <button type="button" data-copy id="lanCopy" hidden>コピー</button>
-          <span class="note" id="lanNote">直したものを公開する前にスマホで見るとき。<code>start-lan.bat</code> で起動するとここにアドレスが出ます</span>
-        </div>
-        <div class="url-row">
-          <b>補正の確認ページ（端末で見た目が違うとき）</b>
-          <code class="url" data-url>https://yashima840.github.io/SeikaPop/tools/color-check.html</code>
-          <button type="button" data-copy>コピー</button>
-          <span class="note">PC・iPhone・Android で開き、出てくる「指紋」が同じなら補正の計算は同じ（違って見えるのは画面の設定）。
-            <a class="ext" href="color-check.html" target="_blank" rel="noopener">この PC で開く</a></span>
-        </div>
       </div>
     </section>
 
@@ -100,8 +87,8 @@
       <ol class="plain">
         <li><a class="go" href="../" target="seikapop-app">アプリを開く ↗</a>
           <span class="note">スマホの大きさで見たいときは F12 →「デバイスのツールバー」</span></li>
-        <li>スマホで試す: <code>start-lan.bat</code> で起動し、上の「この PC のお試し版」のアドレスを同じ Wi-Fi のスマホで開く
-          <span class="note">共有ボタン・ホーム画面への追加は HTTPS の公開版でだけ動く</span></li>
+        <li>スマホで試す: 直したものを公開してから、上の「公開版」をスマホで開く
+          <span class="note">上げてから1〜2分。届いたかは「メンテナンス」の「公開の進み具合」で見る</span></li>
       </ol>
     </section>
 
@@ -323,24 +310,18 @@
       setTimeout(() => { btn.textContent = 'コピー'; btn.classList.remove('done'); }, 1800);
     });
   }
-  // お試し版のアドレスは、start-lan.bat（--lan）で起動したときだけ tools/serve.py が教えてくれる
+  // 受け取り口のプロジェクトは tools/serve.py が教えてくれる（公開版など serve.py 以外で開いたときは答えが無い）
   (async () => {
     if (location.protocol === 'file:') return;
-    const note = document.getElementById('lanNote');
     try {
       const res = await fetch('/api/info');
-      if (!res.ok) return;   // 公開版など、serve.py 以外で開いている
+      if (!res.ok) return;
       const info = await res.json();
       if (info.scriptId) {
         auto.script = `https://script.google.com/home/projects/${info.scriptId}/edit`;
         refresh();
       }
-      if (!info.lan) return;
-      if (!info.ip) { note.textContent = 'この PC の IP アドレスが分かりませんでした（Wi-Fi につながっているか確かめてください）'; return; }
-      document.getElementById('lanUrl').textContent = `http://${info.ip}:${info.port}/`;
-      document.getElementById('lanCopy').hidden = false;
-      note.textContent = 'スマホが同じ Wi-Fi につながっているときだけ開けます。http なので共有ボタン・ホーム画面への追加は動きません（画像の保存で代わりになります）。PC を止めると開けなくなります';
-    } catch { /* 答えが無い＝serve.py 以外で開いている。案内のまま残す */ }
+    } catch { /* 答えが無い＝serve.py 以外で開いている。登録した先か一覧を開く */ }
   })();
 
   // file:// で開くと、他の画面の部品（js/*.js）を読めず何も動かない
