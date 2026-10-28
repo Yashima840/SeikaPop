@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   adOutboxRecord, collectorOf, deliveryBaseName, deliveryBody, makeSetupLink, outboxReplaced,
   filterStock, parseSetupCode, popOutboxRecord, readReply, readStockReply, sortOutbox, stockItems, stockLabel,
-  BUILT_IN_COLLECTOR_URL, makeEasyPasscode, parsePasscodeInput, saveTargets, stockOutboxRecord, stockRequestBody, DELIVERY_FORMAT,
+  BUILT_IN_COLLECTOR_URL, makeEasyPasscode, parsePasscodeInput, saveTargets, stockOutboxRecord, stockRequestBody, stockTitleOf, stockFileKey, DELIVERY_FORMAT,
 } from '../js/collect.js';
 import { createPop } from '../js/model.js';
 
@@ -186,4 +186,17 @@ test('覚えやすい合言葉: 言葉3つ＋3桁で、合言葉の形として�
   const q = makeEasyPasscode(new Uint8Array([255, 255, 255, 255, 255, 255]));
   assert.match(q, /^[a-z]+-[a-z]+-[a-z]+-\d{3}$/);
   assert.equal(parsePasscodeInput(q).ok, true);
+});
+
+test('stockTitleOf: PC から送る写真の名前はファイル名から拡張子を外したもの', () => {
+  assert.equal(stockTitleOf('トマト.JPG'), 'トマト');
+  assert.equal(stockTitleOf(' 新じゃが 北海道.jpeg '), '新じゃが 北海道');
+  assert.equal(stockTitleOf('.png'), '写真');
+  assert.equal(stockTitleOf(''), '写真');
+});
+
+test('stockFileKey: 中身の SHA-256 の頭16バイトから印を作る（同じ写真は同じ印）', () => {
+  const d = new Uint8Array(32).map((_, i) => i * 7);
+  assert.equal(stockFileKey(d.buffer), 'file-00070e151c232a31383f464d545b6269');
+  assert.equal(stockFileKey(d.buffer), stockFileKey(d.slice().buffer));
 });

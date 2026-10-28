@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>写真をストックへ送る（SeikaPop）</title>
+  <style>
+    :root { --line: #d6d2c6; --muted: #6b6a63; --accent: #2f7d43; --err: #c62828; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.5 system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; background: #ecebe6; color: #222; }
+    header { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      padding: 8px 14px; background: #24412d; color: #fff; }
+    header h1 { font-size: 16px; margin: 0 12px 0 0; }
+    header a.home { color: #fff; text-decoration: none; font-size: 13px; padding: 4px 8px; border-radius: 6px; border: 1px solid #fff4; }
+    main { padding: 14px; max-width: 1100px; margin: 0 auto; }
+    .card { background: #fff; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+    label { display: inline-flex; gap: 6px; align-items: center; }
+    input[type=text], input[type=password] { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; }
+    button { font: inherit; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line); background: #f6f5f0; cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; padding: 8px 18px; }
+    button:disabled { opacity: .5; cursor: default; }
+    .help { color: var(--muted); font-size: 12px; margin: 4px 0; }
+    .msg { font-weight: 700; }
+    .msg.ok { color: var(--accent); }
+    .msg.err { color: var(--err); }
+    #drop { border: 2px dashed var(--line); border-radius: 10px; padding: 26px; text-align: center; color: var(--muted); background: #fbfaf6; }
+    #drop.over { border-color: var(--accent); background: #eef6ef; color: var(--accent); }
+    #list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .item { background: #fff; border-radius: 10px; padding: 8px; border: 2px solid transparent; }
+    .item.done { border-color: var(--accent); }
+    .item.failed { border-color: var(--err); }
+    .item img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; background: #ddd; display: block; }
+    .item input { width: 100%; margin-top: 6px; }
+    .item .state { font-size: 12px; margin-top: 4px; min-height: 1.5em; }
+    .item .state.err { color: var(--err); font-weight: 700; }
+    .item .state.ok { color: var(--accent); font-weight: 700; }
+    .item .rm { font-size: 12px; padding: 2px 8px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="home" href="./">← 作業場</a>
+    <h1>写真をストックへ送る</h1>
+    <span class="help" style="color:#fffc">パソコンの写真をまとめて、どの端末の「📦 ストックから」にも出る置き場へ送る</span>
+  </header>
+  <main>
+    <div class="card">
+      <div class="row">
+        <label>合言葉 <input id="passcode" type="password" autocomplete="off" style="width:18em"></label>
+        <label><input id="show" type="checkbox"> 見せる</label>
+        <label>送った人の名前 <input id="sender" type="text" style="width:8em"></label>
+        <button id="ping">送り先を確かめる</button>
+        <span id="pingMsg" class="msg"></span>
+      </div>
+      <p class="help">合言葉は、スマホの「⚙ 設定 → みんなで使える場所」に入れているものと同じです（このパソコンのアプリに入っていれば、最初から入ります）。
+        この画面は合言葉を覚えません。名前はストックで「トマト（事務所）」のように写真の名前の後ろに出ます。</p>
+    </div>
+
+    <div class="card">
+      <div id="drop">
+        ここに写真をドラッグ＆ドロップ（何枚でも）<br>
+        <button id="choose" style="margin-top:8px">写真を選ぶ…</button>
+        <input id="files" type="file" accept="image/*" multiple hidden>
+      </div>
+      <p class="help">送るときに長い辺 1600px の JPEG に縮めます（スマホへの読み込みを速くするため）。写真の名前は送る前に直せます。ストックで探すときの名前になるので、「トマト」「新じゃが」のように商品名にしておくと見つけやすくなります。
+        同じ写真をもう一度送ると、ストックの前の1枚と置き換わります（並んで増えません）。HEIC など、このブラウザで開けない形の写真は送れないので、JPEG・PNG に書き出してから入れてください。</p>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <button id="send" class="primary" disabled>まとめて送る</button>
+        <button id="clearDone" disabled>送ったものを一覧から外す</button>
+        <span id="sum" class="msg"></span>
+      </div>
+      <div id="list"></div>
+    </div>
+  </main>
+  <script type="module" src="stock-upload.js"></script>
+</body>
+</html>

@@ -86,6 +86,15 @@ export async function queueStockPhoto(photoId, title) {
   return true;
 }
 
+/**
+ * PC の作業場から、写真を1枚ストックへ送る。控えには残さず、その場で結果を返す
+ * （作業場の画面が送れなかった写真と理由を並べ、送り直してもらう）。key は stockFileKey で作った印。
+ */
+export async function sendStockPhoto({ url, passcode, sender }, photo, title, key) {
+  const record = stockOutboxRecord(key, title, { id: newId(), sender });
+  return post(url, deliveryBody(record, passcode, await asData(photo), null));
+}
+
 /** ストックに問い合わせる（読むだけなので控えない）。{ ok, data } か { ok:false, message }。 */
 async function askStock(action, extra) {
   const c = collectorOf(await store.getSettings());

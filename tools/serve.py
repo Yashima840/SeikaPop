@@ -36,6 +36,7 @@ PAGES = {
     "金額キャッチの試作キット": "/tools/price-kit/price-kit.html",
     "外部AI案の比較": "/tools/price-kit/compare.html",
     "合言葉を決める": "/tools/collector/link.html",
+    "写真をストックへ送る": "/tools/stock-upload.html",
 }
 CATCH_JS = ROOT / "js" / "catch-design.js"
 BACKUP_DIR = ROOT / "tools" / "designer-backup"

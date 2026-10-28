@@ -145,6 +145,20 @@ export function stockOutboxRecord(photoId, title, { id, sender, now = new Date()
   };
 }
 
+/** PC からストックへ送る写真の名前（ファイル名から拡張子を外したもの。空なら「写真」）。 */
+export function stockTitleOf(fileName) {
+  return String(fileName || '').trim().replace(/\.[a-z0-9]{2,5}$/i, '').trim() || '写真';
+}
+
+/**
+ * PC からストックへ送る写真の印（ファイルの中身の SHA-256 から作る）。
+ * 同じ写真を送り直しても、受け取り口が前の1枚を置き換えるので、ストックに同じ写真が並ばない。
+ */
+export function stockFileKey(digest) {
+  const hex = Array.from(new Uint8Array(digest).slice(0, 16), b => b.toString(16).padStart(2, '0')).join('');
+  return `file-${hex}`;
+}
+
 /** 写真ストックを読む本文（action: stock-list / stock-thumbs / stock-get）。 */
 export function stockRequestBody(passcode, action, extra = {}) {
   return { format: DELIVERY_FORMAT, version: DELIVERY_VERSION, passcode, action, ...extra };
