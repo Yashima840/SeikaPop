@@ -374,7 +374,7 @@ export async function showAd(root, app) {
         if (await sent) done.push('みんなで使える場所へ送ります');
         if (t.phone) {
           downloadFile(made.file);
-          done.push('このスマホに保存しました');
+          done.push('この端末に保存しました');
         }
         if (done.length) toast(done.join('・'));
       }
@@ -394,7 +394,7 @@ export async function showAd(root, app) {
       choiceBox('shared', 'みんなで使える場所に保管', collectorReady
         ? { note: '事務所のドライブに集まります。共有したときもここに入ります' }
         : { disabled: true, note: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」で入れます）' }),
-      choiceBox('phone', 'このスマホに保存', { note: '写真（ダウンロード）に入ります' }),
+      choiceBox('phone', 'この端末に保存', { note: 'スマホは写真（ダウンロード）、パソコンはダウンロードのフォルダーに入ります' }),
       problemsEl, saveBtn),
   );
   draw();

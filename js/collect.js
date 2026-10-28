@@ -64,7 +64,7 @@ export function makeEasyPasscode(bytes) {
 
 /**
  * 「保存する」で実際にどこへ置くか。choice は画面のチェック（shared: みんなで使える場所＝事務所のドライブ／
- * phone: このスマホ／regular: レギュラー）。送り先が未設定なら shared は外す。none: 置く所が1つも無い。
+ * phone: この端末／regular: レギュラー）。送り先が未設定なら shared は外す。none: 置く所が1つも無い。
  */
 export function saveTargets(choice, collectorReady) {
   const t = { shared: !!choice.shared && !!collectorReady, phone: !!choice.phone, regular: !!choice.regular };

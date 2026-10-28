@@ -547,7 +547,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
       if (t.phone) {
         try {
           downloadFile(made.file);
-          done.push('このスマホに保存しました');
+          done.push('この端末に保存しました');
         } catch (err) {
           toast(`画像を保存できませんでした: ${err.message}`, { error: true });
           await kept;
@@ -594,7 +594,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
       choiceBox('shared', 'みんなで使える場所に保管', collectorReady
         ? { note: '事務所のドライブに集まります。共有したときも、このポップの大きさで入ります' }
         : { disabled: true, note: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」で入れます）' }),
-      choiceBox('phone', 'このスマホに保存', { note: '写真（ダウンロード）に入ります' }),
+      choiceBox('phone', 'この端末に保存', { note: 'スマホは写真（ダウンロード）、パソコンはダウンロードのフォルダーに入ります' }),
       pop.isRegular
         ? h('p', { class: 'hint' }, 'これはレギュラーの元です。ここで直すと、次に呼び出したときから反映されます。')
         : choiceBox('regular', pop.fromRegularId ? '★ レギュラーを今の内容で更新' : '★ レギュラーに登録',
