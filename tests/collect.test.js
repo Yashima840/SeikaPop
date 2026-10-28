@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   adOutboxRecord, collectorOf, deliveryBaseName, deliveryBody, makeSetupLink, outboxReplaced,
-  filterStock, parseSetupCode, popOutboxRecord, readReply, readStockReply, sortOutbox, stockItems, stockLabel,
+  filterStock, parseSetupCode, popOutboxRecord, readReply, readStockReply, sortOutbox, stockItems, stockLabel, stockProductName,
   BUILT_IN_COLLECTOR_URL, makeEasyPasscode, parsePasscodeInput, saveTargets, stockOutboxRecord, stockRequestBody, stockTitleOf, stockFileKey, cleanStockName, DELIVERY_FORMAT,
 } from '../js/collect.js';
 import { createPop } from '../js/model.js';
@@ -147,6 +147,12 @@ test('写真ストックの名前: アプリが付けた日時・印は見せず
   assert.equal(stockLabel('20261027-0830_名前なし_トマト_1a2b3c.jpg'), 'トマト');
   assert.equal(stockLabel('シャインマスカット 箱.JPG'), 'シャインマスカット 箱');
   assert.equal(stockLabel(''), '（名前なし）');
+  // 商品名へ入れるのは名前だけ（送った人・日時・印・拡張子は付けない）
+  assert.equal(stockProductName('20261027-0830_田中_完熟トマト_1a2b3c.jpg'), '完熟トマト');
+  assert.equal(stockProductName('20261027-0830_名前なし_トマト_1a2b3c.jpg'), 'トマト');
+  assert.equal(stockProductName('シャインマスカット 箱.JPG'), 'シャインマスカット 箱');
+  assert.equal(stockProductName(''), '');
+  assert.equal(stockItems([{ id: 'x', name: '20261027-0830_田中_なす_1a2b3c.jpg' }])[0].product, 'なす');
   assert.deepEqual(stockItems([{ id: 'x', name: 'a.png', size: '10' }, null, { name: 'no-id' }]).map(i => [i.id, i.name, i.size]), [['x', 'a', 10]]);
 });
 

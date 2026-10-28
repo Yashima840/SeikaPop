@@ -196,17 +196,29 @@ export function readStockReply(reply) {
 export function stockItems(list) {
   if (!Array.isArray(list)) return [];
   return list.filter(x => x && typeof x.id === 'string').map(x => ({
-    id: x.id, name: stockLabel(x.name), file: String(x.name || ''), type: String(x.type || ''),
+    id: x.id, name: stockLabel(x.name), product: stockProductName(x.name), file: String(x.name || ''), type: String(x.type || ''),
     size: Number(x.size) || 0, updated: String(x.updated || ''),
   }));
 }
 
-/** 「20261027-0830_田中_トマト_1a2b3c.jpg」→「トマト（田中）」。PC で入れた名前はそのまま（拡張子だけ外す）。 */
-export function stockLabel(fileName) {
+/** ストックのファイル名を { name, sender } に分ける。アプリが付けた日時・送った人・末尾の印と、拡張子は外す。 */
+function splitStockName(fileName) {
   const base = String(fileName || '').replace(/\.[a-z0-9]{2,5}$/i, '');
   const m = /^\d{8}-\d{4}_([^_]+)_(.+)_[\w-]{1,6}$/.exec(base);
-  if (!m) return base || '（名前なし）';
-  return m[1] === '名前なし' ? m[2] : `${m[2]}（${m[1]}）`;
+  if (!m) return { name: base.trim(), sender: '' };
+  return { name: m[2].trim(), sender: m[1] === '名前なし' ? '' : m[1] };
+}
+
+/** 「20261027-0830_田中_トマト_1a2b3c.jpg」→「トマト（田中）」。PC で入れた名前はそのまま（拡張子だけ外す）。 */
+export function stockLabel(fileName) {
+  const { name, sender } = splitStockName(fileName);
+  if (!name) return '（名前なし）';
+  return sender ? `${name}（${sender}）` : name;
+}
+
+/** ストックの写真を選んだときに商品名へ入れる名前（送った人は付けない。読めなければ空）。 */
+export function stockProductName(fileName) {
+  return splitStockName(fileName).name.slice(0, 40);
 }
 
 /** ストックを名前で絞る（空なら全部）。全角・半角やカタカナ・ひらがなの違いは気にしない。 */

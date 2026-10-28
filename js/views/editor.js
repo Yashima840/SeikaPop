@@ -160,8 +160,13 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
   const fileCamera = h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true });
   const fileLibrary = h('input', { type: 'file', accept: 'image/*', hidden: true });
   const pickPhoto = camera => (camera ? fileCamera : fileLibrary).click();
-  /** 撮った・選んだ・ストックから呼んだ写真を、このポップの写真にする。fromStock＝ストックの写真（整え済みなので自動補正しない）。 */
-  const usePhoto = async (file, { fromStock = false } = {}) => {
+  // ストックから選んで自動で入れた商品名。そのままなら、別の写真を選び直したときに入れ替える（打ち直した名前は消さない）
+  let stockName = '';
+  /**
+   * 撮った・選んだ・ストックから呼んだ写真を、このポップの写真にする。fromStock＝ストックの写真（整え済みなので自動補正しない）。
+   * name＝ストックの写真の名前。商品名が空（または前に自動で入れたまま）なら商品名にする。
+   */
+  const usePhoto = async (file, { fromStock = false, name = '' } = {}) => {
     statusEl.textContent = '写真を読み込み中…';
     const blob = await shrinkPhoto(file);
     const img = await blobToImage(blob);
@@ -171,11 +176,15 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     pop.crop = { ...DEFAULT_CROP };
     pop.adjust = fromStock ? { ...DEFAULT_ADJUST } : autoAdjustFor(img);   // 朝は手間をかけられないので、撮った写真はまず自動で整える
     refreshAdjusted();
+    const current = (pop.name || '').trim();
+    const fillName = Boolean(name) && (!current || current === stockName);
+    if (fillName) pop.name = stockName = name;
     // 新しい写真を指していることを先に保存してから片付ける（逆だと新しい写真が消される）
     await store.putPop(pop);
     await store.removeUnusedPhotos();  // 差し替えた前の写真を片付ける（レギュラーが使っていれば残る）
     changed({ rebuild: true });
-    toast(fromStock ? 'ストックの写真にしました' : '写真を自動で明るく整えました（「写真の調整」で変えられます）');
+    toast(!fromStock ? '写真を自動で明るく整えました（「写真の調整」で変えられます）'
+      : fillName ? `ストックの写真にして、商品名を「${name}」にしました` : 'ストックの写真にしました');
   };
   const onFile = async ev => {
     const file = ev.target.files?.[0];
@@ -191,7 +200,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
   fileCamera.addEventListener('change', onFile);
   fileLibrary.addEventListener('change', onFile);
   // ストックから選ぶ（失敗はストックの画面に出して、選び直せるようにする）
-  const pickFromStock = () => openStockPicker({ onPick: blob => usePhoto(blob, { fromStock: true }) });
+  const pickFromStock = () => openStockPicker({ onPick: (blob, item) => usePhoto(blob, { fromStock: true, name: item.product }) });
   // 今の写真（補正前の元の写真）をストックに足す。送れなければ控えて送り直す
   const addToStock = async () => {
     try {
