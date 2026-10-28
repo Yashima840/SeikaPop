@@ -104,7 +104,7 @@ PC の担当 ──ドライブのフォルダへ写真をドラッグ──▶ 
 |---|---|
 | スマホに「合言葉が違います」 | `PASSCODE` が変わった・打ち間違い。今の合言葉を ⚙ 設定 →「みんなで使える場所」で入れ直す |
 | 合言葉が漏れたかもしれない | `PASSCODE` を新しい合言葉に変える → 全員に伝えて入れ直してもらう（前の合言葉の端末からは届かなくなる） |
-| `Code.gs` を直した（PC から上げる） | clasp（Google の公式ツール）で上げられる。法人アカウントで `clasp -u seikapop login` 済みなら、`tools/collector` で `clasp -u seikapop push --force` → `clasp -u seikapop list-deployments` で番号の付いたデプロイ（`@1` など。`@HEAD` ではない方）の ID を見て `clasp -u seikapop update-deployment <その ID> -d "説明"`（URL は変わらない）。`.clasp.json`（スクリプト ID）と `appsscript.json` は店ごとなので Git に入れない |
+| `Code.gs` を直した（PC から上げる） | clasp（Google の公式ツール）で上げられる。法人アカウントで `clasp -u seikapop login` 済みなら、`bash tools/collector/deploy.sh "説明"` で下の手順をまとめて行う（番号の付いたデプロイを全部更新）。手で行うなら `tools/collector` で `clasp -u seikapop push --force` → `clasp -u seikapop list-deployments` で番号の付いたデプロイ（`@1` など。`@HEAD` ではない方）の ID を見て `clasp -u seikapop update-deployment <その ID> -d "説明"`（URL は変わらない）。`.clasp.json`（スクリプト ID）と `appsscript.json` は店ごとなので Git に入れない |
 | `Code.gs` を直した（画面で） | 「デプロイ」→「デプロイを管理」→ ✎ →「バージョン: 新バージョン」→「デプロイ」（URL は変わらない）。**「新しいデプロイ」にすると URL が変わり、`BUILT_IN_COLLECTOR_URL` の直しと公開が要る** |
 | 「📦 ストックから」「📂 保管したポップから作る」で「受け取り口が古い版です」 | 新しい `Code.gs` を貼り直して「新バージョン」でデプロイ（上の「写真ストック」） |
 | PC で入れた写真が一覧に出ない | HEIC など開けない形か 20MB 超え（一覧の上に「出していません n 枚」と出る）。JPEG にして入れ直す |
