@@ -249,6 +249,8 @@ export const PRICE_BADGES = [
     text: { cx: 0.5, cy: 0.5, w: 0.58 }, font: { family: 'Kaushan Script', weight: '400' }, numScale: 1.05, rotate: -8, color: 'blackGold', outline: '#000000', sub: '#3a2508', halo: '#f2c14e' },
   { id: 'green-medal', label: '緑のメダル', src: 'img/badges/green-medal.png', aspect: 484 / 472,
     text: { cx: 0.5, cy: 0.49, w: 0.5, h: 0.36 }, font: { family: 'Shippori Mincho B1', weight: '800' }, numScale: 1.6, numShift: 0.5, color: '#ffffff', sub: '#ffffff', halo: '#1f5a2c' },
+  { id: 'flower-frame', label: '花の額', src: 'img/badges/flower-frame.png', aspect: 607 / 390,
+    text: { cx: 0.495, cy: 0.46, w: 0.56, h: 0.42 }, font: { family: 'Shippori Mincho B1', weight: '800' }, numScale: 1.3, color: '#6b3f0c', sub: '#7a5a2e', halo: '#fdf3e9' },
 ];
 
 /** 台紙のボタンを押したときの次の台紙の id（一覧の順に回り、最後の次は最初へ。知らない id は最初の次）。 */
