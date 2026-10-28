@@ -4,7 +4,7 @@
 
 import { BACKUP_FORMAT, BACKUP_VERSION, mergePops, mergeShots, unreferencedPhotoIds, validateBackup } from './backup.js';
 import { outboxReplaced, sortOutbox } from './collect.js';
-import { DEFAULT_TAX_RATE, historyOverflow, newId } from './model.js';
+import { DEFAULT_TAX_RATE, historyOverflow, newId, upgradeDesign } from './model.js';
 import { cleanCustomFrames, mergeCustomFrames } from './frames.js';
 
 const DB_NAME = 'seikapop';
@@ -63,12 +63,13 @@ async function run(storeNames, mode, fn) {
   });
 }
 
+// 読むときに古いデザインの選び方を今の形へ直す（「金額主役」→「写真主役」の台紙「爆発」）。次に保存したときに書き換わる
 export async function listPops() {
-  return run(['pops'], 'readonly', tx => reqDone(tx.objectStore('pops').getAll()));
+  return (await run(['pops'], 'readonly', tx => reqDone(tx.objectStore('pops').getAll()))).map(upgradeDesign);
 }
 
 export async function getPop(id) {
-  return run(['pops'], 'readonly', tx => reqDone(tx.objectStore('pops').get(id)));
+  return upgradeDesign(await run(['pops'], 'readonly', tx => reqDone(tx.objectStore('pops').get(id))));
 }
 
 export async function putPop(pop) {

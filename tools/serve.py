@@ -29,7 +29,7 @@ PORT = 8765
 HUB = "/tools/"
 PAGES = {
     "作業場（ここから始める）": HUB,
-    "デザイン編集（金額主役）": "/tools/designer.html",
+    "デザイン編集（台紙「爆発」）": "/tools/designer.html",
     "アプリ": "/",
     "見本帳（全デザイン×全サイズ）": "/tools/gallery.html",
     "台紙の書体を見比べる": "/tools/badge-fonts.html",
@@ -49,7 +49,7 @@ INFO_PATH = "/api/info"
 CLASP_JSON = ROOT / "tools" / "collector" / ".clasp.json"
 # 窓が無いとき（pythonw）の出力先。保存の控えや失敗の理由を後から読めるように
 LOG = ROOT / "tools" / "serve.log"
-LABEL_HEADER = """// 「金額主役」の 産地・商品名・数量と単位 の3行のデザイン（tools/designer.html の「保存」で書き換わる。手で直してもよい）
+LABEL_HEADER = """// 写真主役の台紙「爆発」の 産地・商品名・数量と単位 の3行のデザイン（tools/designer.html の「保存」で書き換わる。手で直してもよい）
 // 座標は、写真の枠の左下を (0, 0) とした「デザイン単位」（幅1080pxの画像で 1 単位＝1px）。右・下がプラス。
 // x, y は1行目の文字の基準点（align の位置・文字の下端の線）。
 // size は最大の大きさ。maxW を超えると maxLines まで折り返し、それでも入らなければ minSize まで縮める。

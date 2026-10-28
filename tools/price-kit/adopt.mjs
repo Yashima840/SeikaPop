@@ -25,7 +25,7 @@ try {
   await buildKit();
   console.log(`取り込みました: ${DESIGN_JS}`);
   console.log(`前のデザインの控え: ${backup}`);
-  console.log('次に: npm test → npm run lint → tools/gallery.html で「金額主役」を見る');
+  console.log('次に: npm test → npm run lint → tools/gallery.html で写真主役の台紙「爆発」を見る');
 } catch (err) {
   console.error(`取り込めませんでした: ${err.message}`);
   process.exit(1);

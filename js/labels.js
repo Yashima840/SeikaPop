@@ -1,4 +1,4 @@
-// 「金額主役」の 産地・商品名・数量と単位 の3行。見た目・置き場所は label-design.js（tools/designer.html で編集する）。
+// 写真主役の台紙「爆発」の 産地・商品名・数量と単位 の3行。見た目・置き場所は label-design.js（tools/designer.html で編集する）。
 // 置き方の計算（layoutLabels・labelBounds）と検査（labelDesignProblems）は Canvas に触らない純粋な関数。
 // 文字の幅は measure(text, size, style) を外から渡す（テストでは 文字数×大きさ で代用できる）。
 
@@ -80,7 +80,7 @@ export function labelDesignFor(pop, design = LABEL_DESIGN) {
 
 /**
  * 写真の下に要る高さ（デザイン単位）＝写真の枠の下端より下にはみ出す行の下端。下に何も出ないなら 0。
- * 「金額主役」が写真の高さを決めるのに使う（商品名が2行なら写真を縮める）。
+ * 台紙「爆発」が写真の高さを決めるのに使う（商品名が2行なら写真を縮める）。
  */
 export function labelsBelow(pop, measure, design = LABEL_DESIGN) {
   const lay = layoutLabels(pop, measure, design);

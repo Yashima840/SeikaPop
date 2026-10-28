@@ -1,6 +1,8 @@
 // ポップを Canvas へ描く・画像ファイルにする。
 
-import { adFileName, badgeFonts, exportFileName, formatDate, NAME_FONTS, nameFontOf, priceBadgeOf, priceTexts, SIZES } from './model.js';
+import {
+  adFileName, badgeFonts, exportFileName, formatDate, NAME_FONTS, nameFontOf, priceBadgeOf, priceTexts, SIZES, upgradeDesign,
+} from './model.js';
 import { FONTS, font, measurer, roundRectPath, TEMPLATES } from './templates.js';
 import { canvasToBlob } from './image.js';
 import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.js';
@@ -17,8 +19,9 @@ export function templateOf(pop) {
 }
 
 let measureCtx = null;
-/** 写真を敷く枠（編集画面のドラッグにも使う）。「金額主役」は商品名の行数で写真の高さが変わるので、文字を測って渡す。 */
+/** 写真を敷く枠（編集画面のドラッグにも使う）。台紙「爆発」は商品名の行数で写真の高さが変わるので、文字を測って渡す。 */
 export function photoBoxOf(pop) {
+  pop = upgradeDesign(pop);
   const s = sizeOf(pop);
   measureCtx ??= document.createElement('canvas').getContext('2d');
   return templateOf(pop).photoBox(s.w, s.h, pop, canvasMeasure(measureCtx));
@@ -99,6 +102,7 @@ export async function ensureFonts(pop, settings, onFail) {
  * 返すのは指で動かせる物の置き場所（{ badge: { x, y, w, h } }＝金額の台紙。無ければ空）。
  */
 export function renderPop(canvas, pop, photo, settings, { preview = false } = {}) {
+  pop = upgradeDesign(pop);   // 古いデザインの選び方（「金額主役」）も今の形で描く
   const s = sizeOf(pop);
   if (canvas.width !== s.w) canvas.width = s.w;
   if (canvas.height !== s.h) canvas.height = s.h;
@@ -113,7 +117,7 @@ export function renderPop(canvas, pop, photo, settings, { preview = false } = {}
     price: priceTexts(pop, settings),   // 価格が無ければ null
     shopName: '',   // 店名はポップに入れない（フレームの下の帯で入れる）
     nameFont: nameFontOf(pop),   // 商品名の書体（選んでいなければ null＝デザインのまま）
-    priceBadge: badgeFor(pop),   // 金額の台紙（「写真主役」だけが使う。無ければ黄色い丸）
+    priceBadge: badgeFor(pop),   // 金額の台紙の絵（「写真主役」だけが使う。無ければ黄色い丸。「爆発」は絵を使わない）
   });
   ctx.restore();
   return hit;

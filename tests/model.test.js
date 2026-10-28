@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   createPop, exportFileName, exportProblems, formatDate, formatPrice, isBlankPop, localStamp,
-  nextPriceBadge, parsePriceInput, popFromRegular, PRICE_BADGES, priceBadgeOf, regularFromPop, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
+  isBurstLayout, nextPriceBadge, parsePriceInput, upgradeDesign, popFromRegular, PRICE_BADGES, priceBadgeOf, regularFromPop, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
 } from '../js/model.js';
 
 const T0 = new Date('2026-10-20T06:30:00Z');
@@ -115,7 +115,7 @@ test('共有の使う先は、どれもある大きさを指し、重ならな�
 
 test('金額の台紙: 絵がアプリに入っていて（オフラインでも出る）、知らない id は黄色い丸', () => {
   const shell = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
-  for (const b of PRICE_BADGES.filter(x => x.id)) {
+  for (const b of PRICE_BADGES.filter(x => x.src)) {
     assert.ok(existsSync(new URL(`../${b.src}`, import.meta.url)), b.src);
     assert.ok(shell.includes(`'./${b.src}'`), `sw.js の SHELL に ${b.src}`);
     assert.ok(b.text.w > 0 && b.text.w < 1 && b.aspect > 0, b.id);
@@ -133,4 +133,19 @@ test('金額の台紙のボタン: 押すたびに一覧の順に回り、最後
   assert.equal(id, '', '1周したら最初（黄色い丸）');
   assert.equal(nextPriceBadge(undefined), PRICE_BADGES[1].id, '古いポップ（台紙なし）は黄色い丸の次へ');
   assert.equal(nextPriceBadge('no-such'), PRICE_BADGES[1].id);
+});
+
+test('「金額主役」は「写真主役」の台紙「爆発」になった（古いポップは読み込むときに直す）', () => {
+  const old = { id: 'p1', template: 'bold', name: 'トマト', priceBadge: '', badgePos: { x: 0.5, y: 0.5 } };
+  const up = upgradeDesign(old);
+  assert.equal(up.template, 'fresh');
+  assert.equal(up.priceBadge, 'burst');
+  assert.equal(up.badgePos, null);
+  assert.equal(up.name, 'トマト');
+  assert.equal(isBurstLayout(up), true);
+  assert.equal(old.template, 'bold', '元のポップは変えない');
+  const fresh = { template: 'fresh', priceBadge: 'gold-brush' };
+  assert.equal(upgradeDesign(fresh), fresh, '今の形はそのまま');
+  assert.equal(upgradeDesign(null), null);
+  assert.ok(PRICE_BADGES.some(b => b.id === 'burst' && b.label === '爆発'));
 });

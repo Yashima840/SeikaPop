@@ -1,4 +1,4 @@
-// 「金額主役」の 産地・商品名・数量と単位 の3行（置き方・検査）
+// 写真主役の台紙「爆発」の 産地・商品名・数量と単位 の3行（置き方・検査）
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { LABEL_DESIGN } from '../js/label-design.js';

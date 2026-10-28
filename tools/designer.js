@@ -1,4 +1,4 @@
-// 「金額主役」のデザイン編集画面（PC 用。tools/serve.py で開く）。
+// 写真主役の台紙「爆発」のデザイン編集画面（PC 用。tools/serve.py で開く）。
 // 金額キャッチ（catch-design.js）と、産地・商品名・数量と単位の3行（label-design.js）を編集する。
 // 編集中のデザインをアプリ本体の描画（renderPop → price-design.js・labels.js）にそのまま渡して見せるので、
 // ここで見えるものと、保存後にアプリで出るものは同じになる。
@@ -174,7 +174,7 @@ function popFor(size, priceIndex, nameIndex = view.name) {
   const [, price, priceTax] = PRICES[priceIndex];
   return {
     ...createPop(), ...NAMES[nameIndex][1],
-    template: 'bold', size, price, priceTax,
+    template: 'fresh', priceBadge: 'burst', size, price, priceTax,   // 写真主役の台紙「爆発」
   };
 }
 const currentPop = () => popFor(view.size, view.price);

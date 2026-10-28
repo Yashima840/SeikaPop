@@ -190,7 +190,7 @@ export function priceTexts(pop, settings) {
 /** 数字に添える税の文字（「税込」または「税込 117.72円」）。 */
 /**
  * 税込の小数（".84" など）を小さく描くための分け方。[{ text, small }] を返す（小数が無ければ1つだけ）。
- * 「金額主役」の price-design.js は外部の案と入れ替える範囲に同じ分け方を持つ（その範囲は他を読み込めないため）。
+ * 台紙「爆発」の price-design.js は外部の案と入れ替える範囲に同じ分け方を持つ（その範囲は他を読み込めないため）。
  */
 export function splitDecimal(text) {
   const m = /\.\d+/.exec(text);
@@ -239,8 +239,12 @@ export function nameFontOf(pop) {
 // lift はまとまり全体を税込の文字の高さの何倍上げるか（下の飾りに税込がかかるとき）。
 // numScale は数字と「円」だけを何倍に大きくするか（単位・税込はそのまま）。numShift は数字と「円」だけを右へずらす量（「円」の幅の何倍か）。
 // rotate は文字の傾き（度。左回りがマイナス）。outline は数字と「円」の細い縁取りの色（地に溶け込むとき）。
+// layout: 'burst' の「爆発」は絵を使わず、ポップ全体の置き方ごと変える（白い枠・写真の右下に黒いギザギザの金額キャッチ・
+// 写真の下に商品名。金額キャッチは price-design.js、商品名などの3行は labels.js。もとの「金額主役」デザイン）。
+export const BURST_BADGE = 'burst';
 export const PRICE_BADGES = [
   { id: '', label: '黄色い丸' },
+  { id: BURST_BADGE, label: '爆発', layout: 'burst' },
   { id: 'gold-brush', label: '金の筆丸', src: 'img/badges/gold-brush.png', aspect: 512 / 463,
     text: { cx: 0.498, cy: 0.465, w: 0.56 }, font: { family: 'Oswald', weight: '700' }, color: 'gold', sub: '#ffffff' },
   { id: 'red-medal', label: '赤のメダル', src: 'img/badges/red-medal.png', aspect: 482 / 590,
@@ -262,6 +266,20 @@ export function nextPriceBadge(id) {
 /** 台紙で使う書体（描く前に読み込む）。 */
 export function badgeFonts() {
   return PRICE_BADGES.map(b => b.font).filter(Boolean);
+}
+
+/** 「爆発」の台紙（ポップ全体を金額キャッチの置き方で描く）か。 */
+export function isBurstLayout(pop) {
+  return pop?.priceBadge === BURST_BADGE;
+}
+
+/**
+ * 古いデザインの選び方を今の形へ直す（読み込むときに通す）。
+ * デザイン「金額主役」（template: 'bold'）は「写真主役」の台紙「爆発」になった。
+ */
+export function upgradeDesign(pop) {
+  if (!pop || pop.template !== 'bold') return pop;
+  return { ...pop, template: 'fresh', priceBadge: BURST_BADGE, badgePos: null };
 }
 
 /** ポップの金額の台紙。黄色い丸（または知らない id）なら null。 */
