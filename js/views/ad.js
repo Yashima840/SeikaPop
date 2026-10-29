@@ -61,6 +61,15 @@ async function popImage(pop, settings) {
   return cv;
 }
 
+// かんたん作成の段（画像を選ぶ段と、文字などの設定の段に分ける）
+const AD_STEPS = {
+  frame: { label: '形', title: 'フレームの形を選ぶ' },
+  pops: { label: 'ポップ', title: '入れるポップを選ぶ' },
+  text: { label: '文字・飾り', title: '見出し・期間のバッジ・ロゴ' },
+  out: { label: '出す', title: '仕上がりを確かめて出す' },
+};
+const AD_STEP_ORDER = ['frame', 'pops', 'text', 'out'];
+
 function loadImage(src, what) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -435,29 +444,35 @@ export async function showAd(root, app) {
     })),
   ] : []);
 
+  // ---- かんたん作成の段（ポップを作るときと同じく1段ずつ。「全部を1画面で」でいつもの画面に切り替えられる）----
+  let wizard = true;
+  let step = 0;
+  const goStep = i => {
+    step = Math.max(0, Math.min(AD_STEP_ORDER.length - 1, i));
+    rebuild();
+    window.scrollTo(0, 0);
+  };
+
   function rebuild() {
     const n = ad.slots.length, filled = ad.slots.filter(Boolean).length;
-    form.replaceChildren(
-      h('section', {},
-        h('h3', {}, '① フレーム'),
+    const sections = {
+      frame: () => [
         frameChips(),
         builder ? builderView()
           : savedNowFor() ? h('div', { class: 'row' },
             h('button', { onclick: () => openBuilder(savedNowFor()) }, `「${savedNowFor().name}」を直す`),
             h('button', { class: 'danger', onclick: () => deleteSaved(savedNowFor()) }, '削除'))
             : null,
-      ),
-      h('section', {},
-        h('h3', {}, `② ポップを選ぶ（${filled}/${n}）`),
+      ],
+      pops: () => [
         h('p', { class: 'hint' }, 'タップした順に 1, 2, … の枠へ入ります。もう一度タップで外します。はじめの画面と同じポップが並び、今の中身（価格・写真）で入ります。'),
         listed.length ? [
           ...groupGrid('★ レギュラー', groups.regulars),
           ...groupGrid('履歴', groups.recent),
         ] : h('p', { class: 'empty' },
           'まだポップがありません。はじめの画面の「＋ 1枚作る」で作ると、ここに並びます。'),
-      ),
-      h('section', {},
-        h('h3', {}, '③ 文字'),
+      ],
+      text: () => [
         h('label', { class: 'field' }, h('span', { class: 'label', text: '見出し' }), titleInput,
           chips(AD_TITLES.map(t => [t, t]), v => { ad.title = v; titleInput.value = v; changed(); }, ad.title)),
         h('div', { class: 'field' }, h('span', { class: 'label', text: '見出しの色' }), headColorChips()),
@@ -466,8 +481,35 @@ export async function showAd(root, app) {
         h('label', { class: 'check' }, logoCheck, '店のロゴを入れる（見本のロゴを指で動かせます）'),
         logoBack,
         h('p', { class: 'hint' }, `下の帯には「${FOOTER_TEXT}」が入ります。`),
-      ),
-    );
+      ],
+    };
+    const titleOf = key => (key === 'pops' ? `${AD_STEPS.pops.title}（${filled}/${n}）` : AD_STEPS[key].title);
+    exportEl.hidden = wizard && AD_STEP_ORDER[step] !== 'out';
+    if (wizard) {
+      const key = AD_STEP_ORDER[step];
+      const last = step === AD_STEP_ORDER.length - 1;
+      const nextLabel = key === 'pops' && filled < n ? `次へ →（あと ${n - filled} 枚は後で選べます）` : '次へ →';
+      form.replaceChildren(
+        h('div', { class: 'steps' }, AD_STEP_ORDER.map((k, i) => h('button', {
+          type: 'button', class: i === step ? 'step on' : i < step ? 'step done' : 'step',
+          onclick: () => goStep(i),
+        }, h('b', { text: String(i + 1) }), AD_STEPS[k].label))),
+        key === 'out' ? null : h('section', {},
+          h('h3', {}, `${step + 1}. ${titleOf(key)}`),
+          ...sections[key](),
+        ),
+        h('div', { class: 'row wizard-nav' },
+          step > 0 ? h('button', { onclick: () => goStep(step - 1) }, '← 戻る') : null,
+          last ? null : h('button', { class: 'primary', onclick: () => goStep(step + 1) }, nextLabel),
+        ),
+        h('p', { class: 'center' }, h('button', { class: 'mini', onclick: () => { wizard = false; rebuild(); window.scrollTo(0, 0); } }, '全部を1画面で')),
+      );
+      return;
+    }
+    form.replaceChildren(...['frame', 'pops', 'text'].map((key, i) => h('section', {},
+      h('h3', {}, `${'①②③'[i]} ${titleOf(key)}`),
+      ...sections[key](),
+    )));
   }
 
   // ---- 出す ----
@@ -547,17 +589,18 @@ export async function showAd(root, app) {
     }
   }
 
-  rebuild();
-  root.replaceChildren(
-    h('div', { class: 'preview' }, canvas, h('div', { class: 'preview-bar' }, statusEl)),
-    form,
-    h('div', { class: 'export' }, h('h3', {}, '出す'), shareBtn,
+  const exportEl = h('div', { class: 'export' }, h('h3', {}, '出す'), shareBtn,
       h('h3', { class: 'sub' }, '保存する場所'),
       choiceBox('shared', 'みんなで使える場所に保管', collectorReady
         ? { note: '事務所のドライブに集まります。共有したときもここに入ります' }
         : { disabled: true, note: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」で入れます）' }),
       choiceBox('phone', 'この端末に保存', { note: 'スマホは写真（ダウンロード）、パソコンはダウンロードのフォルダーに入ります' }),
-      problemsEl, saveBtn),
+      problemsEl, saveBtn);
+  rebuild();
+  root.replaceChildren(
+    h('div', { class: 'preview' }, canvas, h('div', { class: 'preview-bar' }, statusEl)),
+    form,
+    exportEl,
   );
   draw();
 
