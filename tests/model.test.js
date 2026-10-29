@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   createPop, exportFileName, exportProblems, formatDate, formatPrice, isBlankPop, localStamp,
-  isBurstLayout, moveToRegular, needsCheck, nextPriceBadge, parsePriceInput, upgradeDesign, popFromRegular, popFromShared, PRICE_BADGES, priceBadgeOf, regularFromPop, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
+  catchDesignFor, isBurstLayout, moveToRegular, needsCheck, nextPriceBadge, parsePriceInput, upgradeDesign, popFromRegular, popFromShared, PRICE_BADGES, priceBadgeOf, regularFromPop, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
 } from '../js/model.js';
 
 const T0 = new Date('2026-10-20T06:30:00Z');
@@ -169,4 +169,21 @@ test('「金額主役」は「写真主役」の台紙「爆発」になった�
   assert.equal(upgradeDesign(fresh), fresh, '今の形はそのまま');
   assert.equal(upgradeDesign(null), null);
   assert.ok(PRICE_BADGES.some(b => b.id === 'burst' && b.label === '爆発'));
+});
+
+test('「爆発2」は「爆発」と同じ置き方で、ギザギザを赤・数字と「円」を黄色にする', () => {
+  const design = { burst: { fill: '#111111', line: '#ffffff', points: [[0, 0]] }, num: { fill: '#e60012', size: 100 }, yen: { fill: '#e60012' }, tax: { fill: '#ffffff' } };
+  const red = { priceBadge: 'burst-red' };
+  assert.ok(PRICE_BADGES.some(b => b.id === 'burst-red' && b.label === '爆発2'));
+  assert.equal(isBurstLayout(red), true);
+  const d = catchDesignFor(red, design);
+  assert.equal(d.burst.fill, '#e60012');
+  assert.equal(d.num.fill, '#ffe100');
+  assert.equal(d.yen.fill, '#ffe100');
+  assert.equal(d.tax.fill, '#ffffff', '税込の文字はそのまま');
+  assert.equal(d.burst.line, '#ffffff', '色以外はそのまま');
+  assert.equal(d.num.size, 100);
+  assert.equal(design.burst.fill, '#111111', '元のデザインは変えない');
+  assert.equal(catchDesignFor({ priceBadge: 'burst' }, design), design, '「爆発」はそのまま');
+  assert.equal(isBurstLayout({ priceBadge: 'gold-brush' }), false);
 });

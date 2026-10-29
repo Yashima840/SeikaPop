@@ -3,8 +3,9 @@
 // 大きさは幅1080px を基準にした u（W/1080）で書き、縦の長さ（H）に合わせて写真の枠を伸ばす。
 
 import { coverSource, fitFontSize, layoutLines, placeBadge, rectsOverlap, seededRandom } from './layout.js';
-import { isBurstLayout, splitDecimal, taxNote } from './model.js';
+import { catchDesignFor, isBurstLayout, splitDecimal, taxNote } from './model.js';
 import { VINTAGE } from './image.js';
+import { CATCH_DESIGN } from './catch-design.js';
 import { drawPrice } from './price-design.js';
 import { canvasMeasure, drawLabels, labelDesignFor, labelsBelow } from './labels.js';
 
@@ -669,7 +670,7 @@ function drawBurstLayout(ctx, d) {
     ctx.save();
     roundRectPath(ctx, box.x, box.y, box.w, box.h, PHOTO_RADIUS * u);
     ctx.clip();
-    drawPrice(ctx, box, d.price, u);
+    drawPrice(ctx, box, d.price, u, catchDesignFor(pop, CATCH_DESIGN));   // 「爆発2」などは色だけ差し替える
     ctx.restore();
   }
   // 産地・商品名・数量と単位（置き場所と見た目は label-design.js）。金額より手前に描く（重なっても名前が隠れないように）

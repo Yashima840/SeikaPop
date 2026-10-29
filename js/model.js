@@ -267,10 +267,12 @@ export function nameFontOf(pop) {
 // rotate は文字の傾き（度。左回りがマイナス）。outline は数字と「円」の細い縁取りの色（地に溶け込むとき）。
 // layout: 'burst' の「爆発」は絵を使わず、ポップ全体の置き方ごと変える（白い枠・写真の右下に黒いギザギザの金額キャッチ・
 // 写真の下に商品名。金額キャッチは price-design.js、商品名などの3行は labels.js。もとの「金額主役」デザイン）。
+// catchColors は「爆発」の金額キャッチの色の差し替え（burst＝ギザギザの塗り、num・yen＝数字と「円」の塗り）。形・縁取りは catch-design.js のまま。
 export const BURST_BADGE = 'burst';
 export const PRICE_BADGES = [
   { id: '', label: '黄色い丸' },
   { id: BURST_BADGE, label: '爆発', layout: 'burst' },
+  { id: 'burst-red', label: '爆発2', layout: 'burst', catchColors: { burst: '#e60012', num: '#ffe100', yen: '#ffe100' } },
   { id: 'gold-brush', label: '金の筆丸', src: 'img/badges/gold-brush.png', aspect: 512 / 463,
     text: { cx: 0.498, cy: 0.465, w: 0.56 }, font: { family: 'Oswald', weight: '700' }, color: 'gold', sub: '#ffffff' },
   { id: 'red-medal', label: '赤のメダル', src: 'img/badges/red-medal.png', aspect: 482 / 590,
@@ -294,9 +296,18 @@ export function badgeFonts() {
   return PRICE_BADGES.map(b => b.font).filter(Boolean);
 }
 
-/** 「爆発」の台紙（ポップ全体を金額キャッチの置き方で描く）か。 */
+/** 「爆発」の台紙（ポップ全体を金額キャッチの置き方で描く）か。「爆発2」など色違いも含む。 */
 export function isBurstLayout(pop) {
-  return pop?.priceBadge === BURST_BADGE;
+  return PRICE_BADGES.some(b => b.layout === 'burst' && b.id === pop?.priceBadge);
+}
+
+/** 「爆発」の金額キャッチのデザイン。色違いの台紙なら design の色だけを差し替えた複製（元の design は変えない）。 */
+export function catchDesignFor(pop, design) {
+  const c = PRICE_BADGES.find(b => b.layout === 'burst' && b.id === pop?.priceBadge)?.catchColors;
+  if (!c) return design;
+  const out = { ...design };
+  for (const [key, fill] of Object.entries(c)) out[key] = { ...design[key], fill };
+  return out;
 }
 
 /**
