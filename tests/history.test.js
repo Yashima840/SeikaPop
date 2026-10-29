@@ -92,7 +92,7 @@ test('ポップから作る履歴は、商品名を題名に持つ', () => {
 
 test('出し直すファイル名と一覧の日時は端末の時刻（朝9時前に前日にならない）', () => {
   const at = new Date(2026, 9, 22, 7, 5).toISOString();
-  assert.equal(shotFileName({ kind: 'ad', createdAt: at }), 'ad_20261022-0705.jpg');
+  assert.equal(shotFileName({ kind: 'ad', createdAt: at }), 'ad_20261022-0705.png');
   assert.equal(shotFileName({ kind: 'pop', createdAt: at }), 'pop_20261022-0705.jpg');
   assert.equal(formatShotTime(at), '10/22(木) 7:05');
   assert.equal(formatShotTime('壊れた値'), '');

@@ -157,6 +157,10 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
   if (canvas.height !== H) canvas.height = H;
   const ctx = canvas.getContext('2d');
   ctx.save();
+  // 全体の四隅を丸く取る（角の外は透明。見本も同じ形で見せる）
+  ctx.clearRect(0, 0, W, H);
+  roundRectPath(ctx, 0, 0, W, H, AD_CORNER);
+  ctx.clip();
   ctx.fillStyle = frame.bg || '#ffffff';
   ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center';
@@ -226,6 +230,9 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
   ctx.restore();
 }
 
+// 広告の四隅の丸み（px）
+const AD_CORNER = 48;
+
 // 期間のバッジの文字の大きさ（日を 1 として）。月は小さく（日にちの方が大事）
 const PERIOD_SCALE = { month: 0.55, day: 1, week: 0.6, sep: 0.7, tail: 0.72 };
 
@@ -259,8 +266,8 @@ export async function adToFile(frame, ad, images, settings, { overlay = null, lo
   await ensureAdFonts(ad, settings);
   const cv = document.createElement('canvas');
   renderAd(cv, frame, ad, images, settings, { overlay, logo });
-  const blob = await canvasToBlob(cv, 'image/jpeg', 0.92);
-  return { file: new File([blob], adFileName(), { type: 'image/jpeg' }), thumb: thumbnailOf(cv, 360) };
+  const blob = await canvasToBlob(cv, 'image/png');   // 角の外を透明のまま残すため PNG
+  return { file: new File([blob], adFileName(), { type: 'image/png' }), thumb: thumbnailOf(cv, 360) };
 }
 
 /** 一覧に出す小さな見本（保存に入れる）。 */
@@ -269,6 +276,9 @@ export function thumbnailOf(canvas, width = 270) {
   const cv = document.createElement('canvas');
   cv.width = width;
   cv.height = Math.round(canvas.height * k);
-  cv.getContext('2d').drawImage(canvas, 0, 0, cv.width, cv.height);
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#ffffff';   // 見本は JPEG なので、透明な所（広告の角の外）は白にする（黒くならないように）
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(canvas, 0, 0, cv.width, cv.height);
   return cv.toDataURL('image/jpeg', 0.72);
 }

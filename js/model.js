@@ -374,7 +374,7 @@ export function exportFileName(pop, now = new Date()) {
 }
 
 export function adFileName(now = new Date()) {
-  return `ad_${localStamp(now, true)}.jpg`;
+  return `ad_${localStamp(now, true)}.png`;   // 角の外を透明にするため PNG
 }
 
 // ---- 作った画像の履歴 ----
@@ -445,7 +445,7 @@ export function historyOverflow(shots, pops = [], max = HISTORY_MAX) {
 export function shotFileName(shot) {
   const d = new Date(shot.createdAt);
   const stamp = Number.isNaN(d.getTime()) ? 'unknown' : localStamp(d, true);
-  return `${shot.kind === 'ad' ? 'ad' : 'pop'}_${stamp}.jpg`;
+  return shot.kind === 'ad' ? `ad_${stamp}.png` : `pop_${stamp}.jpg`;
 }
 
 /** 一覧に出す日時（端末の時刻で「10/22(木) 7:05」）。 */
