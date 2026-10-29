@@ -3,12 +3,12 @@
 // クラウド版を作ってここを差し替える。画面側はこのファイルの関数しか呼ばない。
 
 import { BACKUP_FORMAT, BACKUP_VERSION, mergePops, mergeShots, unreferencedPhotoIds, validateBackup } from './backup.js';
-import { outboxReplaced, sortOutbox } from './collect.js';
+import { driveCacheEvict, outboxReplaced, sortOutbox } from './collect.js';
 import { DEFAULT_TAX_RATE, historyOverflow, newId, upgradeDesign } from './model.js';
 import { cleanCustomFrames, mergeCustomFrames } from './frames.js';
 
 const DB_NAME = 'seikapop';
-const DB_VERSION = 3;   // 2: 作った画像の履歴（shots・shotImages）を追加／3: 事務所へ送る控え（outbox）を追加
+const DB_VERSION = 4;   // 2: 作った画像の履歴（shots・shotImages）を追加／3: 事務所へ送る控え（outbox）を追加／4: 倉庫から開いたものの控え（driveFiles）を追加
 let dbPromise = null;
 
 function openDb() {
@@ -28,6 +28,7 @@ function openDb() {
       if (!db.objectStoreNames.contains('shots')) db.createObjectStore('shots', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('shotImages')) db.createObjectStore('shotImages', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('driveFiles')) db.createObjectStore('driveFiles', { keyPath: 'key' });
     };
     // 別のタブが古い版で開いたままだと新しい版を開けない。待たされていることを知らせる
     req.onblocked = () => reject(new Error('他のタブで青果ポップが開いたままです。そちらを閉じてから開き直してください'));
@@ -178,6 +179,39 @@ export async function getSavedCache() {
 
 export async function putSavedCache(value) {
   await run(['meta'], 'readwrite', tx => reqDone(tx.objectStore('meta').put({ key: 'savedCache', value })));
+}
+
+// 倉庫（写真ストック・保管したポップ）から開いたものの控え。2回目からは問い合わせずに開く（問い合わせ1回に1〜2秒かかる）。
+// key は driveCacheKey（ドライブで直されたら key が変わるので古い中身は使わない）。使った順は meta に持ち、多すぎたら古いものから捨てる
+// （本体を読まずに選べるように）。バックアップには入れない（事務所のドライブに元がある）。
+const DRIVE_FILES_MAX = 40;
+
+export async function getDriveFile(key) {
+  const rec = await run(['driveFiles'], 'readonly', tx => reqDone(tx.objectStore('driveFiles').get(key)));
+  if (!rec) return null;
+  touchDriveFile(key).catch(() => { /* 使った順が付けられなくても、中身は使える（先に捨てられやすくなるだけ） */ });
+  return rec.value;
+}
+
+export async function putDriveFile(key, value, now = new Date()) {
+  await run(['driveFiles', 'meta'], 'readwrite', async tx => {
+    tx.objectStore('driveFiles').put({ key, value });
+    const use = (await reqDone(tx.objectStore('meta').get('driveFileUse')))?.value || {};
+    use[key] = now.toISOString();
+    for (const old of driveCacheEvict(use, DRIVE_FILES_MAX)) {
+      tx.objectStore('driveFiles').delete(old);
+      delete use[old];
+    }
+    tx.objectStore('meta').put({ key: 'driveFileUse', value: use });
+  });
+}
+
+async function touchDriveFile(key, now = new Date()) {
+  await run(['meta'], 'readwrite', async tx => {
+    const use = (await reqDone(tx.objectStore('meta').get('driveFileUse')))?.value || {};
+    use[key] = now.toISOString();
+    tx.objectStore('meta').put({ key: 'driveFileUse', value: use });
+  });
 }
 
 // ---- 事務所へ送る控え ----

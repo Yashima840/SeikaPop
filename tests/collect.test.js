@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   adOutboxRecord, collectorOf, deliveryBaseName, deliveryBody, makeSetupLink, outboxReplaced,
   filterStock, parseSetupCode, popOutboxRecord, readReply, readSavedAsset, readSavedReply, readStockReply, savedItems, sortOutbox, sortSaved, stockItems, stockLabel, stockProductName,
+  driveCacheEvict, driveCacheKey, thumbUrls,
   BUILT_IN_COLLECTOR_URL, makeEasyPasscode, parsePasscodeInput, saveTargets, stockOutboxRecord, stockRequestBody, stockTitleOf, stockFileKey, cleanStockName, DELIVERY_FORMAT,
 } from '../js/collect.js';
 import { createPop } from '../js/model.js';
@@ -256,4 +257,26 @@ test('cleanStockName: ドライブで使えない記号は「_」、前後の空
   assert.equal(cleanStockName('a/b:c*d?e\\f').name, 'a_b_c_d_e_f');
   assert.equal(cleanStockName('あ'.repeat(80)).name.length, 60);
   assert.equal(cleanStockName('  ').ok, false);
+});
+
+test('倉庫から開いたものの控えの名前は、ドライブで直されたら変わる（古い中身を使わない）', () => {
+  const item = { id: 'abc123', updated: '2026-10-30T01:00:00.000Z' };
+  assert.equal(driveCacheKey('stock', item), 'stock:abc123:2026-10-30T01:00:00.000Z');
+  assert.notEqual(driveCacheKey('stock', item), driveCacheKey('stock', { ...item, updated: '2026-10-31T01:00:00.000Z' }));
+  assert.notEqual(driveCacheKey('stock', item), driveCacheKey('saved', item), '写真とポップは別に持つ');
+});
+
+test('控えが多すぎたら、使ってから長いものから捨てる', () => {
+  const use = { a: '2026-10-30T01:00:00Z', b: '2026-10-30T03:00:00Z', c: '2026-10-30T02:00:00Z' };
+  assert.deepEqual(driveCacheEvict(use, 2), ['a']);
+  assert.deepEqual(driveCacheEvict(use, 3), []);
+  assert.deepEqual(driveCacheEvict(use, 1).sort(), ['a', 'c']);
+  assert.deepEqual(driveCacheEvict(null, 2), []);
+});
+
+test('一覧と一緒に届いた見本を data URL にする（ドライブの重い見本は印を付ける・中身の無いものは除く）', () => {
+  const r = thumbUrls({ a: { type: 'image/jpeg', data: 'QUJD' }, b: { type: 'image/png', data: 'REVG', drive: true }, c: { type: 'image/jpeg' } });
+  assert.deepEqual(r.thumbs, { a: 'data:image/jpeg;base64,QUJD', b: 'data:image/png;base64,REVG' });
+  assert.deepEqual(r.heavy, ['b']);
+  assert.deepEqual(thumbUrls(undefined), { thumbs: {}, heavy: [] }, '古い版の受け取り口（見本が付かない）');
 });

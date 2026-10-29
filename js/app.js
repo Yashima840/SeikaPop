@@ -8,6 +8,7 @@ import { showEditor } from './views/editor.js';
 import { showSettings, showSetup } from './views/settings.js';
 import { flushOutbox } from './sender.js';
 import { showAd } from './views/ad.js';
+import { warmDrive } from './views/stock.js';
 import { isNewerPublished, VERSION, versionInSw } from './version.js';
 
 const report = installCrashHandlers(msg => toast(msg, { error: true }));
@@ -112,6 +113,7 @@ document.addEventListener('visibilitychange', () => {
   flushOutbox();   // 共有画面から戻ったときなど。送れなかった分を送り直す
   if (navigator.onLine === false) return;   // 電波が無いときは確かめられない（失敗を記録に溜めない）
   checkUpdate();
+  warmDrive();   // 倉庫の一覧と見本を裏で読んでおく（10分に1回まで）
   navigator.serviceWorker?.getRegistration()
     .then(reg => reg?.update())
     .catch(err => recordError('serviceWorker.update', err));
@@ -129,3 +131,4 @@ if (navigator.storage?.persist) {
 route();
 flushOutbox();
 checkUpdate();
+if (navigator.onLine !== false) warmDrive();

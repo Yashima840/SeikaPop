@@ -4,7 +4,7 @@
 import * as store from './store.js';
 import {
   adOutboxRecord, collectorOf, deliveryBody, pingBody, popOutboxRecord, readReply, readSavedAsset, readSavedReply, readStockReply,
-  savedItems, sortSaved, stockItems, STOCK_THUMB, stockOutboxRecord, stockRequestBody,
+  savedItems, sortSaved, stockItems, STOCK_THUMB, stockOutboxRecord, stockRequestBody, thumbUrls,
 } from './collect.js';
 import { shrinkPhoto } from './image.js';
 import { newId } from './model.js';
@@ -111,10 +111,13 @@ async function askStock(action, extra, admin = null, read = readStockReply) {
   return post(c.url, stockRequestBody(c.passcode, action, extra), read);
 }
 
-/** ストックの一覧。{ ok, items, skipped（一覧に出せない形の写真の数）} */
-export async function fetchStockList(admin = null) {
-  const r = await askStock('stock-list', {}, admin);
-  return r.ok ? { ok: true, items: stockItems(r.data.items), skipped: Number(r.data.skipped) || 0 } : r;
+/**
+ * ストックの一覧。{ ok, items, skipped（一覧に出せない形の写真の数）, thumbs（一緒に届いた見本 id → data URL）}
+ * have: この端末が見本を持っている id。渡すと、持っていない分の軽い見本も一緒に届く（問い合わせが1回で済む）。
+ */
+export async function fetchStockList(admin = null, have = null) {
+  const r = await askStock('stock-list', have ? { have } : {}, admin);
+  return r.ok ? { ok: true, items: stockItems(r.data.items), skipped: Number(r.data.skipped) || 0, thumbs: thumbUrls(r.data.thumbs).thumbs } : r;
 }
 
 /**
@@ -127,14 +130,7 @@ export function fetchStockThumbs(ids, admin = null) {
 
 async function askThumbs(action, ids, admin, read) {
   const r = await askStock(action, { ids }, admin, read);
-  if (!r.ok) return r;
-  const thumbs = {}, heavy = [];
-  for (const [id, t] of Object.entries(r.data.thumbs || {})) {
-    if (!t?.data) continue;
-    thumbs[id] = `data:${t.type || 'image/png'};base64,${t.data}`;
-    if (t.drive) heavy.push(id);
-  }
-  return { ok: true, thumbs, heavy };
+  return r.ok ? { ok: true, ...thumbUrls(r.data.thumbs) } : r;
 }
 
 /**
@@ -191,10 +187,10 @@ function blobOf(img) {
 
 // ---- 保管したポップ（みんなで使える場所に保管したものを、どの端末からでも呼び出して直す）----
 
-/** 保管したポップの一覧（商品名順）。{ ok, items } */
-export async function fetchSavedList() {
-  const r = await askStock('saved-list', {}, null, readSavedReply);
-  return r.ok ? { ok: true, items: sortSaved(savedItems(r.data.items)) } : r;
+/** 保管したポップの一覧（商品名順）。{ ok, items, thumbs }。have はストックと同じ（持っていない見本が一緒に届く）。 */
+export async function fetchSavedList(have = null) {
+  const r = await askStock('saved-list', have ? { have } : {}, null, readSavedReply);
+  return r.ok ? { ok: true, items: sortSaved(savedItems(r.data.items)), thumbs: thumbUrls(r.data.thumbs).thumbs } : r;
 }
 
 /** 保管したポップの見本（出した画像の id → data URL）。形は fetchStockThumbs と同じ。 */

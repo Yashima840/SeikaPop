@@ -322,6 +322,31 @@ export function readReply(reply) {
   return { ok: false, message: `送り先で失敗しました: ${reply.message || '理由不明'}` };
 }
 
+/**
+ * 倉庫から開いたものを端末に控えるときの名前。ドライブで直された（更新日時が変わった）ら別の名前になり、古い中身は使わない。
+ * kind: 'stock'＝写真ストックの写真／'saved'＝保管したポップ。
+ */
+export function driveCacheKey(kind, item) {
+  return `${kind}:${item.id}:${item.updated || ''}`;
+}
+
+/** 控えが max を超えたら、使ってから長い順に捨てる名前（use＝{ 名前: 最後に使った日時 }）。 */
+export function driveCacheEvict(use, max) {
+  const keys = Object.keys(use || {}).sort((a, b) => String(use[b]).localeCompare(String(use[a])));
+  return keys.slice(Math.max(0, max));
+}
+
+/** 一覧と一緒に届いた見本（{ id: { type, data } }）を、画面で使う data URL にする。drive＝ドライブの重い見本（縮めて預け直す）。 */
+export function thumbUrls(raw) {
+  const thumbs = {}, heavy = [];
+  for (const [id, t] of Object.entries(raw && typeof raw === 'object' ? raw : {})) {
+    if (!t?.data) continue;
+    thumbs[id] = `data:${t.type || 'image/png'};base64,${t.data}`;
+    if (t.drive) heavy.push(id);
+  }
+  return { thumbs, heavy };
+}
+
 /** 控えに新しいものを足すとき、同じ印の古い控えは送らずに置き換える（最新の1件だけ送ればよい）。 */
 export function outboxReplaced(records, key) {
   return records.filter(r => r.key === key).map(r => r.id);

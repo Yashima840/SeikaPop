@@ -12,6 +12,8 @@
 //   PC の担当はドライブのフォルダへ写真を直接入れる。店員さんのスマホは kind: 'stock' で写真を送って足す。
 //   action: 'stock-list'（一覧）／'stock-thumbs'（小さい見本）／'stock-get'（写真の本体）／'stock-thumbs-put'（端末で縮めた見本を預かる）。
 //   PC の作業場の管理画面から: 'stock-rename'（名前を変える）／'stock-trash'（ゴミ箱へ移す。30日はドライブから戻せる）。
+//   一覧の問い合わせに have（アプリが見本を持っている id）が付いていたら、持っていない分の軽い見本も一覧と一緒に返す
+//   （問い合わせ1回ごとに1〜2秒かかるので、一覧→見本の2回を1回にする）。返事の thumbs が無い古い版の受け取り口でも、アプリは見本を別に問い合わせる。
 //   小さい見本はアプリが写真と一緒に送ってくる（200px の JPEG）。1つのファイル（THUMBS_FILE_NAME）にまとめて持ち、まとめて返す
 //   （ドライブが作る見本は PNG で重く、1枚ずつ取り出すので遅いため）。無い写真だけドライブの見本を返し、アプリが縮めて預け直す。
 //   読めるのはこのフォルダの中のファイルだけ（id を指定されても、ほかの場所のファイルは返さない）。
@@ -53,11 +55,11 @@ function doPost(e) {
     if (body.passcode !== passcode) return reply_({ ok: false, code: 'passcode', message: '合言葉が違います' });
     // stock: 1 ＝写真ストックに対応した版（古い版の受け取り口と見分けるため、アプリがこれを見る）
     if (body.ping) return reply_({ ok: true, stock: 1 });   // 「送り先を確かめる」。何も置かない
-    if (body.action === 'stock-list') return reply_(stockList_(props));
+    if (body.action === 'stock-list') return reply_(withThumbs_(props, STOCK_THUMBS, stockList_(props), body.have));
     if (body.action === 'stock-thumbs') return reply_(thumbs_(props, STOCK_THUMBS, body.ids));
     if (body.action === 'stock-get') return reply_(stockGet_(props, body.id));
     if (body.action === 'stock-thumbs-put') return reply_(thumbsPut_(props, STOCK_THUMBS, body.thumbs));
-    if (body.action === 'saved-list') return reply_(savedList_(props));
+    if (body.action === 'saved-list') return reply_(withThumbs_(props, SAVED_THUMBS, savedList_(props), body.have));
     if (body.action === 'saved-thumbs') return reply_(thumbs_(props, SAVED_THUMBS, body.ids));
     if (body.action === 'saved-thumbs-put') return reply_(thumbsPut_(props, SAVED_THUMBS, body.thumbs));
     if (body.action === 'saved-get') return reply_(savedGet_(props, body.id));
@@ -203,6 +205,21 @@ function thumbs_(props, box, ids) {
     }
   });
   return { ok: true, stock: 1, saved: 1, thumbs: thumbs };
+}
+
+// 一覧の返事に、アプリがまだ持っていない軽い見本を添える（have が無い＝古い版のアプリには添えない）。
+// 預かっていない（ドライブが作る重い）見本は添えない（1枚ずつ取り出すので遅い）。アプリが別に問い合わせる
+function withThumbs_(props, box, list, have) {
+  if (!list.ok || !Array.isArray(have)) return list;
+  var known = {};
+  have.forEach(function (id) { known[id] = true; });
+  var index = readThumbs_(props, box);
+  var thumbs = {};
+  list.items.forEach(function (item) {
+    if (!known[item.id] && index[item.id]) thumbs[item.id] = index[item.id];
+  });
+  list.thumbs = thumbs;
+  return list;
 }
 
 // 端末で縮めた見本を預かる（そのフォルダの中のファイルの分だけ）
