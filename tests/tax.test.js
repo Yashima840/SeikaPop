@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createPop, DEFAULT_TAX_RATE, formatTaxIncluded, nextTaxRounding, parseTaxRateInput, popFromRegular, priceTexts,
+  createPop, DEFAULT_TAX_RATE, formatTaxIncluded, newPop, nextTaxRounding, parseTaxRateInput, popFromRegular, priceTexts,
   popFromShared, popTaxRate, popTaxRounding, regularFromPop, splitDecimal, taxNote, taxRateOf,
 } from '../js/model.js';
 
@@ -97,12 +97,17 @@ test('税込の金額を押すたびに 小数第2位まで → 切り捨て →
   assert.equal(nextTaxRounding({ ...pop, taxRounding: 'round' }, {}), 'decimal');
 });
 
-test('切り捨てと四捨五入が同じ金額なら、四捨五入を飛ばして頭へ戻る', () => {
+test('切り捨てと四捨五入が同じ金額になる価格でも飛ばさない（選んだ扱いは次のポップへ引き継ぐので、きっちり選べるように）', () => {
   const pop = { ...createPop(), price: 106, priceTax: 'excl', taxRate: 8 };   // 114.48 → 114 と 114
   assert.equal(nextTaxRounding(pop, {}), 'floor');
-  assert.equal(nextTaxRounding({ ...pop, taxRounding: 'floor' }, {}), 'decimal');
-  // 価格を変えて同額になったときに四捨五入のままでも、次は頭へ
+  assert.equal(nextTaxRounding({ ...pop, taxRounding: 'floor' }, {}), 'round');
   assert.equal(nextTaxRounding({ ...pop, taxRounding: 'round' }, {}), 'decimal');
+});
+
+test('新しく作るポップは、前に選んだ税込の端数を引き継ぐ', () => {
+  assert.equal(newPop({ taxRounding: 'round' }).taxRounding, 'round');
+  assert.equal(newPop({}).taxRounding, 'decimal');
+  assert.equal(newPop({ taxRounding: 'x' }).taxRounding, 'decimal');
 });
 
 test('税込の端数は、レギュラー・保管したポップから作っても引き継ぐ', () => {

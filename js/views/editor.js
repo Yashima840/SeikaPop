@@ -348,10 +348,17 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
 
   const priceError = h('span', { class: 'field-error', text: '' });
   // 税抜で入れたときは、ポップに入る税込の金額をその場で見せる（税率の入れ違いに気付けるように）。
-  // 押すたびに端数の扱いを 小数第2位まで → 切り捨て → 四捨五入 と回す（切り捨てと同じ金額になる四捨五入は飛ばす）
+  // 押すたびに端数の扱いを 小数第2位まで → 切り捨て → 四捨五入 と回す。選んだ扱いは次に作るポップにも引き継ぐ
   const priceNote = h('button', {
     type: 'button', class: 'mini tax-note', hidden: true,
-    onclick: () => { pop.taxRounding = nextTaxRounding(pop, settings); showPriceNote(); changed(); },
+    onclick: () => {
+      pop.taxRounding = nextTaxRounding(pop, settings);
+      settings.taxRounding = pop.taxRounding;
+      showPriceNote();
+      changed();
+      store.patchSettings({ taxRounding: pop.taxRounding })
+        .catch(err => toast(`端数の扱いを次のポップへ引き継げませんでした: ${err.message}`, { error: true }));
+    },
   });
   const showPriceNote = () => {
     const t = priceTexts(pop, settings);
@@ -506,8 +513,9 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
         isBurstLayout(pop) ? null : h('button', { class: 'mini', onclick: () => { pop.badgePos = null; changed(); } }, '台紙の位置を戻す'))) : null);
 
     exportBox.hidden = wizard && steps[step] !== 'out';
-    // デザインの段は下の見本が大きく並ぶので、上の見本はしまう
-    previewEl.hidden = wizard && steps[step] === 'design';
+    // デザインの段は下の見本が大きく並ぶので、上の見本はしまう（段の番号は残す）
+    previewBody.hidden = wizard && steps[step] === 'design';
+    stepsEl.hidden = !wizard;
     if (wizard) {
       const key = steps[step];
       const info = STEPS[key];
@@ -522,11 +530,12 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
       }[key]();
       const last = step === steps.length - 1;
       const nextLabel = key === 'photo' && !photoImg ? '写真なしで次へ →' : '次へ →';
+      // 段の番号は見本の上に置き、見本と一緒に上に留める（下へ送っても今どの段かが見えて、すぐ飛べる）
+      stepsEl.replaceChildren(...steps.map((k, i) => h('button', {
+        type: 'button', class: i === step ? 'step on' : i < step ? 'step done' : 'step',
+        onclick: () => goStep(i),
+      }, h('b', { text: String(i + 1) }), STEPS[k].label)));
       form.replaceChildren(
-        h('div', { class: 'steps' }, steps.map((k, i) => h('button', {
-          type: 'button', class: i === step ? 'step on' : i < step ? 'step done' : 'step',
-          onclick: () => goStep(i),
-        }, h('b', { text: String(i + 1) }), STEPS[k].label))),
         h('section', {},
           h('h3', {}, `${step + 1}. ${info.title}`),
           info.hint ? h('p', { class: 'hint', text: key === 'check' ? `${calledFrom}ので、${info.hint}` : info.hint }) : null,
@@ -789,7 +798,9 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     updateExportState();
   }
 
-  const previewEl = h('div', { class: 'preview' }, canvas, h('div', { class: 'preview-bar' }, statusEl));
+  const stepsEl = h('div', { class: 'steps', hidden: true });
+  const previewBody = h('div', {}, canvas, h('div', { class: 'preview-bar' }, statusEl));
+  const previewEl = h('div', { class: 'preview' }, stepsEl, previewBody);
   rebuildForm();
   renderExportBox();
   root.replaceChildren(

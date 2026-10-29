@@ -203,6 +203,7 @@ export async function showAd(root, app) {
 
   // ---- 入力 ----
   const form = h('div', { class: 'form' });
+  const stepsEl = h('div', { class: 'steps', hidden: true });   // 1段ずつ進むときの段の番号（見本の上に留める）
   const titleInput = h('input', {
     value: ad.title, placeholder: '例: 本日のおすすめ', enterkeyhint: 'done',
     oninput: () => { ad.title = titleInput.value; statusEl.textContent = '保存中…'; draw(); save(); },
@@ -526,15 +527,17 @@ export async function showAd(root, app) {
     };
     const titleOf = key => (key === 'pops' ? `${AD_STEPS.pops.title}（${filled}/${n}）` : AD_STEPS[key].title);
     exportEl.hidden = wizard && AD_STEP_ORDER[step] !== 'out';
+    stepsEl.hidden = !wizard;
     if (wizard) {
       const key = AD_STEP_ORDER[step];
       const last = step === AD_STEP_ORDER.length - 1;
       const nextLabel = key === 'pops' && filled < n ? `次へ →（あと ${n - filled} 枚は後で選べます）` : '次へ →';
+      // 段の番号は見本の上に置き、見本と一緒に上に留める（ポップの編集画面と同じ）
+      stepsEl.replaceChildren(...AD_STEP_ORDER.map((k, i) => h('button', {
+        type: 'button', class: i === step ? 'step on' : i < step ? 'step done' : 'step',
+        onclick: () => goStep(i),
+      }, h('b', { text: String(i + 1) }), AD_STEPS[k].label)));
       form.replaceChildren(
-        h('div', { class: 'steps' }, AD_STEP_ORDER.map((k, i) => h('button', {
-          type: 'button', class: i === step ? 'step on' : i < step ? 'step done' : 'step',
-          onclick: () => goStep(i),
-        }, h('b', { text: String(i + 1) }), AD_STEPS[k].label))),
         key === 'out' ? null : h('section', {},
           h('h3', {}, `${step + 1}. ${titleOf(key)}`),
           ...sections[key](),
@@ -648,7 +651,7 @@ export async function showAd(root, app) {
       h('div', { class: 'save-row' }, saveBtn, h('button', { class: 'end', onclick: () => app.go('#/') }, '終了')));
   rebuild();
   root.replaceChildren(
-    h('div', { class: 'preview' }, canvas, h('div', { class: 'preview-bar' }, statusEl)),
+    h('div', { class: 'preview' }, stepsEl, canvas, h('div', { class: 'preview-bar' }, statusEl)),
     form,
     exportEl,
   );

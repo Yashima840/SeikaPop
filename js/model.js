@@ -40,7 +40,7 @@ export function createPop(now = new Date()) {
     price: null,          // 円。未入力は null。税抜か税込かは priceTax
     priceTax: 'excl',     // 'excl'＝税抜で入れた（税込を計算して併記）／'incl'＝税込で入れた
     taxRate: null,        // 税抜のときの税率（%）。ポップごとに価格の欄で入れる。null は設定の税率（前の版で設定画面に入れた値。無ければ 8）
-    taxRounding: 'decimal', // 併記する税込の端数（TAX_ROUNDINGS の id）。価格の欄の税込の金額を押して回す。無い古いポップは前の版の設定画面の値
+    taxRounding: 'decimal', // 併記する税込の端数（TAX_ROUNDINGS の id）。価格の欄の税込の金額を押して回す。新しく作るときは前に選んだもの（newPop）。無い古いポップは設定の値
     each: false,          // 価格の頭に「各」を付ける（同じ値段の品をまとめて出すとき）
     nameFont: '',         // 商品名の書体（NAME_FONTS の id。'' はデザインのまま）
     priceBadge: '',       // 「写真主役」の金額の台紙（PRICE_BADGES の id。'' は黄色い丸）
@@ -79,6 +79,11 @@ export function contentOf(pop) {
     out[k] = v && typeof v === 'object' ? { ...v } : v;
   }
   return out;
+}
+
+/** 新しく1枚作る。税込の端数は前に選んだもの（設定に残した最後の扱い）を引き継ぐ。 */
+export function newPop(settings, now = new Date()) {
+  return { ...createPop(now), taxRounding: popTaxRounding(null, settings) };
 }
 
 /** レギュラーから今日のポップを作る。価格・産地は確認が済むまで出力させない。 */
@@ -240,7 +245,7 @@ export function popTaxRate(pop, settings) {
   return isTaxRate(pop?.taxRate) ? pop.taxRate : taxRateOf(settings);
 }
 
-/** そのポップの税込の端数。ポップに入れた扱いが読めればそれ、無ければ設定の値（前の版で設定画面に入れた値。無ければ小数第2位まで）。 */
+/** そのポップの税込の端数。ポップに入れた扱いが読めればそれ、無ければ設定の値（最後に選んだ扱い。無ければ小数第2位まで）。 */
 export function popTaxRounding(pop, settings) {
   if (TAX_ROUNDINGS[pop?.taxRounding]) return pop.taxRounding;
   return TAX_ROUNDINGS[settings?.taxRounding] ? settings.taxRounding : 'decimal';
@@ -248,12 +253,10 @@ export function popTaxRounding(pop, settings) {
 
 /**
  * 税込の金額を押したときの次の端数（小数第2位まで → 切り捨て → 四捨五入 → 頭へ戻る）。
- * 切り捨てと四捨五入が同じ金額になる価格では、押しても変わらない四捨五入を飛ばす。
+ * 選んだ扱いは次のポップにも引き継ぐ（店の決まりとして選ぶ）ので、今の価格で金額が同じになる扱いも飛ばさない。
  */
 export function nextTaxRounding(pop, settings) {
-  const rate = popTaxRate(pop, settings);
-  const order = Object.keys(TAX_ROUNDINGS)
-    .filter(id => id !== 'round' || formatTaxIncluded(pop.price, rate, 'floor') !== formatTaxIncluded(pop.price, rate, 'round'));
+  const order = Object.keys(TAX_ROUNDINGS);
   return order[(order.indexOf(popTaxRounding(pop, settings)) + 1) % order.length];
 }
 

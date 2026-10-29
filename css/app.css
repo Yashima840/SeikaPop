@@ -178,7 +178,8 @@ button.tax-note[hidden] { display: none; }
 .check { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; font-size: 15px; }
 .check input { width: 22px; height: 22px; margin-top: 1px; accent-color: var(--green); flex: none; }
 /* かんたん作成（ウィザード）: 上に段の並び、下に戻る・次へ */
-.steps { display: flex; gap: 4px; margin: 0 0 10px; }
+.steps { display: flex; gap: 4px; margin: 0 0 8px; }
+.steps[hidden] { display: none; }
 .step {
   flex: 1; min-height: 44px; padding: 4px 2px; font-size: 12px; line-height: 1.2;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;

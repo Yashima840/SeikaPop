@@ -1,7 +1,7 @@
 // はじめの画面: 1枚作る／フレームにまとめる（広告）／保管したポップから作る、の入口と、レギュラー・履歴の2つの欄
 
 import * as store from '../store.js';
-import { createPop, formatShotTime, isBlankPop, moveToRegular, popFromRegular, popFromShared, popLists, popTitle } from '../model.js';
+import { newPop, formatShotTime, isBlankPop, moveToRegular, popFromRegular, popFromShared, popLists, popTitle } from '../model.js';
 import { confirmBox, h, toast } from '../ui.js';
 import { flushOutbox, onOutboxChange, outboxStatus } from '../sender.js';
 import { recordError } from '../crash.js';
@@ -35,7 +35,7 @@ export async function showHome(root, app) {
   }
 
   const openNew = async () => {
-    const pop = createPop();
+    const pop = newPop(await store.getSettings());
     await store.putPop(pop);
     app.go(`#/make/${pop.id}`);   // 新しく作るときは、かんたん作成（1段ずつ）で
   };

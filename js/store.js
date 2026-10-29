@@ -220,6 +220,11 @@ export async function putSettings(value) {
   await run(['meta'], 'readwrite', tx => reqDone(tx.objectStore('meta').put({ key: 'settings', value })));
 }
 
+/** 設定の一部だけを書き換える（読み直してから書くので、ほかの画面が書いた合言葉などを古い中身で上書きしない）。 */
+export async function patchSettings(patch) {
+  await putSettings({ ...await getSettings(), ...patch });
+}
+
 // ---- バックアップ ----
 
 export function blobToBase64(blob) {
