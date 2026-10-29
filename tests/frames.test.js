@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  defaultLogo, LOGO, logoRect, normalizeLogo, placeLogo, titleWidth,
+  defaultLogo, LOGO, logoRect, logoSizeOf, normalizeLogo, placeLogo, resizeLogo, titleWidth,
   adProblems, adShotKey, cleanCustomFrames, createAd, CUSTOM_COLORS, CUSTOM_ID, customFrame, customFrameProblems, dayInput, defaultPeriod,
   dropMissing, fitSlots, frameFor, frameProblems, FRAME_ORDER, FRAMES, mergeCustomFrames, normalizePeriod, normalizeRows, PERIOD_BAND, PERIOD_COLORS,
   periodEnd, periodOf, periodParts, periodText, saveCustomFrame, toggleShot,
@@ -244,11 +244,32 @@ test('店のロゴ: 初めは入れる・見出しの帯の左。動かしても
   assert.deepEqual([moved.x, moved.y], [900 - LOGO.size / 2, 300 - LOGO.size / 2]);
   // 前の作りかけ（ロゴの指定が無い・壊れている）
   assert.deepEqual(normalizeLogo(undefined), defaultLogo());
-  assert.deepEqual(normalizeLogo({ on: false, x: 'a', y: 3 }), { on: false, x: null, y: null });
-  assert.deepEqual(normalizeLogo({ on: true, x: 10.4, y: 20.6 }), { on: true, x: 10, y: 21 });
+  assert.deepEqual(normalizeLogo({ on: false, x: 'a', y: 3 }), { on: false, x: null, y: null, size: null });
+  assert.deepEqual(normalizeLogo({ on: true, x: 10.4, y: 20.6 }), { on: true, x: 10, y: 21, size: null }, '大きさの無い前の作りかけは元の大きさ');
   // 位置が違えば別の広告として残す
   assert.notEqual(adShotKey(ad), adShotKey({ ...ad, logo: { on: true, x: 900, y: 300 } }));
   assert.notEqual(adShotKey(ad), adShotKey({ ...ad, logo: { on: false, x: null, y: null } }));
+});
+
+test('店のロゴの大きさ: ピンチ・Ctrl＋ホイールで変える。決まった範囲と画像の中に収める', () => {
+  const ad = { ...createAd(), frameId: 'pair' };
+  const f = frameFor(ad);
+  assert.equal(logoSizeOf(ad.logo), LOGO.size, '初めは元の大きさ');
+  const big = resizeLogo({ on: true, x: 500, y: 600, size: null }, 2);
+  assert.deepEqual(big, { on: true, x: 500, y: 600, size: LOGO.size * 2 }, '位置はそのまま');
+  const r = logoRect({ ...ad, logo: big }, f);
+  assert.deepEqual(r, { x: 500 - LOGO.size, y: 600 - LOGO.size, w: LOGO.size * 2, h: LOGO.size * 2 }, '真ん中を変えずに大きくなる');
+  assert.equal(resizeLogo(big, 100).size, LOGO.max, '大きすぎない');
+  assert.equal(resizeLogo(big, 0.001).size, LOGO.min, '小さすぎない');
+  // 端に置いた大きいロゴも画像からはみ出さない
+  const edge = logoRect({ ...ad, logo: { on: true, x: 0, y: 0, size: LOGO.max } }, f);
+  assert.deepEqual([edge.x, edge.y], [0, 0]);
+  // 帯の左（位置を動かしていない）でも大きさは効く
+  assert.equal(logoRect({ ...ad, logo: { ...defaultLogo(), size: 100 } }, f).w, 100);
+  // 壊れた値・範囲の外は読むときにそろえる
+  assert.equal(normalizeLogo({ on: true, x: 1, y: 2, size: 99999 }).size, LOGO.max);
+  assert.equal(normalizeLogo({ on: true, size: 'a' }).size, null);
+  assert.notEqual(adShotKey(ad), adShotKey({ ...ad, logo: { ...ad.logo, size: 300 } }), '大きさが違えば別の広告');
 });
 
 test('店のロゴ: 見出しの帯にかかるときは、見出しの文字を左右とも空けて避ける', () => {

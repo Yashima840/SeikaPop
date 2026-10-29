@@ -205,26 +205,41 @@ export function periodOf(ad) {
   return ad?.period?.on ? periodText(ad.period.from, Number(ad.period.days)) : '';
 }
 
-// ---- 店のロゴ（ad.logo = { on, x, y }。x・y はロゴの真ん中の位置（px）。null なら見出しの帯の左）----
+// ---- 店のロゴ（ad.logo = { on, x, y, size }。x・y はロゴの真ん中の位置（px）。null なら見出しの帯の左）----
+// size は一辺の長さ（px）。null なら LOGO.size。見本の上でピンチ（パソコンは Ctrl＋ホイール）で変える（min〜max）。
 
-export const LOGO = { src: './icons/logo.png', size: 170, pad: 16 };
+export const LOGO = { src: './icons/logo.png', size: 170, pad: 16, min: 60, max: 600 };
 
-/** ロゴの初めの値（入れる・見出しの帯の左）。 */
+/** ロゴの初めの値（入れる・見出しの帯の左・元の大きさ）。 */
 export function defaultLogo() {
-  return { on: true, x: null, y: null };
+  return { on: true, x: null, y: null, size: null };
 }
 
-/** 保存してあるロゴの指定を読める形にそろえる（無い作りかけは「入れる」）。 */
+/** 保存してあるロゴの指定を読める形にそろえる（無い作りかけは「入れる」。大きさの無い前の作りかけは元の大きさ）。 */
 export function normalizeLogo(l) {
   const num = v => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null);
   if (!l || typeof l !== 'object') return defaultLogo();
-  const x = num(l.x), y = num(l.y);
-  return { on: l.on !== false, x: x === null || y === null ? null : x, y: x === null || y === null ? null : y };
+  const x = num(l.x), y = num(l.y), size = num(l.size);
+  const at = x === null || y === null ? { x: null, y: null } : { x, y };
+  return { on: l.on !== false, ...at, size: size === null ? null : clampLogoSize(size) };
 }
 
-/** ロゴの真ん中を (x, y) に置いたときの位置。画像の外へはみ出さないように収める。 */
-export function placeLogo(frame, x, y) {
-  const r = LOGO.size / 2;
+const clampLogoSize = s => Math.round(Math.min(Math.max(s, LOGO.min), LOGO.max));
+
+/** ロゴの一辺の長さ（px）。画像の短い辺より大きくはしない。 */
+export function logoSizeOf(logo, frame = null) {
+  const s = clampLogoSize(logo?.size ?? LOGO.size);
+  return frame ? Math.min(s, frame.w, frame.h) : s;
+}
+
+/** ロゴの大きさを k 倍にした指定（min〜max に収める。位置はそのまま）。 */
+export function resizeLogo(logo, k) {
+  return { ...logo, size: clampLogoSize(logoSizeOf(logo) * k) };
+}
+
+/** 一辺 size のロゴの真ん中を (x, y) に置いたときの位置。画像の外へはみ出さないように収める。 */
+export function placeLogo(frame, x, y, size = LOGO.size) {
+  const r = Math.min(size, frame.w, frame.h) / 2;
   const clamp = (v, max) => Math.round(Math.min(Math.max(v, r), max - r));
   return { x: clamp(x, frame.w), y: clamp(y, frame.h) };
 }
@@ -232,11 +247,11 @@ export function placeLogo(frame, x, y) {
 /** ロゴを描く四角（左上と大きさ）。入れないなら null。 */
 export function logoRect(ad, frame) {
   if (!ad?.logo?.on || !frame) return null;
-  const s = LOGO.size;
+  const s = logoSizeOf(ad.logo, frame);
   const head = frame.header?.h || 0;
   const l = ad.logo.x === null || ad.logo.x === undefined
-    ? placeLogo(frame, LOGO.pad + s / 2, head ? head / 2 : LOGO.pad + s / 2)
-    : placeLogo(frame, ad.logo.x, ad.logo.y);
+    ? placeLogo(frame, LOGO.pad + s / 2, head ? head / 2 : LOGO.pad + s / 2, s)
+    : placeLogo(frame, ad.logo.x, ad.logo.y, s);
   return { x: l.x - s / 2, y: l.y - s / 2, w: s, h: s };
 }
 
@@ -362,13 +377,13 @@ export function adProblems(ad, frame) {
   return out;
 }
 
-/** 同じ組み合わせを2回残さないための印。見出しの色・ロゴの有無と位置・期間のバッジの文字が違えば別の画像になる。 */
+/** 同じ組み合わせを2回残さないための印。見出しの色・ロゴの有無と位置と大きさ・期間のバッジの文字が違えば別の画像になる。 */
 export function adShotKey(ad) {
   const period = periodOf(ad) ? `@${periodOf(ad)}~${periodColorOf(ad.period.color).id}` : '';
   const frame = ad.frameId === CUSTOM_ID
     ? `${CUSTOM_ID}:${usedRows(ad.customRows).join('-')}:${customColorOf(ad.customColor).id}` : ad.frameId;
   const color = ad.headColor ? `#${ad.headColor}` : '';
-  const logo = ad.logo?.on ? `+logo${ad.logo.x ?? ''},${ad.logo.y ?? ''}` : '';
+  const logo = ad.logo?.on ? `+logo${ad.logo.x ?? ''},${ad.logo.y ?? ''}${ad.logo.size ? `@${ad.logo.size}` : ''}` : '';
   return `ad:${frame}${color}${logo}|${ad.slots.join(',')}|${ad.title}${period}`;
 }
 

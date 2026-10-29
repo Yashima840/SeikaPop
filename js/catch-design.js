@@ -38,7 +38,7 @@ export const CATCH_DESIGN = {
     "weight": "400",
     "x": -64.5,
     "y": -49.6,
-    "size": 121.7,
+    "size": 141,
     "maxW": 230.4,
     "slant": 0.21,
     "fill": "#e60012",

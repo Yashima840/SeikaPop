@@ -6,7 +6,7 @@ import * as store from '../store.js';
 import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
   AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, dayInput, normalizePeriod, PERIOD_COLORS, PERIOD_DAYS_MAX, periodEnd, periodText, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrame, customFrameProblems,
-  defaultLogo, dropMissing, fitSlots, FOOTER_TEXT, frameFor, FRAME_ORDER, FRAMES, LOGO, logoRect, normalizeLogo, normalizeRows, placeLogo, saveCustomFrame, shotFromAd, toggleShot, usedRows,
+  defaultLogo, dropMissing, fitSlots, FOOTER_TEXT, frameFor, FRAME_ORDER, FRAMES, LOGO, logoRect, logoSizeOf, normalizeLogo, normalizeRows, placeLogo, resizeLogo, saveCustomFrame, shotFromAd, toggleShot, usedRows,
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
 import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../render.js';
@@ -261,12 +261,12 @@ export async function showAd(root, app) {
       onclick: () => { ad.headColor = c.id; changed(); },
     }, ad.headColor === c.id ? `✓ ${c.label}` : c.label)));
 
-  // ---- 店のロゴ（見出しの帯の左に入れる。見本の上で指で動かせる）----
+  // ---- 店のロゴ（見出しの帯の左に入れる。見本の上で指で動かせる・ピンチ（パソコンは Ctrl＋ホイール）で大きさを変える）----
   const logoChanged = () => { statusEl.textContent = '保存中…'; draw(); save(); updateExportState(); };
   const logoBack = h('button', {
     type: 'button', class: 'chip', hidden: !ad.logo.on,
     onclick: () => { ad.logo = defaultLogo(); logoChanged(); },
-  }, 'ロゴを左上に戻す');
+  }, 'ロゴを左上・元の大きさに戻す');
   const logoCheck = h('input', {
     type: 'checkbox', checked: ad.logo.on,
     onchange: ev => { ad.logo.on = ev.target.checked; logoBack.hidden = !ad.logo.on; logoChanged(); },
@@ -282,34 +282,74 @@ export async function showAd(root, app) {
     const p = canvasPoint(cx, cy);
     return p.x >= at.x && p.x <= at.x + at.w && p.y >= at.y && p.y <= at.y + at.h;
   };
+  // 1本目の指がロゴに触れたら動かす。そのまま2本目を置いたらピンチで大きさを変える（2本目はロゴの外でもよい）
   let dragging = null;   // { dx, dy }＝触れた所とロゴの真ん中のずれ
+  const fingers = new Map();   // ロゴを触っている指 pointerId → { x, y }（画面の座標）
+  let pinch = null;            // { dist, size }＝ピンチを始めたときの指の間と大きさ
+  /** 動かしていない（帯の左の）ロゴは、今の真ん中に置き直してから大きさを変える（大きさを変えても真ん中が動かないように）。 */
+  const pinLogo = () => {
+    if (ad.logo.x !== null && ad.logo.x !== undefined) return;
+    const at = logoRect(ad, frameOf());
+    ad.logo = { ...ad.logo, x: Math.round(at.x + at.w / 2), y: Math.round(at.y + at.h / 2) };
+  };
+  const fingerDist = () => { const [a, b] = [...fingers.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
   canvas.addEventListener('touchstart', ev => {
-    if (ev.touches.length === 1 && onLogo(ev.touches[0].clientX, ev.touches[0].clientY)) ev.preventDefault();   // 画面が動かないように
+    // 画面が動いたり拡大されたりしないように（ロゴに触れたとき・ロゴを触ったまま2本目を置いたとき）
+    if ((ev.touches.length === 1 && onLogo(ev.touches[0].clientX, ev.touches[0].clientY)) || fingers.size) ev.preventDefault();
   }, { passive: false });
   canvas.addEventListener('pointerdown', ev => {
-    if (!onLogo(ev.clientX, ev.clientY)) return;
+    if (fingers.size === 1 && ev.pointerType === 'touch') {
+      fingers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      canvas.setPointerCapture?.(ev.pointerId);
+      pinLogo();
+      pinch = { dist: fingerDist(), size: logoSizeOf(ad.logo) };
+      ev.preventDefault();
+      return;
+    }
+    if (fingers.size || !onLogo(ev.clientX, ev.clientY)) return;
     const at = logoRect(ad, frameOf()), p = canvasPoint(ev.clientX, ev.clientY);
     dragging = { dx: at.x + at.w / 2 - p.x, dy: at.y + at.h / 2 - p.y };
+    fingers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
     canvas.setPointerCapture?.(ev.pointerId);
     ev.preventDefault();
   });
   canvas.addEventListener('pointermove', ev => {
-    if (!dragging) {
-      canvas.style.cursor = onLogo(ev.clientX, ev.clientY) ? 'grab' : '';
+    if (!fingers.has(ev.pointerId)) {
+      if (!fingers.size) canvas.style.cursor = onLogo(ev.clientX, ev.clientY) ? 'grab' : '';
       return;
     }
-    const p = canvasPoint(ev.clientX, ev.clientY);
-    ad.logo = { on: true, ...placeLogo(frameOf(), p.x + dragging.dx, p.y + dragging.dy) };
+    fingers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (pinch) {
+      if (pinch.dist > 0) ad.logo = resizeLogo({ ...ad.logo, size: pinch.size }, fingerDist() / pinch.dist);
+    } else if (dragging) {
+      const p = canvasPoint(ev.clientX, ev.clientY);
+      ad.logo = { ...ad.logo, on: true, ...placeLogo(frameOf(), p.x + dragging.dx, p.y + dragging.dy, logoSizeOf(ad.logo, frameOf())) };
+    }
     statusEl.textContent = '保存中…';
     draw();
   });
-  const dragEnd = () => {
-    if (!dragging) return;
-    dragging = null;
-    save();
+  const dragEnd = ev => {
+    if (!fingers.delete(ev.pointerId)) return;
+    if (pinch) {
+      // ピンチの途中で指を1本離したら、残った指では動かさない（離した瞬間にロゴが跳ねないように）
+      pinch = null;
+      dragging = null;
+    }
+    if (!fingers.size) {
+      dragging = null;
+      logoChanged();
+    }
   };
   canvas.addEventListener('pointerup', dragEnd);
   canvas.addEventListener('pointercancel', dragEnd);
+  // パソコン: ロゴの上で Ctrl＋ホイール（ノートのタッチパッドでは2本指のピンチも同じ合図になる）
+  canvas.addEventListener('wheel', ev => {
+    if (!ev.ctrlKey || !onLogo(ev.clientX, ev.clientY)) return;
+    ev.preventDefault();   // ブラウザの拡大にしない
+    pinLogo();
+    ad.logo = resizeLogo(ad.logo, Math.exp(-ev.deltaY * 0.002));
+    logoChanged();
+  }, { passive: false });
 
   /** フレームを替える。custom＝カスタムのとき { id, name, rows }（保存済みのもの）。 */
   const pickFrame = (id, custom = null) => {
@@ -478,7 +518,7 @@ export async function showAd(root, app) {
         h('div', { class: 'field' }, h('span', { class: 'label', text: '見出しの色' }), headColorChips()),
         h('label', { class: 'check' }, periodCheck, '期間のバッジを入れる（例: 10/17(土)～10/19(月) 3日間限り）'),
         periodBox,
-        h('label', { class: 'check' }, logoCheck, '店のロゴを入れる（見本のロゴを指で動かせます）'),
+        h('label', { class: 'check' }, logoCheck, '店のロゴを入れる（見本のロゴを指で動かせます。2本指で広げると大きく、パソコンは Ctrl＋ホイール）'),
         logoBack,
         h('p', { class: 'hint' }, `下の帯には「${FOOTER_TEXT}」が入ります。`),
       ],
