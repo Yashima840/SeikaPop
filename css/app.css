@@ -46,6 +46,10 @@ button.primary { background: var(--green); border-color: var(--green-dark); colo
 button.danger { color: var(--red); }
 button.ok.danger { background: var(--red); color: #fff; border-color: var(--red); }
 button.big { width: 100%; min-height: 56px; font-size: 18px; margin: 4px 0 8px; }
+/* 「出す」の最下段: 保存する ＋ 終了（はじめの画面へ戻る） */
+.save-row { display: flex; gap: 8px; }
+.save-row > button.big { flex: 2 1 0; }
+.save-row > button.end { flex: 1 1 0; min-height: 56px; font-size: 18px; margin: 4px 0 8px; }
 /* はじめの画面の入口2つ（1枚作る／まとめて1枚） */
 .start-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 8px; }
 button.start { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 112px; padding: 12px 8px; }

@@ -611,7 +611,8 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
         : choiceBox('regular', pop.fromRegularId ? '★ レギュラーを今の内容で更新' : '★ レギュラーに登録',
           { note: pop.fromRegularId ? '呼び出し元のレギュラーを、この内容に書き換えます' : 'はじめの画面から呼び出せるようにします' }),
       problemsEl,
-      saveBtn,
+      // 打った内容は画面を離れるときの後始末で保存されるので、そのままはじめの画面へ
+      h('div', { class: 'save-row' }, saveBtn, h('button', { class: 'end', onclick: () => app.go('#/') }, '終了')),
     ].filter(Boolean));
     updateExportState();
   }

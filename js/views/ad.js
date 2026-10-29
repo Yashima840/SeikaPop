@@ -595,7 +595,9 @@ export async function showAd(root, app) {
         ? { note: '事務所のドライブに集まります。共有したときもここに入ります' }
         : { disabled: true, note: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」で入れます）' }),
       choiceBox('phone', 'この端末に保存', { note: 'スマホは写真（ダウンロード）、パソコンはダウンロードのフォルダーに入ります' }),
-      problemsEl, saveBtn);
+      problemsEl,
+      // 作りかけは画面を離れるときの後始末で保存されるので、そのままはじめの画面へ
+      h('div', { class: 'save-row' }, saveBtn, h('button', { class: 'end', onclick: () => app.go('#/') }, '終了')));
   rebuild();
   root.replaceChildren(
     h('div', { class: 'preview' }, canvas, h('div', { class: 'preview-bar' }, statusEl)),
