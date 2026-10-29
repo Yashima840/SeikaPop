@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   createPop, exportFileName, exportProblems, formatDate, formatPrice, isBlankPop, localStamp,
-  catchDesignFor, isBurstLayout, moveToRegular, needsCheck, nextPriceBadge, parsePriceInput, upgradeDesign, popFromRegular, popFromShared, PRICE_BADGES, priceBadgeOf, regularFromPop, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
+  catchDesignFor, isBurstLayout, moveToRegular, needsCheck, nextPriceBadge, parsePriceInput, upgradeDesign, popFromRegular, popFromShared, placeStamp, PRICE_BADGES, priceBadgeOf, regularFromPop, STAMP, stampOf, normalizeStamp, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
 } from '../js/model.js';
 
 const T0 = new Date('2026-10-20T06:30:00Z');
@@ -186,4 +186,32 @@ test('「爆発2」は「爆発」と同じ置き方で、ギザギザを赤・�
   assert.equal(design.burst.fill, '#111111', '元のデザインは変えない');
   assert.equal(catchDesignFor({ priceBadge: 'burst' }, design), design, '「爆発」はそのまま');
   assert.equal(isBurstLayout({ priceBadge: 'gold-brush' }), false);
+});
+
+test('文字スタンプ: 置き方を決めていなければ決まった位置。動かしても画像の中・決まった大きさに収め、向きは -180〜180', () => {
+  const pop = createPop(T0);
+  assert.equal(pop.stampText, '');
+  assert.deepEqual(stampOf(pop), { x: STAMP.x, y: STAMP.y, scale: 1, rot: 0 });
+  const st = stampOf(pop);
+  assert.deepEqual(placeStamp(st, { x: 1.5, y: -0.2 }), { ...st, x: 1, y: 0 }, '真ん中は画像の中');
+  assert.equal(placeStamp(st, { scale: 99 }).scale, STAMP.maxScale);
+  assert.equal(placeStamp(st, { scale: 0 }).scale, STAMP.minScale);
+  assert.equal(placeStamp(st, { rot: 190 }).rot, -170, '回し続けても値が膨らまない');
+  assert.equal(placeStamp(st, { rot: -190 }).rot, 170);
+  assert.equal(placeStamp(st, { rot: 180 }).rot, 180);
+  // 壊れた置き方は決まった位置へ
+  assert.equal(normalizeStamp({ x: 'a', y: 0, scale: 1, rot: 0 }), null);
+  assert.equal(normalizeStamp(null), null);
+  assert.deepEqual(stampOf({ stamp: { x: 0.3 } }), stampOf(pop));
+});
+
+test('文字スタンプはレギュラー・保管へ引き継ぐ（届いた置き方は形を確かめて取り込む）', () => {
+  const pop = { ...createPop(T0), name: 'じゃが芋', stampText: '今夜はカレー！', stamp: { x: 0.3, y: 0.7, scale: 1.5, rot: -12 } };
+  const today = popFromRegular(regularFromPop(pop, T0), T1);
+  assert.equal(today.stampText, '今夜はカレー！');
+  assert.deepEqual(today.stamp, pop.stamp);
+  assert.notEqual(today.stamp, pop.stamp, '同じ物を指さない（片方を動かしても他方は動かない）');
+  assert.deepEqual(popFromShared({ stampText: 'a', stamp: { x: 0.3, y: 0.7, scale: 9, rot: 0 } }).stamp, { x: 0.3, y: 0.7, scale: STAMP.maxScale, rot: 0 });
+  assert.equal(popFromShared({ stamp: 'x' }).stamp, null);
+  assert.equal(isBlankPop({ ...createPop(T0), stampText: '今夜は' }), false, 'ひとことだけ入れたポップも片付けない');
 });

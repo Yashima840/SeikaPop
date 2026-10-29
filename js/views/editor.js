@@ -3,9 +3,9 @@
 import * as store from '../store.js';
 import {
   DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, NAME_FONTS, parsePriceInput, parseTaxRateInput,
-  isBurstLayout, needsCheck, nextPriceBadge, PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, popTaxRate, updateRegularFrom, withSample,
+  isBurstLayout, needsCheck, nextPriceBadge, PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, placeStamp, popTaxRate, STAMP, stampOf, updateRegularFrom, withSample,
 } from '../model.js';
-import { dragCrop, moveBadge, zoomCrop, ZOOM_MAX } from '../layout.js';
+import { dragCrop, fingerSpan, inRotatedRect, moveBadge, zoomCrop, ZOOM_MAX } from '../layout.js';
 import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.js';
 import { ensureFonts, photoBoxOf, renderPop, renderToFile, thumbnailOf } from '../render.js';
 import { TEMPLATE_ORDER, TEMPLATES } from '../templates.js';
@@ -58,7 +58,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
   // ---- プレビュー ----
   const canvas = h('canvas', { class: 'preview-canvas' });
   const statusEl = h('span', { class: 'status', text: '' });
-  let hit = {};   // 見本の上で指で動かせる物の置き場所（金額の台紙）
+  let hit = {};   // 見本の上で指で動かせる物の置き場所（金額の台紙・文字スタンプ）
   const draw = frameThrottle(async () => {
     await ensureFonts(pop, settings, () => toast('文字の書体を読み込めませんでした（電波を確認してください）。端末の字で表示します'));
     hit = renderPop(canvas, pop, photoShown, settings, { preview: true });
@@ -85,6 +85,91 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     if (rebuild) rebuildForm();
     updateExportState();
   };
+
+  // ---- 文字スタンプ（ひとこと）: 1本指で動かす・2本指で大きさと向き（パソコンはホイールで大きさ、Shift＋ホイールで向き）----
+  // 1本目の指がスタンプに触れたら掴む。そのまま2本目を置いたらピンチ（2本目はスタンプの外でもよい）
+  const stampFingers = new Map();   // pointerId → { x, y }（画面の座標）
+  let stampPinch = null;            // { stamp, span, mid }＝2本目を置いたときの置き方・指の間と向き・真ん中
+  const canvasPoint = ev => {
+    const r = canvas.getBoundingClientRect(), k = canvas.width / r.width;
+    return { x: (ev.clientX - r.left) * k, y: (ev.clientY - r.top) * k };
+  };
+  const onStamp = ev => { const p = canvasPoint(ev); return !!hit.stamp && inRotatedRect(p.x, p.y, hit.stamp); };
+  const midOf = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  /** 置き方を変えて描き直す（スライダーも合わせる）。 */
+  const setStamp = change => {
+    pop.stamp = placeStamp(stampOf(pop), change);
+    syncStampInputs();
+    changed();
+  };
+  const startStampPinch = () => {
+    const [a, b] = [...stampFingers.values()];
+    stampPinch = { stamp: stampOf(pop), span: fingerSpan(a, b), mid: midOf(a, b) };
+  };
+  canvas.addEventListener('pointerdown', ev => {
+    if (stampFingers.size === 1 && ev.pointerType === 'touch') {
+      stampFingers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      canvas.setPointerCapture(ev.pointerId);
+      startStampPinch();
+      ev.stopImmediatePropagation();   // 写真の拡大・台紙の移動には回さない
+      return;
+    }
+    if (stampFingers.size || pointers.size || badgeDrag || !onStamp(ev)) return;
+    stampFingers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    canvas.setPointerCapture(ev.pointerId);
+    ev.stopImmediatePropagation();
+  });
+  canvas.addEventListener('pointermove', ev => {
+    const prev = stampFingers.get(ev.pointerId);
+    if (!prev) return;
+    ev.stopImmediatePropagation();
+    const cur = { x: ev.clientX, y: ev.clientY };
+    stampFingers.set(ev.pointerId, cur);
+    const r = canvas.getBoundingClientRect();
+    if (stampPinch && stampFingers.size === 2) {
+      // 大きさと向きは2本目を置いたときから、位置は2本の指の真ん中が動いた分だけ
+      const [a, b] = [...stampFingers.values()];
+      const span = fingerSpan(a, b), mid = midOf(a, b), base = stampPinch.stamp;
+      if (stampPinch.span.dist <= 0) return;
+      setStamp({
+        x: base.x + (mid.x - stampPinch.mid.x) / r.width, y: base.y + (mid.y - stampPinch.mid.y) / r.height,
+        scale: base.scale * span.dist / stampPinch.span.dist, rot: base.rot + span.angle - stampPinch.span.angle,
+      });
+      return;
+    }
+    // 1本指（ピンチの途中で1本離したときも、残った指の動いた分だけ動かす＝跳ねない）
+    const st = stampOf(pop);
+    setStamp({ x: st.x + (cur.x - prev.x) / r.width, y: st.y + (cur.y - prev.y) / r.height });
+  });
+  const endStampPointer = ev => {
+    if (!stampFingers.delete(ev.pointerId)) return;
+    ev.stopImmediatePropagation();
+    stampPinch = null;
+  };
+  canvas.addEventListener('pointerup', endStampPointer);
+  canvas.addEventListener('pointercancel', endStampPointer);
+  canvas.addEventListener('wheel', ev => {
+    if (!onStamp(ev)) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();   // 写真の拡大には回さない
+    const st = stampOf(pop), delta = ev.deltaY || ev.deltaX;   // Shift を押すと横のホイールになるブラウザがある
+    if (ev.shiftKey) setStamp({ rot: st.rot + (delta < 0 ? -5 : 5) });
+    else setStamp({ scale: st.scale * (delta < 0 ? 1.06 : 1 / 1.06) });
+  }, { passive: false });
+  // 入力欄（スライダー）でも大きさ・向きを合わせられる（指では細かく合わせにくい・パソコンでも分かるように）
+  const stampScaleInput = h('input', {
+    type: 'range', min: STAMP.minScale, max: STAMP.maxScale, step: 0.01, value: stampOf(pop).scale,
+    oninput: () => setStamp({ scale: Number(stampScaleInput.value) }),
+  });
+  const stampRotInput = h('input', {
+    type: 'range', min: -180, max: 180, step: 1, value: stampOf(pop).rot,
+    oninput: () => setStamp({ rot: Number(stampRotInput.value) }),
+  });
+  function syncStampInputs() {
+    const st = stampOf(pop);
+    stampScaleInput.value = st.scale;
+    stampRotInput.value = st.rot;
+  }
 
   // ---- 金額の台紙の位置（ドラッグ）・写真の位置（ドラッグ）・拡大（ピンチ・ホイール）----
   const pointers = new Map();
@@ -322,6 +407,17 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     const memoInput = textInput('catch', '例: 入荷数・仕入れ先への連絡など', { multiline: true });
     const unitInput = textInput('unit', '例: 1袋');
     const originInput = textInput('origin', '例: 熊本県産／○○食品');
+    const stampInput = textInput('stampText', '例: 今夜はカレー！');
+    // ひとこと（文字スタンプ）と、その大きさ・向き。位置は見本の上で指で動かす
+    const stampFields = () => h('div', { class: 'field' },
+      h('span', { class: 'label', text: 'ひとこと（文字スタンプ。見本の上で指で動かす・2本指で大きさと向き）' }),
+      stampInput,
+      h('div', { class: 'stamp-adjust' },
+        h('label', {}, '大きさ', stampScaleInput),
+        h('label', {}, '向き', stampRotInput),
+        h('button', { type: 'button', class: 'mini', onclick: () => { pop.stamp = null; syncStampInputs(); changed(); } }, '位置・大きさ・向きを戻す'),
+      ),
+      h('span', { class: 'field-note', text: 'パソコンは スタンプの上で ホイール＝大きさ、Shift＋ホイール＝向き' }));
 
     const photoButtons = () => h('div', { class: 'row' },
       h('button', { class: 'primary', onclick: () => pickPhoto(true) }, '📷 撮影'),
@@ -376,7 +472,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
       const info = STEPS[key];
       const body = {
         photo: () => [photoButtons(), photoImg ? h('p', { class: 'hint', text: '写真が入りました。撮り直すときは上のボタンをもう一度。' }) : null],
-        name: () => [field('商品名', nameInput), field('産地（食品はメーカー名）', originInput)],
+        name: () => [field('商品名', nameInput), field('産地（食品はメーカー名）', originInput), stampFields()],
         price: () => [...priceFields(), badgeChips()],
         design: () => [designPicker(), h('div', { class: 'field' },
           h('span', { class: 'label', text: '大きさ（押すと見本の形が替わります。共有するときは使う先に合わせて作り直します）' }), sizeChips())],
@@ -445,9 +541,10 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
       ),
       h('section', {},
         h('h3', {}, '文字'),
-        // 画像に入るのは 産地（メーカー名）・商品名・価格・単位 だけ。見出しと日付はフレーム（広告）で入れる
+        // 画像に入るのは 産地（メーカー名）・商品名・ひとこと（文字スタンプ）・価格・単位 だけ。見出しと日付はフレーム（広告）で入れる
         field('産地（食品はメーカー名）', originInput),
         field('商品名', nameInput),
+        stampFields(),
         h('div', { class: 'field' },
           h('span', { class: 'label', text: '商品名の書体' }),
           // 候補はその書体で見せる（書体の定義は ensureFonts が読み込む。読めなければ端末の字）

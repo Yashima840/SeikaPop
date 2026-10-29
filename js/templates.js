@@ -3,7 +3,7 @@
 // 大きさは幅1080px を基準にした u（W/1080）で書き、縦の長さ（H）に合わせて写真の枠を伸ばす。
 
 import { coverSource, fitFontSize, layoutLines, placeBadge, rectsOverlap, seededRandom } from './layout.js';
-import { catchDesignFor, isBurstLayout, splitDecimal, taxNote } from './model.js';
+import { catchDesignFor, isBurstLayout, splitDecimal, stampOf, taxNote } from './model.js';
 import { VINTAGE } from './image.js';
 import { CATCH_DESIGN } from './catch-design.js';
 import { drawPrice } from './price-design.js';
@@ -656,6 +656,40 @@ function drawBurstLayout(ctx, d) {
   if (d.price) drawPrice(ctx, box, d.price, u, catchDesignFor(pop, CATCH_DESIGN));
   // 産地・商品名・数量と単位（置き場所と見た目は label-design.js）。金額より手前に描く（重なっても名前が隠れないように）
   drawLabels(ctx, box, pop, u, labelDesignFor(pop));
+}
+
+// ------------------------------------------------------------------
+// 文字スタンプ（ひとこと）: どのデザインでも一番手前に、好きな位置・大きさ・向きで描く
+//    赤い太字に白い太い縁取り（写真の上でも読めるように）。大きさは幅1080pxで 96px × scale
+// ------------------------------------------------------------------
+const STAMP_STYLE = { font: FONTS.impact, size: 96, fill: '#e53935', edge: '#ffffff', edgeW: 0.22 };
+
+/** 文字スタンプを描き、掴める範囲 { cx, cy, w, h, rot } を返す（文字が無ければ null）。 */
+export function drawStamp(ctx, d) {
+  const text = String(d.pop.stampText ?? '').trim();
+  if (!text) return null;
+  const { W, H, u } = d;
+  const st = stampOf(d.pop);
+  const size = STAMP_STYLE.size * u * st.scale, edge = size * STAMP_STYLE.edgeW;
+  const cx = st.x * W, cy = st.y * H;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(st.rot * Math.PI / 180);
+  ctx.font = font(STAMP_STYLE.font, size);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const w = ctx.measureText(text).width;
+  ctx.lineJoin = 'round';
+  withShadow(ctx, size * 0.18, 'rgba(0,0,0,0.35)', () => {
+    ctx.lineWidth = edge;
+    ctx.strokeStyle = STAMP_STYLE.edge;
+    ctx.strokeText(text, 0, 0);
+  });
+  ctx.fillStyle = STAMP_STYLE.fill;
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
+  // 掴める範囲は縁取りの分も含める（小さくしても指で掴めるよう、少し広めに）
+  return { cx, cy, w: w + edge + 24 * u, h: size * 1.2 + edge + 24 * u, rot: st.rot };
 }
 
 export const TEMPLATES = { fresh, marche, simple };

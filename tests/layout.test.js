@@ -1,7 +1,7 @@
 // 写真の切り出し・指での移動・文字の折り返し
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coverSource, dragCrop, layoutLines, moveBadge, placeBadge, rectsOverlap, seededRandom, splitsAreNice, wrapText, zoomCrop } from '../js/layout.js';
+import { coverSource, dragCrop, fingerSpan, inRotatedRect, layoutLines, moveBadge, placeBadge, rectsOverlap, seededRandom, splitsAreNice, wrapText, zoomCrop } from '../js/layout.js';
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} != ${b}`);
 const mono = (t, s = 1) => Array.from(t).length * s;   // 1文字＝大きさぶんの幅
@@ -101,4 +101,17 @@ test('rectsOverlap: 金額の台紙と商品名が重なるか（辺が触れる
   assert.equal(rectsOverlap(a, { x: 100, y: 0, w: 50, h: 50 }), false);
   assert.equal(rectsOverlap(a, { x: 0, y: 150, w: 50, h: 50 }), false);
   assert.equal(rectsOverlap(a, { x: 20, y: 20, w: 10, h: 10 }), true);
+});
+
+test('文字スタンプを掴む: 傾けた四角の中か・2本の指の間と向き', () => {
+  const r = { cx: 100, cy: 100, w: 200, h: 40, rot: 0 };
+  assert.equal(inRotatedRect(190, 110, r), true);
+  assert.equal(inRotatedRect(100, 130, r), false, '上下にはみ出す');
+  // 90度回すと、横長の四角が縦長になる
+  const turned = { ...r, rot: 90 };
+  assert.equal(inRotatedRect(100, 190, turned), true);
+  assert.equal(inRotatedRect(190, 100, turned), false);
+  const s = fingerSpan({ x: 0, y: 0 }, { x: 0, y: 10 });
+  near(s.dist, 10);
+  near(s.angle, 90);
 });

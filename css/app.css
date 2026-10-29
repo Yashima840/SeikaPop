@@ -132,6 +132,10 @@ input[type=range] { width: 100%; height: 32px; accent-color: var(--green); }
 .price-row input[type="text"] { flex: 1; min-width: 0; }
 .each-box { display: flex; align-items: center; gap: 4px; font-weight: 700; font-size: 16px; white-space: nowrap; }
 .each-box input { width: 22px; height: 22px; accent-color: var(--green); }
+/* ひとこと（文字スタンプ）の大きさ・向き */
+.stamp-adjust { display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; margin-top: 6px; }
+.stamp-adjust label { display: flex; align-items: center; gap: 6px; flex: 1 1 140px; }
+.stamp-adjust input[type="range"] { flex: 1; min-width: 0; }
 /* 価格の欄の 税抜・税込（ラジオボタン）と税率 */
 .tax-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 6px 0 4px; }
 .tax-rate { display: flex; align-items: center; gap: 6px; font-weight: 700; }

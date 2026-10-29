@@ -54,6 +54,18 @@ export function placeBadge(W, H, w, h, pos, auto) {
   return { x: clamp(x, 0, Math.max(0, W - w)), y: clamp(y, 0, Math.max(0, H - h)), w, h };
 }
 
+/** 点 (px, py) が、真ん中 (cx, cy)・幅 w・高さ h・傾き rot（度）の四角の中か（文字スタンプを指で掴むとき）。 */
+export function inRotatedRect(px, py, { cx, cy, w, h, rot }) {
+  const a = -rot * Math.PI / 180, dx = px - cx, dy = py - cy;
+  const x = dx * Math.cos(a) - dy * Math.sin(a), y = dx * Math.sin(a) + dy * Math.cos(a);
+  return Math.abs(x) <= w / 2 && Math.abs(y) <= h / 2;
+}
+
+/** 2本の指 a・b の間の長さと向き（度）。ピンチで大きさと向きを変えるのに使う。 */
+export function fingerSpan(a, b) {
+  return { dist: Math.hypot(b.x - a.x, b.y - a.y), angle: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI };
+}
+
 /** 2つの範囲 {x, y, w, h} が重なるか（辺が触れるだけなら重ならない）。 */
 export function rectsOverlap(a, b) {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
