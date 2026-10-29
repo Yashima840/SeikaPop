@@ -5,7 +5,7 @@
 import * as store from '../store.js';
 import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
-  AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, dayInput, normalizePeriod, PERIOD_DAYS, periodEnd, periodText, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrame, customFrameProblems,
+  AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, dayInput, normalizePeriod, PERIOD_COLORS, PERIOD_DAYS_MAX, periodEnd, periodText, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrame, customFrameProblems,
   defaultLogo, dropMissing, fitSlots, FOOTER_TEXT, frameFor, FRAME_ORDER, FRAMES, LOGO, logoRect, normalizeLogo, normalizeRows, placeLogo, saveCustomFrame, shotFromAd, toggleShot, usedRows,
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
@@ -204,22 +204,31 @@ export async function showAd(root, app) {
     type: 'date', value: ad.period.from,
     onchange: () => { ad.period.from = fromInput.value; periodChanged(); },
   });
-  const daysEl = h('div', { class: 'chips' });
+  // 日数は数字で入れる（読めない数は消さずに残し、理由を出す。出力は adProblems が止める）
+  const daysInput = h('input', {
+    type: 'number', inputmode: 'numeric', min: 1, max: PERIOD_DAYS_MAX, step: 1, class: 'days-input',
+    value: String(ad.period.days), 'aria-label': '何日間',
+    oninput: () => { ad.period.days = daysInput.value.trim() === '' ? null : Number(daysInput.value); periodChanged(); },
+  });
+  const colorEl = h('div', { class: 'chips' });
   const periodNote = h('p', { class: 'hint' });
   function showPeriod() {
-    daysEl.replaceChildren(...PERIOD_DAYS.map(n => h('button', {
-      type: 'button', class: n === ad.period.days ? 'chip on' : 'chip',
-      onclick: () => { ad.period.days = n; periodChanged(); },
-    }, `${n}日間`)));
+    colorEl.replaceChildren(...PERIOD_COLORS.map(c => h('button', {
+      type: 'button', class: ad.period.color === c.id ? 'chip on' : 'chip',
+      style: `background:${c.bg};color:${c.color};border-color:${c.bg}`,
+      onclick: () => { ad.period.color = c.id; periodChanged(); },
+    }, ad.period.color === c.id ? `✓ ${c.label}` : c.label)));
     const end = periodEnd(ad.period.from, ad.period.days);
+    periodNote.classList.toggle('error', !end);
     periodNote.textContent = end
       ? `終わりは ${end.replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1/$2')}。バッジ: ${periodText(ad.period.from, ad.period.days)}`
-      : '始まりの日を選んでください';
+      : !ad.period.from ? '始まりの日を選んでください' : `日数は 1〜${PERIOD_DAYS_MAX} の数字で入れてください`;
   }
   showPeriod();
   const periodBox = h('div', { class: 'period-box', hidden: !ad.period.on },
-    h('label', { class: 'field' }, h('span', { class: 'label', text: '始まりの日' }), fromInput),
-    h('div', { class: 'field' }, h('span', { class: 'label', text: '何日間' }), daysEl),
+    h('div', { class: 'field' }, h('span', { class: 'label', text: '始まりの日' }),
+      h('div', { class: 'period-row' }, fromInput, h('span', {}, '～'), daysInput, h('span', {}, '日間'))),
+    h('div', { class: 'field' }, h('span', { class: 'label', text: 'バッジの色' }), colorEl),
     periodNote);
   const periodCheck = h('input', {
     type: 'checkbox', checked: ad.period.on,

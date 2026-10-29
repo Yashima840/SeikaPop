@@ -125,13 +125,29 @@ export function frameFor(ad) {
   const band = !!periodOf(ad);
   const f = ad.frameId === CUSTOM_ID ? customFrame(ad.customRows, ad.customName || '', ad.customColor, { band }) : builtIn(ad.frameId, band);
   const c = f && CUSTOM_COLORS.find(x => x.id === ad.headColor);
-  return c ? { ...f, header: { ...f.header, bg: c.bg }, footer: { ...f.footer, color: c.foot } } : f;
+  const g = c ? { ...f, header: { ...f.header, bg: c.bg }, footer: { ...f.footer, color: c.foot } } : f;
+  if (!g?.band) return g;
+  const pc = periodColorOf(ad.period.color);
+  return { ...g, band: { ...g.band, bg: pc.bg, color: pc.color } };
 }
 
-// ---- 期間のバッジ（ad.period = { on, from, days }。from は 'YYYY-MM-DD'（端末の日付）、days は何日間か）----
+// ---- 期間のバッジ（ad.period = { on, from, days, color }。from は 'YYYY-MM-DD'（端末の日付）、days は何日間か、color は PERIOD_COLORS の id）----
 
-export const PERIOD_DAYS = [1, 2, 3, 4, 5, 6, 7, 10, 14];   // 日数の候補
-const DAYS_MAX = 31;
+export const PERIOD_DAYS_MAX = 31;   // 日数は 1〜31 を手で入れる
+const DAYS_MAX = PERIOD_DAYS_MAX;
+// バッジの色（帯の色と文字の色）。初めは黄色に赤い字
+export const PERIOD_COLORS = [
+  { id: 'yellow', label: '黄', bg: PERIOD_BAND.bg, color: PERIOD_BAND.color },
+  { id: 'red', label: '赤', bg: '#c62828', color: '#ffffff' },
+  { id: 'pink', label: 'ピンク', bg: '#e91e63', color: '#ffffff' },
+  { id: 'orange', label: 'オレンジ', bg: '#ef6c00', color: '#ffffff' },
+  { id: 'navy', label: '濃い青', bg: '#1d3f8a', color: '#ffe14d' },
+  { id: 'black', label: '黒', bg: '#1a1a1a', color: '#ffe14d' },
+];
+/** バッジの色（知らない id は黄）。 */
+export function periodColorOf(id) {
+  return PERIOD_COLORS.find(c => c.id === id) || PERIOD_COLORS[0];
+}
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 const parseDay = s => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
@@ -171,7 +187,7 @@ export function periodText(from, days) {
 
 /** 期間のバッジの初めの値（今日から3日間。入れるかどうかは「入れない」）。 */
 export function defaultPeriod(now = new Date()) {
-  return { on: false, from: dayInput(now), days: 3 };
+  return { on: false, from: dayInput(now), days: 3, color: PERIOD_COLORS[0].id };
 }
 
 /** 保存してある期間を読める形にそろえる（無い・壊れた作りかけは「入れない」。前の { from, to } は日数に直す）。 */
@@ -181,7 +197,7 @@ export function normalizePeriod(p, now = new Date()) {
   const from = parseDay(p.from) ? p.from : d.from;
   let days = Number(p.days);
   if (!validDays(days) && parseDay(p.to) && parseDay(p.from)) days = Math.round((parseDay(p.to) - parseDay(p.from)) / 86400000) + 1;
-  return { on: p.on === true, from, days: validDays(days) ? days : d.days };
+  return { on: p.on === true, from, days: validDays(days) ? days : d.days, color: periodColorOf(p.color).id };
 }
 
 /** バッジに入れる文字（入れないなら ''）。 */
@@ -342,13 +358,13 @@ export function adProblems(ad, frame) {
   const out = [];
   const empty = ad.slots.filter(s => !s).length;
   if (empty) out.push(`あと ${empty} 枚、「② ポップを選ぶ」から選んでください`);
-  if (ad.period?.on && !periodOf(ad)) out.push('期間のバッジの始まりの日・日数を選び直してください');
+  if (ad.period?.on && !periodOf(ad)) out.push('期間のバッジの始まりの日・日数（1〜31）を確かめてください');
   return out;
 }
 
 /** 同じ組み合わせを2回残さないための印。見出しの色・ロゴの有無と位置・期間のバッジの文字が違えば別の画像になる。 */
 export function adShotKey(ad) {
-  const period = periodOf(ad) ? `@${periodOf(ad)}` : '';
+  const period = periodOf(ad) ? `@${periodOf(ad)}~${periodColorOf(ad.period.color).id}` : '';
   const frame = ad.frameId === CUSTOM_ID
     ? `${CUSTOM_ID}:${usedRows(ad.customRows).join('-')}:${customColorOf(ad.customColor).id}` : ad.frameId;
   const color = ad.headColor ? `#${ad.headColor}` : '';

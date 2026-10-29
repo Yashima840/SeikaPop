@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   defaultLogo, LOGO, logoRect, normalizeLogo, placeLogo, titleWidth,
   adProblems, adShotKey, cleanCustomFrames, createAd, CUSTOM_COLORS, CUSTOM_ID, customFrame, customFrameProblems, dayInput, defaultPeriod,
-  dropMissing, fitSlots, frameFor, frameProblems, FRAME_ORDER, FRAMES, mergeCustomFrames, normalizePeriod, normalizeRows, PERIOD_BAND,
+  dropMissing, fitSlots, frameFor, frameProblems, FRAME_ORDER, FRAMES, mergeCustomFrames, normalizePeriod, normalizeRows, PERIOD_BAND, PERIOD_COLORS,
   periodEnd, periodOf, periodParts, periodText, saveCustomFrame, toggleShot,
 } from '../js/frames.js';
 import { containRect } from '../js/layout.js';
@@ -192,11 +192,13 @@ test('期間のバッジ: 始まりの日と日数から終わりの日を出し
   // 初めの値は端末の日付で今日から3日間・入れない（朝9時前に UTC で前日にならない）
   const morning = new Date(2026, 9, 17, 6, 30);
   assert.equal(dayInput(morning), '2026-10-17');
-  assert.deepEqual(defaultPeriod(morning), { on: false, from: '2026-10-17', days: 3 });
+  assert.deepEqual(defaultPeriod(morning), { on: false, from: '2026-10-17', days: 3, color: 'yellow' });
   // 前の作りかけ（期間が無い・壊れている・終わりの日で持っていた）
   assert.equal(normalizePeriod(undefined, morning).on, false);
-  assert.deepEqual(normalizePeriod({ on: true, from: '2026-10-20', to: '2026-10-24' }, morning), { on: true, from: '2026-10-20', days: 5 });
-  assert.deepEqual(normalizePeriod({ on: true, from: 'x', days: 99 }, morning), { on: true, from: '2026-10-17', days: 3 });
+  assert.deepEqual(normalizePeriod({ on: true, from: '2026-10-20', to: '2026-10-24' }, morning), { on: true, from: '2026-10-20', days: 5, color: 'yellow' });
+  assert.deepEqual(normalizePeriod({ on: true, from: 'x', days: 99 }, morning), { on: true, from: '2026-10-17', days: 3, color: 'yellow' });
+  assert.equal(normalizePeriod({ on: true, from: '2026-10-20', days: 4, color: 'no-such' }, morning).color, 'yellow', '知らない色は黄');
+  assert.equal(normalizePeriod({ on: true, from: '2026-10-20', days: 4, color: 'navy' }, morning).color, 'navy');
 });
 
 test('期間のバッジを入れると、見出しの帯の下に帯が入り、枠はその分だけ下へずれる。文字が空なら出せない', () => {
@@ -259,4 +261,15 @@ test('店のロゴ: 見出しの帯にかかるときは、見出しの文字を
   const right = logoRect({ ...ad, logo: { on: true, x: f.w - LOGO.pad - LOGO.size / 2, y: 100 } }, f);
   assert.equal(titleWidth(f, right), left, '右へ寄せても同じだけ空ける');
   assert.equal(titleWidth(f, logoRect({ ...ad, logo: { on: true, x: 500, y: 700 } }, f)), full, '帯の外なら避けない');
+});
+
+test('期間のバッジの色: 選んだ色で帯と文字を描く。色が違えば別の広告', () => {
+  const ad = { ...createAd(), frameId: 'pair', period: { on: true, from: '2026-10-17', days: 3, color: 'yellow' } };
+  assert.equal(frameFor(ad).band.bg, PERIOD_COLORS[0].bg);
+  const red = { ...ad, period: { ...ad.period, color: 'red' } };
+  assert.equal(frameFor(red).band.bg, PERIOD_COLORS[1].bg);
+  assert.equal(frameFor(red).band.color, PERIOD_COLORS[1].color);
+  assert.equal(frameFor(red).band.h, PERIOD_BAND.h);
+  assert.notEqual(adShotKey(ad), adShotKey(red));
+  assert.equal(frameFor({ ...ad, period: { ...ad.period, on: false } }).band, undefined, '入れないときは帯が無い');
 });
