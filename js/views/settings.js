@@ -1,8 +1,8 @@
-// 設定: 事務所へ送る・税・バックアップ・保存の状態・エラーの記録。設定用リンクを開いたときの画面（#/setup?…）も
+// 設定: 事務所へ送る・税込の端数・バックアップ・保存の状態・エラーの記録。設定用リンクを開いたときの画面（#/setup?…）も
 
 import * as store from '../store.js';
 import { backupFileName } from '../backup.js';
-import { parseTaxRateInput, TAX_ROUNDINGS, taxRateOf } from '../model.js';
+import { TAX_ROUNDINGS } from '../model.js';
 import { clearErrorLog, readErrorLog } from '../crash.js';
 import { BUILT_IN_COLLECTOR_URL, collectorOf, parsePasscodeInput, parseSetupCode } from '../collect.js';
 import { flushOutbox, onOutboxChange, outboxStatus, pingCollector } from '../sender.js';
@@ -184,15 +184,6 @@ export async function showSettings(root, app) {
     }
   }, 600);
 
-  const taxError = h('span', { class: 'field-error', text: '' });
-  const taxInput = h('input', {
-    type: 'text', inputmode: 'numeric', value: String(taxRateOf(settings)),
-    oninput: () => {
-      const r = parseTaxRateInput(taxInput.value);
-      taxError.textContent = r.ok ? '' : r.message;   // 読めない値は保存しない（打った字は残す）
-      if (r.ok) { settings.taxRate = r.value; saveSettings(); }
-    },
-  });
   const roundingChips = h('div', { class: 'chips' });
   const showRounding = () => roundingChips.replaceChildren(...Object.entries(TAX_ROUNDINGS).map(([id, label]) =>
     h('button', {
@@ -241,8 +232,7 @@ export async function showSettings(root, app) {
     collector.el,
     h('section', { class: 'form' },
       h('h3', {}, '税'),
-      h('p', { class: 'hint' }, '価格を「税抜で入れる」にしたポップは、この税率で計算した税込の金額を併記します。'),
-      h('label', { class: 'field' }, h('span', { class: 'label', text: '税率（%）  青果などの食料品は 8' }), taxInput, taxError),
+      h('p', { class: 'hint' }, '価格を「税抜」にしたポップは、ポップごとに入れた税率で計算した税込の金額を併記します（税率はポップの価格の欄で入れます）。'),
       h('div', { class: 'field' }, h('span', { class: 'label', text: '税込の端数' }), roundingChips),
     ),
     h('section', { class: 'form' },

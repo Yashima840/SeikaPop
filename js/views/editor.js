@@ -2,8 +2,8 @@
 
 import * as store from '../store.js';
 import {
-  DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, NAME_FONTS, parsePriceInput,
-  isBurstLayout, needsCheck, nextPriceBadge, PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, taxRateOf, updateRegularFrom, withSample,
+  DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, NAME_FONTS, parsePriceInput, parseTaxRateInput,
+  isBurstLayout, needsCheck, nextPriceBadge, PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, popTaxRate, updateRegularFrom, withSample,
 } from '../model.js';
 import { dragCrop, moveBadge, zoomCrop, ZOOM_MAX } from '../layout.js';
 import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.js';
@@ -16,7 +16,6 @@ import { openStockPicker } from './stock.js';
 import { recordError } from '../crash.js';
 
 // 青果と食品の両方に使う（食品は「1人前」「1本入」など）
-const UNITS = ['1袋', '1個', '1パック', '1本', '1玉', '1房', '100g', '1盛', '1人前', '1本入', '1個入'];
 
 function chips(items, onPick, current) {
   return h('div', { class: 'chips' }, items.map(([value, label]) =>
@@ -236,11 +235,21 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
 
   const priceError = h('span', { class: 'field-error', text: '' });
   const priceNote = h('span', { class: 'field-note', text: '' });
-  // 税抜で入れたときは、ポップに入る税込の金額をその場で見せる（税率の設定違いに気付けるように）
+  // 税抜で入れたときは、ポップに入る税込の金額をその場で見せる（税率の入れ違いに気付けるように）
   const showPriceNote = () => {
     const t = priceTexts(pop, settings);
-    priceNote.textContent = t?.incl ? `税込 ${t.incl}円（税率 ${taxRateOf(settings)}%）` : '';
+    priceNote.textContent = t?.incl ? `税込 ${t.incl}円（税率 ${popTaxRate(pop, settings)}%）` : '';
   };
+  // 税率はポップごと（税抜のときだけ使う）。読めない値は保存しない・打った字は消さない
+  const taxError = h('span', { class: 'field-error', text: '' });
+  const taxInput = h('input', {
+    type: 'text', inputmode: 'numeric', value: String(popTaxRate(pop, settings)), class: 'tax-input',
+    oninput: () => {
+      const r = parseTaxRateInput(taxInput.value);
+      taxError.textContent = r.ok ? '' : r.message;
+      if (r.ok) { pop.taxRate = r.value; showPriceNote(); changed(); }
+    },
+  });
   const priceInput = h('input', {
     type: 'text', inputmode: 'numeric', placeholder: '例: 298', value: formatPrice(pop.price),
     enterkeyhint: 'next',
@@ -313,7 +322,6 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     const memoInput = textInput('catch', '例: 入荷数・仕入れ先への連絡など', { multiline: true });
     const unitInput = textInput('unit', '例: 1袋');
     const originInput = textInput('origin', '例: 熊本県産／○○食品');
-    const setText = (key, input, value) => { pop[key] = value; input.value = value; changed(); };
 
     const photoButtons = () => h('div', { class: 'row' },
       h('button', { class: 'primary', onclick: () => pickPhoto(true) }, '📷 撮影'),
@@ -335,9 +343,16 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
         ),
         field('単位', unitInput),
       ),
-      chips([['excl', '税抜で入れる'], ['incl', '税込で入れる']],
-        v => { pop.priceTax = v; showPriceNote(); changed({ rebuild: true }); }, isTaxExcluded(pop) ? 'excl' : 'incl'),
-      chips(UNITS.map(u => [u, u]), v => setText('unit', unitInput, v), pop.unit),
+      // 税抜・税込（ラジオボタン）と、税抜のときの税率
+      h('div', { class: 'tax-row' },
+        ...[['excl', '税抜'], ['incl', '税込']].map(([v, label]) => h('label', { class: 'each-box' },
+          h('input', {
+            type: 'radio', name: 'priceTax', value: v, checked: (isTaxExcluded(pop) ? 'excl' : 'incl') === v,
+            onchange: () => { pop.priceTax = v; showPriceNote(); changed({ rebuild: true }); },
+          }), label)),
+        isTaxExcluded(pop) ? h('label', { class: 'tax-rate' }, '税率', taxInput, '%') : null,
+      ),
+      taxError,
     ];
     const sizeChips = () => chips(Object.entries(SIZES).map(([id, s]) => [id, `${s.label}（${s.note}）`]),
       v => { pop.size = v; changed({ rebuild: true }); }, pop.size);

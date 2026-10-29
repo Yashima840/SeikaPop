@@ -20,7 +20,7 @@ export const DEFAULT_ADJUST = Object.freeze({ brightness: 0, contrast: 0, satura
 // レギュラーから呼び出したときに引き継ぐ項目（＝ポップの中身）。
 // id・日時・レギュラーかどうか・確認済みかどうかは引き継がない。
 const CONTENT_FIELDS = [
-  'name', 'catch', 'price', 'priceTax', 'unit', 'origin', 'badge',
+  'name', 'catch', 'price', 'priceTax', 'taxRate', 'unit', 'origin', 'badge',
   'template', 'size', 'photoId', 'crop', 'adjust', 'thumb', 'each', 'nameFont', 'photoFade', 'photoSepia', 'photoVintage',
   'priceBadge', 'badgePos',
 ];
@@ -39,6 +39,7 @@ export function createPop(now = new Date()) {
     catch: '',
     price: null,          // 円。未入力は null。税抜か税込かは priceTax
     priceTax: 'excl',     // 'excl'＝税抜で入れた（税込を計算して併記）／'incl'＝税込で入れた
+    taxRate: null,        // 税抜のときの税率（%）。ポップごとに価格の欄で入れる。null は設定の税率（前の版で設定画面に入れた値。無ければ 8）
     each: false,          // 価格の頭に「各」を付ける（同じ値段の品をまとめて出すとき）
     nameFont: '',         // 商品名の書体（NAME_FONTS の id。'' はデザインのまま）
     priceBadge: '',       // 「写真主役」の金額の台紙（PRICE_BADGES の id。'' は黄色い丸）
@@ -91,6 +92,7 @@ export function popFromShared(content, { photoId = null } = {}, now = new Date()
     if (k === 'photoId' || k === 'thumb' || !(k in content)) continue;
     const v = content[k], d = base[k];
     if (k === 'price') out.price = typeof v === 'number' && Number.isFinite(v) ? v : null;
+    else if (k === 'taxRate') out.taxRate = isTaxRate(v) ? v : null;
     else if (k === 'badgePos') out.badgePos = v && typeof v === 'object' && Number.isFinite(v.x) && Number.isFinite(v.y) ? { x: v.x, y: v.y } : null;
     else if (d && typeof d === 'object') out[k] = v && typeof v === 'object' ? { ...d, ...v } : { ...d };
     else if (typeof v === typeof d) out[k] = v;
@@ -162,7 +164,7 @@ export function formatPrice(value) {
 }
 
 // ---- 税 ----
-// 青果は食料品なので軽減税率 8% を初期値にする（設定で変えられる）。
+// 青果は食料品なので軽減税率 8% を初期値にする（ポップごとに価格の欄で変えられる）。
 export const DEFAULT_TAX_RATE = 8;
 export const TAX_ROUNDINGS = {
   decimal: '小数第2位まで（例: 117.72円）',
@@ -182,10 +184,16 @@ export function parseTaxRateInput(text) {
   return { ok: true, value: Number(s) };
 }
 
-/** 設定の税率（読めない値なら初期値。設定画面では読める値しか保存しない）。 */
+const isTaxRate = r => Number.isInteger(r) && r >= 0 && r <= 30;
+
+/** 設定の税率（読めない値なら初期値）。ポップに税率が無いときに使う（前の版では設定画面で入れていた）。 */
 export function taxRateOf(settings) {
-  const r = settings?.taxRate;
-  return Number.isInteger(r) && r >= 0 && r <= 30 ? r : DEFAULT_TAX_RATE;
+  return isTaxRate(settings?.taxRate) ? settings.taxRate : DEFAULT_TAX_RATE;
+}
+
+/** そのポップの税率。ポップに入れた税率が読めればそれ、無ければ設定の税率。 */
+export function popTaxRate(pop, settings) {
+  return isTaxRate(pop?.taxRate) ? pop.taxRate : taxRateOf(settings);
 }
 
 /**
@@ -210,7 +218,7 @@ export function priceTexts(pop, settings) {
   if (pop.price == null) return null;
   const main = formatPrice(pop.price), each = !!pop.each;
   if (!isTaxExcluded(pop)) return { main, incl: '', each };
-  return { main, incl: formatTaxIncluded(pop.price, taxRateOf(settings), settings?.taxRounding), each };
+  return { main, incl: formatTaxIncluded(pop.price, popTaxRate(pop, settings), settings?.taxRounding), each };
 }
 
 /** 数字に添える税の文字（「税込」または「税込 117.72円」）。 */

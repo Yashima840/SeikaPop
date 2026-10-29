@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createPop, DEFAULT_TAX_RATE, formatTaxIncluded, parseTaxRateInput, popFromRegular, priceTexts,
-  regularFromPop, splitDecimal, taxNote, taxRateOf,
+  popFromShared, popTaxRate, regularFromPop, splitDecimal, taxNote, taxRateOf,
 } from '../js/model.js';
 
 test('税込の金額は銭の整数で計算する（109×1.08 が 117.72000000000001 にならない）', () => {
@@ -54,6 +54,21 @@ test('0.1.0 で作ったポップ（priceTax が無い）は税込のまま読�
 test('税抜・税込の別はレギュラーに引き継ぐ', () => {
   const reg = regularFromPop({ ...createPop(), name: 'a', price: 100, priceTax: 'incl' });
   assert.equal(popFromRegular(reg).priceTax, 'incl');
+});
+
+test('税率はポップごと（無い・読めないときは設定の税率＝前の版で入れた値）。レギュラー・保管へ引き継ぐ', () => {
+  const pop = { ...createPop(), price: 100, priceTax: 'excl' };
+  assert.equal(pop.taxRate, null, '新しいポップは設定の税率');
+  assert.equal(popTaxRate(pop, { taxRate: 10 }), 10);
+  assert.equal(popTaxRate(pop, {}), DEFAULT_TAX_RATE);
+  const ten = { ...pop, taxRate: 10 };
+  assert.equal(popTaxRate(ten, { taxRate: 8 }), 10, 'ポップに入れた税率が先');
+  assert.equal(priceTexts(ten, { taxRate: 8 }).incl, '110');
+  assert.equal(priceTexts(pop, { taxRate: 8 }).incl, '108', '他のポップの税率に引きずられない');
+  assert.equal(popTaxRate({ ...pop, taxRate: 80 }, { taxRate: 8 }), 8, '読めない値は使わない');
+  assert.equal(popFromRegular(regularFromPop(ten)).taxRate, 10);
+  assert.equal(popFromShared({ name: 'a', price: 100, priceTax: 'excl', taxRate: 10 }).taxRate, 10);
+  assert.equal(popFromShared({ name: 'a', price: 100, taxRate: 'x' }).taxRate, null, '形の合わない値は取り込まない');
 });
 
 test('税込の小数は小さく描くために分ける（小数が無ければそのまま1つ）', () => {
