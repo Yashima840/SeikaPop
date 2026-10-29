@@ -209,6 +209,7 @@ test('保存する場所: 送り先が未設定なら「みんなで使える場
   assert.equal(saveTargets({ shared: true, phone: false }, false).none, true);
   assert.equal(saveTargets({ regular: true }, false).none, false);
   assert.equal(saveTargets({}, true).none, true);
+  assert.equal(saveTargets({ shared: false, phone: false }, true, true).none, false, 'レギュラーそのものはチェックが無くても保存だけで済む');
 });
 
 test('合言葉だけで送れる（URL を入れていない端末は組み込みの受け取り口へ）', () => {

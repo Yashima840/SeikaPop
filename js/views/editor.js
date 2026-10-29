@@ -464,7 +464,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
 
   function updateExportState() {
     const problems = exportProblems(pop);
-    if (saveTargets(choice, collectorReady).none) problems.push('保存する場所に1つ以上チェックを入れてください');
+    if (saveTargets(choice, collectorReady, pop.isRegular).none) problems.push('保存する場所に1つ以上チェックを入れてください');
     problemsEl.replaceChildren(...problems.map(p => h('li', { text: p })));
     for (const b of shareBtns) b.disabled = exportProblems(pop).length > 0;
     saveBtn.disabled = problems.length > 0;
@@ -542,9 +542,21 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
 
   /** チェックした場所へ置く。レギュラーは画像が要らないので先に済ませる。 */
   async function doSave() {
-    const t = saveTargets(choice, collectorReady);
+    const t = saveTargets(choice, collectorReady, pop.isRegular);
     if (exportProblems(pop).length || t.none) return;
     const done = [];
+    if (pop.isRegular) {
+      // レギュラーそのものは打った内容を自動で保存している。待っている分を済ませ、確かに書けたかを見るためもう一度書く
+      // （自動保存は失敗を中で知らせるだけで投げないので、flush だけでは成否が分からない）
+      await save.flush();
+      try {
+        await store.putPop(pop);
+      } catch (err) {
+        toast(`レギュラーを保存できませんでした: ${err.message}`, { error: true });
+        return;
+      }
+      done.push('レギュラーを保存しました');
+    }
     if (t.regular) {
       const msg = await saveRegular();
       if (!msg) return;

@@ -118,7 +118,8 @@ test('デザインの検査: 壊れた値・総額表示に反する値は保存
   assert.match(bad(d => { d.num.strokes.push(...Array(4).fill({ color: '#000000', width: 1 })); }).join(), /0〜4 本/);
   assert.match(bad(d => { d.fit.scale = 0; }).join(), /fit\.scale/);
   assert.match(bad(d => { d.num.size = Number.NaN; }).join(), /数字の size/);
-  assert.deepEqual(catchFontList({ ...ok, yen: { ...ok.yen, font: 'Anton', weight: '400' } }).length, 2);
+  // 「円」を数字と同じ書体・太さにすると1つにまとまる（数字の書体はデザイン作業場で替わるので、今の値から作る）
+  assert.deepEqual(catchFontList({ ...ok, yen: { ...ok.yen, font: ok.num.font, weight: ok.num.weight } }).length, 2);
 });
 
 test('編集中のデザインを渡すと、その色・縁取りで描く（保存前の見本に使う）', () => {

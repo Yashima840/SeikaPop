@@ -34,10 +34,10 @@ export const CATCH_DESIGN = {
     "lineWidth": 8
   },
   "num": {
-    "font": "Anton",
+    "font": "Bebas Neue",
     "weight": "400",
-    "x": -62.9,
-    "y": -42.2,
+    "x": -64.5,
+    "y": -49.6,
     "size": 121.7,
     "maxW": 230.4,
     "slant": 0.21,
@@ -56,8 +56,8 @@ export const CATCH_DESIGN = {
   "yen": {
     "font": "Noto Sans JP",
     "weight": "900",
-    "x": -63,
-    "y": -44,
+    "x": -66.9,
+    "y": -28.6,
     "size": 50,
     "slant": 0.21,
     "fill": "#e60012",
