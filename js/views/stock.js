@@ -9,11 +9,12 @@ import {
 } from '../sender.js';
 import { recordError } from '../crash.js';
 import { confirmBox, h } from '../ui.js';
+import { askPasscode, ensureCollector } from './passcode.js';
 
 const THUMBS_PER_ASK = 30;   // 受け取り口が1回に返す見本の数（Code.gs の STOCK_THUMBS_MAX）
 
 const STOCK = {
-  title: '📦 写真ストック',
+  title: '📦 写真ストック', use: '写真ストックを使う',
   hint: '事務所のドライブ「青果ポップ 写真ストック」の写真です。タップするとこのポップの写真になります。',
   icon: '🖼', loading: '大きい写真は少し時間がかかります',
   noMatch: q => `「${q}」に合う写真はありません`,
@@ -31,7 +32,7 @@ const STOCK = {
 };
 
 const SAVED = {
-  title: '📂 保管したポップ',
+  title: '📂 保管したポップ', use: '保管したポップを使う',
   hint: '「みんなで使える場所に保管」したポップです。タップすると同じ中身で今日のポップを作ります（価格・産地を確かめてから出せます）。',
   icon: '🏷', loading: '写真も一緒に読むので少し時間がかかります',
   noMatch: q => `「${q}」に合うポップはありません`,
@@ -73,15 +74,17 @@ const SAVED = {
  * onPick が失敗を投げたら、閉じずに理由を出す（選び直せるように）。
  */
 export function openStockPicker({ onPick }) {
-  openDrivePicker(STOCK, onPick);
+  return openDrivePicker(STOCK, onPick);
 }
 
 /** 保管したポップを開く。選んだら onPick({ content, photo }, item) を待ってから閉じる（失敗の扱いはストックと同じ）。 */
 export function openSavedPicker({ onPick }) {
-  openDrivePicker(SAVED, onPick);
+  return openDrivePicker(SAVED, onPick);
 }
 
-function openDrivePicker(src, onPick) {
+async function openDrivePicker(src, onPick) {
+  // 合言葉がまだ無ければ、ここで聞く（やめたら開かない）
+  if (!await ensureCollector(src.use)) return;
   let items = [], thumbs = {}, query = '', busy = false, closed = false;
 
   const statusEl = h('p', { class: 'stock-status', text: '' });
@@ -181,8 +184,13 @@ function openDrivePicker(src, onPick) {
 
   async function refresh() {
     setStatus(items.length ? '最新の一覧を確かめています…' : '一覧を読み込み中…');
-    const r = await src.list();
+    let r = await src.list();
     if (closed) return;
+    // 事務所で合言葉を変えた。その場で聞き直して、もう一度読む
+    if (r.stop && await askPasscode({ wrong: true })) {
+      r = await src.list();
+      if (closed) return;
+    }
     if (!r.ok) { setStatus(items.length ? `最新の一覧を読めませんでした（前に読んだ一覧です）: ${r.message}` : r.message, true); return; }
     items = r.items;
     // 消えたものの見本は捨てる（控えが膨らまないように）

@@ -3,9 +3,11 @@
 import * as store from '../store.js';
 import { createPop, formatShotTime, isBlankPop, moveToRegular, popFromRegular, popFromShared, popLists, popTitle } from '../model.js';
 import { confirmBox, h, toast } from '../ui.js';
-import { onOutboxChange, outboxStatus } from '../sender.js';
+import { flushOutbox, onOutboxChange, outboxStatus } from '../sender.js';
 import { recordError } from '../crash.js';
 import { openSavedPicker } from './stock.js';
+import { askPasscode } from './passcode.js';
+import { WRONG_PASSCODE } from '../collect.js';
 
 function card(pop, { onOpen, actions, sub = '' }) {
   return h('div', { class: 'card' },
@@ -67,14 +69,22 @@ export async function showHome(root, app) {
     app.refresh();
   };
 
-  // 事務所へ送れていないものがあるときだけ出す（タップで設定画面の詳しい理由へ）
-  const outboxNote = h('button', { class: 'notice', hidden: true, onclick: () => app.go('#/settings') });
+  // 事務所へ送れていないものがあるときだけ出す。合言葉を断られたときはタップでその場で入れ直す（ほかは設定画面の詳しい理由へ）
+  let wrongPasscode = false;
+  const outboxNote = h('button', {
+    class: 'notice', hidden: true,
+    onclick: async () => {
+      if (!wrongPasscode) { app.go('#/settings'); return; }
+      if (await askPasscode({ wrong: true })) flushOutbox();
+    },
+  });
   const showOutbox = async () => {
     try {
       const st = await outboxStatus();
+      wrongPasscode = st.lastError === WRONG_PASSCODE;
       outboxNote.hidden = !st.count;
       outboxNote.textContent = st.lastError
-        ? `⚠ 事務所へ送れていないものが ${st.count} 件あります（${st.lastError}）`
+        ? `⚠ 事務所へ送れていないものが ${st.count} 件あります（${st.lastError}）${wrongPasscode ? ' → ここを押して入れ直す' : ''}`
         : `事務所へ送っています（残り ${st.count} 件）`;
       outboxNote.classList.toggle('error', !!st.lastError);
     } catch (err) {

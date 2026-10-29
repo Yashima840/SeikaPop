@@ -14,6 +14,7 @@ import { confirmBox, debounce, downloadFile, frameThrottle, h, toast } from '../
 import { queueAd } from '../sender.js';
 import { collectorOf, saveTargets } from '../collect.js';
 import { recordError } from '../crash.js';
+import { ensureCollector } from './passcode.js';
 
 const FONT_WAIT_MS = 8000;   // 書体を待つのはここまで（電波が弱くて届かなくても、端末の字で枠に入れる）
 
@@ -554,8 +555,10 @@ export async function showAd(root, app) {
 
   // ---- 出す ----
   // 置く場所はチェックで選ぶ（編集画面と同じ。最初から印あり）
-  const collectorReady = collectorOf(settings).ready;
+  let collectorReady = collectorOf(settings).ready;
   const choice = { shared: collectorReady, phone: true };
+  // 合言葉がまだ無い端末は、初めて「みんなで使える場所に保管」に印を付けたときに聞く
+  const ensureShared = async () => (collectorReady ||= await ensureCollector('みんなで使える場所に保管する'));
   const problemsEl = h('ul', { class: 'problems' });
   const shareBtn = h('button', { class: 'primary big', onclick: () => doExport(true) }, '共有する（LINE・Instagram など）');
   const saveBtn = h('button', { class: 'big', onclick: () => doExport(false) }, '保存する');
@@ -567,11 +570,16 @@ export async function showAd(root, app) {
     shareBtn.disabled = p.length > 0;
     saveBtn.disabled = p.length > 0 || none;
   }
-  function choiceBox(key, label, { disabled = false, note = '' } = {}) {
+  // needs: 印を付けたときに要るものを用意する（みんなで使える場所＝合言葉）。用意できなければ印を外す
+  function choiceBox(key, label, { note = '', needs = null } = {}) {
     return h('label', { class: 'check' },
       h('input', {
-        type: 'checkbox', checked: choice[key], disabled,
-        onchange: ev => { choice[key] = ev.target.checked; updateExportState(); },
+        type: 'checkbox', checked: choice[key],
+        onchange: async ev => {
+          choice[key] = ev.target.checked;
+          if (ev.target.checked && needs && !await needs()) { ev.target.checked = false; choice[key] = false; }
+          updateExportState();
+        },
       }),
       h('span', {}, label, note ? h('small', { class: 'check-note', text: note }) : null));
   }
@@ -633,7 +641,7 @@ export async function showAd(root, app) {
       h('h3', { class: 'sub' }, '保存する場所'),
       choiceBox('shared', 'みんなで使える場所に保管', collectorReady
         ? { note: '事務所のドライブに集まります。共有したときもここに入ります' }
-        : { disabled: true, note: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」で入れます）' }),
+        : { needs: ensureShared, note: '事務所のドライブに集まります（初めて印を付けたときに合言葉を聞きます）' }),
       choiceBox('phone', 'この端末に保存', { note: 'スマホは写真（ダウンロード）、パソコンはダウンロードのフォルダーに入ります' }),
       problemsEl,
       // 作りかけは画面を離れるときの後始末で保存されるので、そのままはじめの画面へ

@@ -311,11 +311,14 @@ export function pingBody(passcode) {
   return { format: DELIVERY_FORMAT, version: DELIVERY_VERSION, passcode, ping: true };
 }
 
+/** 受け取り口に合言葉を断られたときの理由（控えに残る。はじめの画面はこれを見て、その場で聞き直す）。 */
+export const WRONG_PASSCODE = '合言葉が違います（事務所で今の合言葉を聞いて、入れ直してください）';
+
 /** 受け取り口の返事を読む。ok でなければ画面に出す理由を付ける。 */
 export function readReply(reply) {
   if (!reply || typeof reply !== 'object') return { ok: false, message: '送り先から読める返事がありません（設置の手順を確かめてください）' };
   if (reply.ok === true) return { ok: true };
-  if (reply.code === 'passcode') return { ok: false, stop: true, message: '合言葉が違います（事務所で今の合言葉を聞いて、⚙ 設定 →「みんなで使える場所」で入れ直してください）' };
+  if (reply.code === 'passcode') return { ok: false, stop: true, message: WRONG_PASSCODE };
   return { ok: false, message: `送り先で失敗しました: ${reply.message || '理由不明'}` };
 }
 

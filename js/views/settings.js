@@ -4,8 +4,9 @@ import * as store from '../store.js';
 import { backupFileName } from '../backup.js';
 import { TAX_ROUNDINGS } from '../model.js';
 import { clearErrorLog, readErrorLog } from '../crash.js';
-import { BUILT_IN_COLLECTOR_URL, collectorOf, parsePasscodeInput, parseSetupCode } from '../collect.js';
+import { collectorOf, parsePasscodeInput, parseSetupCode } from '../collect.js';
 import { flushOutbox, onOutboxChange, outboxStatus, pingCollector } from '../sender.js';
+import { saveCollector } from './passcode.js';
 import { confirmBox, debounce, downloadFile, h, toast } from '../ui.js';
 
 export const APP_VERSION = '0.1.0';
@@ -30,21 +31,6 @@ async function storageInfo() {
 
 function isStandalone() {
   return window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
-}
-
-/**
- * 送り先を確かめてから入れる。url が空なら組み込みの受け取り口。
- * 合言葉が違うと分かったときは入れない（false）。電波が無いなどで確かめられないときは入れて知らせる。
- */
-async function applyCollector(settings, url, passcode, sender) {
-  const r = await pingCollector(url || BUILT_IN_COLLECTOR_URL, passcode);
-  if (r.stop) { toast(r.message, { error: true }); return false; }
-  settings.collector = { url, passcode, sender };
-  await store.putSettings(settings);
-  if (r.ok) toast('設定しました（事務所に届くことを確かめました）');
-  else toast(`設定しましたが、届くかは確かめられませんでした: ${r.message}`, { error: true });
-  flushOutbox();
-  return true;
 }
 
 /** 「みんなで使える場所（事務所へ送る）」の欄。戻り値の dispose で表示の更新を止める。 */
@@ -94,7 +80,7 @@ async function collectorSection(settings, rerender) {
     if (!sender) { codeError.textContent = '名前も入れてください（誰が作ったか分かるように）'; return; }
     codeError.textContent = '確かめています…';
     try {
-      const ok = await applyCollector(settings, r.url, r.passcode, sender);
+      const ok = await saveCollector(r.url, r.passcode, sender, settings);
       codeError.textContent = ok ? '' : '合言葉が違います（もう一度確かめてください）';
       if (ok) rerender();
     } catch (err) {
@@ -156,7 +142,8 @@ export async function showSetup(root, app, href) {
   const apply = async () => {
     if (!senderInput.value.trim()) { toast('名前を入れてください（誰が作ったか分かるように）', { error: true }); return; }
     try {
-      if (await applyCollector(settings, r.url, r.passcode, senderInput.value.trim())) app.go('#/settings');
+      if (await saveCollector(r.url, r.passcode, senderInput.value.trim(), settings)) app.go('#/');
+      else toast('合言葉が違います（事務所で今の合言葉を聞いてください）', { error: true });
     } catch (err) {
       toast(`送り先を保存できませんでした: ${err.message}`, { error: true });
     }
@@ -165,7 +152,7 @@ export async function showSetup(root, app, href) {
     h('p', {}, 'この端末で作ったポップを、事務所の Google ドライブへ自動で送るようにします。'),
     isStandalone() ? null : h('p', { class: 'hint' },
       '※ iPhone でホーム画面のアイコンから使っている場合、ここで設定してもアイコンの方には届きません。',
-      'アイコンから開いたアプリの「⚙ 設定 → みんなで使える場所」に合言葉を入れてください（このリンクを貼り付けても設定できます）。'),
+      'アイコンから開いたアプリで「みんなで使える場所に保管」などを使うと合言葉を聞かれるので、そこで入れてください（このリンクを貼り付けても設定できます）。'),
     h('label', { class: 'field' }, h('span', { class: 'label', text: 'あなたの名前' }), senderInput),
     h('button', { class: 'primary big', onclick: apply }, '設定する'),
   ));

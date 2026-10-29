@@ -13,6 +13,7 @@ import { debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
 import { queuePop, queueStockPhoto } from '../sender.js';
 import { collectorOf, saveTargets } from '../collect.js';
 import { openStockPicker } from './stock.js';
+import { ensureCollector } from './passcode.js';
 import { recordError } from '../crash.js';
 
 // 青果と食品の両方に使う（食品は「1人前」「1本入」など）
@@ -314,9 +315,10 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
   // 今の写真（補正前の元の写真）をストックに足す。送れなければ控えて送り直す
   const addToStock = async () => {
     try {
+      if (!await ensureCollector('写真ストックに足す')) return;
       const ok = await queueStockPhoto(pop.photoId, pop.name);
       toast(ok ? 'ストックへ送ります（届くと、どの端末の「📦 ストックから」にも出ます）'
-        : '合言葉がまだ入っていないので送れません（⚙ 設定 →「みんなで使える場所」）', { error: !ok });
+        : '合言葉がまだ入っていないので送れません', { error: !ok });
     } catch (err) {
       toast(`ストックへ送れませんでした: ${err.message}`, { error: true });
     }
@@ -596,8 +598,10 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
 
   // ---- 出力・レギュラー ----
   // 置く場所はチェックで選ぶ（みんなで使える場所＝事務所のドライブ・このスマホは最初から印あり。開くたびに戻す）
-  const collectorReady = collectorOf(settings).ready;
+  let collectorReady = collectorOf(settings).ready;
   const choice = { shared: collectorReady, phone: true, regular: false };
+  // 合言葉がまだ無い端末は、初めて「みんなで使える場所に保管」に印を付けたときに聞く
+  const ensureShared = async () => (collectorReady ||= await ensureCollector('みんなで使える場所に保管する'));
   // 共有は使う先ごとのボタン。押した先の大きさで描き直して渡す
   const shareBtns = SHARE_TARGETS.map(t => h('button', { class: 'primary share-btn', onclick: () => doShare(t) },
     h('b', { text: t.label }), h('small', { text: SIZES[t.size].label })));
@@ -615,11 +619,16 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     saveBtn.disabled = problems.length > 0;
   }
 
-  function choiceBox(key, label, { disabled = false, note = '' } = {}) {
+  // needs: 印を付けたときに要るものを用意する（みんなで使える場所＝合言葉）。用意できなければ印を外す
+  function choiceBox(key, label, { note = '', needs = null } = {}) {
     return h('label', { class: 'check' },
       h('input', {
-        type: 'checkbox', checked: choice[key], disabled,
-        onchange: ev => { choice[key] = ev.target.checked; updateExportState(); },
+        type: 'checkbox', checked: choice[key],
+        onchange: async ev => {
+          choice[key] = ev.target.checked;
+          if (ev.target.checked && needs && !await needs()) { ev.target.checked = false; choice[key] = false; }
+          updateExportState();
+        },
       }),
       h('span', {}, label, note ? h('small', { class: 'check-note', text: note }) : null));
   }
@@ -761,7 +770,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
       h('h3', { class: 'sub' }, '保存する場所'),
       choiceBox('shared', 'みんなで使える場所に保管', collectorReady
         ? { note: '事務所のドライブに集まります。共有したときも、このポップの大きさで入ります' }
-        : { disabled: true, note: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」で入れます）' }),
+        : { needs: ensureShared, note: '事務所のドライブに集まります（初めて印を付けたときに合言葉を聞きます）' }),
       choiceBox('phone', 'この端末に保存', { note: 'スマホは写真（ダウンロード）、パソコンはダウンロードのフォルダーに入ります' }),
       pop.isRegular
         ? h('p', { class: 'hint' }, 'これはレギュラーの元です。ここで直すと、次に呼び出したときから反映されます。')

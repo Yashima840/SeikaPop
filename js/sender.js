@@ -107,7 +107,7 @@ export function stockThumbOf(blob) {
  */
 async function askStock(action, extra, admin = null, read = readStockReply) {
   const c = admin || collectorOf(await store.getSettings());
-  if (!admin && !c.ready) return { ok: false, notSet: true, message: '合言葉がまだ入っていません（⚙ 設定 →「みんなで使える場所」）' };
+  if (!admin && !c.ready) return { ok: false, notSet: true, message: '合言葉がまだ入っていません' };
   return post(c.url, stockRequestBody(c.passcode, action, extra), read);
 }
 
