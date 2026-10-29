@@ -1,7 +1,7 @@
 // アプリの版。sw.js の VERSION と同じ値にする（npm test が食い違いを止める）。
 // 画面の動きを変えて公開するたびに上げる（スマホが新しい版に気付けるように）。
 
-export const VERSION = 'v42';
+export const VERSION = 'v43';
 
 /** 公開している sw.js の中身から版を読む。読めなければ ''。 */
 export function versionInSw(text) {

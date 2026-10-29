@@ -73,6 +73,50 @@ export function frameThrottle(fn) {
   return schedule;
 }
 
+/** iPhone・iPad か（iPad はパソコンの Safari を名乗るので、指で触れるかでも見る）。 */
+export function isIOS() {
+  return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+// 「この端末に保存」の注意書き（編集画面・広告で同じもの）
+export const DEVICE_SAVE_NOTE = 'iPhone は出てくる画面で「画像を保存」を押すと写真アプリに入ります。Android・パソコンはダウンロードのフォルダーに入ります';
+
+/**
+ * 画像をこの端末に保存する。iPhone・iPad はダウンロードにすると「ファイル」アプリに入って写真アプリに出ないので、
+ * 共有の画面を開く（「画像を保存」で写真アプリへ）。ほかはダウンロード。
+ * 戻り値: 'shared'＝共有の画面を出した／'cancel'＝共有の画面でやめた／'downloaded'＝ダウンロードした。
+ * 押してから時間が経って共有を断られたら、確認窓で押し直してもらう（押した直後でないと共有の画面は開けない）。
+ */
+export async function saveToDevice(file, title = '') {
+  if (!isIOS() || !navigator.canShare?.({ files: [file] })) {
+    downloadFile(file);
+    return 'downloaded';
+  }
+  const share = async () => {
+    try {
+      await navigator.share({ files: [file], title });
+      return 'shared';
+    } catch (err) {
+      if (err?.name === 'AbortError') return 'cancel';   // 共有画面で「キャンセル」した＝失敗ではない
+      throw err;
+    }
+  };
+  try {
+    return await share();
+  } catch (err) {
+    if (err?.name !== 'NotAllowedError') throw err;
+    if (!await confirmBox('保存の用意ができました。押すと保存の画面が開きます（「画像を保存」を押すと写真アプリに入ります）。', '保存の画面を開く')) return 'cancel';
+    return share();
+  }
+}
+
+/** saveToDevice の結果を、知らせる文言に。やめたときは null。 */
+export function deviceSaveMessage(result) {
+  if (result === 'shared') return '保存の画面を出しました（「画像を保存」で写真アプリに入ります）';
+  if (result === 'downloaded') return 'この端末に保存しました';
+  return null;
+}
+
 export function downloadFile(file) {
   const url = URL.createObjectURL(file);
   const a = h('a', { href: url, download: file.name });

@@ -10,7 +10,7 @@ import {
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
 import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../render.js';
-import { confirmBox, debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
+import { confirmBox, debounce, DEVICE_SAVE_NOTE, deviceSaveMessage, downloadFile, frameThrottle, h, saveToDevice, toast } from '../ui.js';
 import { queueAd } from '../sender.js';
 import { collectorOf, saveTargets } from '../collect.js';
 import { recordError } from '../crash.js';
@@ -625,12 +625,11 @@ export async function showAd(root, app) {
         downloadFile(made.file);
         toast('この端末は共有に対応していないため、画像を保存しました');
       } else {
+        // iPhone は共有の画面で写真へ保存する（押してから時間が経つと開けないので、送る控えを待たずに先に）
+        const saved = t.phone ? deviceSaveMessage(await saveToDevice(made.file, ad.title)) : null;
         const done = [];
         if (await sent) done.push('みんなで使える場所へ送ります');
-        if (t.phone) {
-          downloadFile(made.file);
-          done.push('この端末に保存しました');
-        }
+        if (saved) done.push(saved);
         if (done.length) toast(done.join('・'));
       }
     } catch (err) {
@@ -645,7 +644,7 @@ export async function showAd(root, app) {
       choiceBox('shared', 'みんなで使える場所に保管', collectorReady
         ? { note: '事務所のドライブに集まります。共有したときもここに入ります' }
         : { needs: ensureShared, note: '事務所のドライブに集まります（初めて印を付けたときに合言葉を聞きます）' }),
-      choiceBox('phone', 'この端末に保存', { note: 'スマホは写真（ダウンロード）、パソコンはダウンロードのフォルダーに入ります' }),
+      choiceBox('phone', 'この端末に保存', { note: DEVICE_SAVE_NOTE }),
       problemsEl,
       // 作りかけは画面を離れるときの後始末で保存されるので、そのままはじめの画面へ
       h('div', { class: 'save-row' }, saveBtn, h('button', { class: 'end', onclick: () => app.go('#/') }, '終了')));

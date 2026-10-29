@@ -9,7 +9,7 @@ import { dragCrop, fingerSpan, inRotatedRect, moveBadge, zoomCrop, ZOOM_MAX } fr
 import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.js';
 import { ensureFonts, photoBoxOf, renderPop, renderToFile, thumbnailOf } from '../render.js';
 import { TEMPLATE_ORDER, TEMPLATES } from '../templates.js';
-import { debounce, downloadFile, frameThrottle, h, toast } from '../ui.js';
+import { debounce, DEVICE_SAVE_NOTE, deviceSaveMessage, downloadFile, frameThrottle, h, saveToDevice, toast } from '../ui.js';
 import { queuePop, queueStockPhoto } from '../sender.js';
 import { collectorOf, saveTargets } from '../collect.js';
 import { openStockPicker } from './stock.js';
@@ -734,18 +734,20 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
     if (t.shared || t.phone) {
       const made = await makeImage();
       if (!made) return;
+      // iPhone は共有の画面で写真へ保存する。押してから時間が経つと開けないので、履歴・送る控えは並行して進める
       const kept = keepInHistory(made);
-      if (t.shared && await sendShared(made)) done.push('みんなで使える場所へ送ります');
+      const sent = t.shared ? sendShared(made) : Promise.resolve(false);
       if (t.phone) {
         try {
-          downloadFile(made.file);
-          done.push('この端末に保存しました');
+          const msg = deviceSaveMessage(await saveToDevice(made.file, pop.name));
+          if (msg) done.push(msg);
         } catch (err) {
           toast(`画像を保存できませんでした: ${err.message}`, { error: true });
-          await kept;
+          await Promise.all([kept, sent]);
           return;
         }
       }
+      if (await sent) done.unshift('みんなで使える場所へ送ります');
       await kept;
     }
     if (done.length) toast(done.join('・'));
@@ -786,7 +788,7 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
       choiceBox('shared', 'みんなで使える場所に保管', collectorReady
         ? { note: '事務所のドライブに集まります。共有したときも、このポップの大きさで入ります' }
         : { needs: ensureShared, note: '事務所のドライブに集まります（初めて印を付けたときに合言葉を聞きます）' }),
-      choiceBox('phone', 'この端末に保存', { note: 'スマホは写真（ダウンロード）、パソコンはダウンロードのフォルダーに入ります' }),
+      choiceBox('phone', 'この端末に保存', { note: DEVICE_SAVE_NOTE }),
       pop.isRegular
         ? h('p', { class: 'hint' }, 'これはレギュラーの元です。ここで直すと、次に呼び出したときから反映されます。')
         : choiceBox('regular', pop.fromRegularId ? '★ レギュラーを今の内容で更新' : '★ レギュラーに登録',
