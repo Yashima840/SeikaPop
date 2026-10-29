@@ -141,6 +141,8 @@ python tools/make_badges.py  # 「写真主役」の金額の台紙を img/badge
 | `tools/collector/` | 受け取り口（Google Apps Script の `Code.gs`）・設置手順・合言葉を決める画面 `link.html` |
 | `js/views/*.js` | 画面（はじめ＝レギュラーと履歴・編集・設定・フレームにまとめる＝広告・ドライブから選ぶ＝`stock.js`・合言葉を聞く＝`passcode.js`） |
 | `sw.js` | オフライン用の控え（ファイルを足したら `SHELL` に足して `VERSION` を上げる） |
+| `js/version.js` | アプリの版（`sw.js` の `VERSION` と同じ値）。公開している版と違えば、画面の上に「新しい版があります」を出す |
+| `tools/publish.sh` | 公開: 試験 → コミット → push → GitHub Pages が新しい版を出すまで待つ（`bash tools/publish.sh "説明"`） |
 
 ## この先（案）
 

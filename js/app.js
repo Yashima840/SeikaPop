@@ -8,6 +8,7 @@ import { showEditor } from './views/editor.js';
 import { showSettings, showSetup } from './views/settings.js';
 import { flushOutbox } from './sender.js';
 import { showAd } from './views/ad.js';
+import { isNewerPublished, VERSION, versionInSw } from './version.js';
 
 const report = installCrashHandlers(msg => toast(msg, { error: true }));
 
@@ -55,6 +56,38 @@ function route() {
   return routing;
 }
 
+// 新しい版が公開されていたら、どの画面でも上に知らせる（押すと書きかけを保存してから読み直す）。
+// sw.js は Service Worker を通しても毎回サーバーに確かめるので、公開した版がすぐ分かる
+const updateBtn = document.getElementById('updateBtn');
+async function checkUpdate() {
+  if (navigator.onLine === false) return;
+  try {
+    const res = await fetch('./sw.js', { cache: 'no-store' });
+    const published = res.ok ? versionInSw(await res.text()) : '';
+    if (!isNewerPublished(published)) return;
+    updateBtn.textContent = `🔄 新しい版（${published}）があります。押すと切り替えます（今は ${VERSION}）`;
+    updateBtn.hidden = false;
+  } catch (err) {
+    recordError('checkUpdate', err);
+  }
+}
+updateBtn.addEventListener('click', async () => {
+  updateBtn.disabled = true;
+  try {
+    await leaveCurrent?.flush?.();
+  } catch (err) {
+    report('flush before update', err);
+    updateBtn.disabled = false;
+    return;   // 保存できないまま読み直すと打った内容を失う
+  }
+  try {
+    await (await navigator.serviceWorker?.getRegistration())?.update();
+  } catch (err) {
+    recordError('serviceWorker.update', err);   // 読み直せば、ファイルはネットから新しいものを取る
+  }
+  location.reload();
+});
+
 backBtn.addEventListener('click', () => app.go(backTo));
 document.getElementById('settingsBtn').addEventListener('click', () => app.go('#/settings'));
 window.addEventListener('hashchange', route);
@@ -78,6 +111,7 @@ document.addEventListener('visibilitychange', () => {
   }
   flushOutbox();   // 共有画面から戻ったときなど。送れなかった分を送り直す
   if (navigator.onLine === false) return;   // 電波が無いときは確かめられない（失敗を記録に溜めない）
+  checkUpdate();
   navigator.serviceWorker?.getRegistration()
     .then(reg => reg?.update())
     .catch(err => recordError('serviceWorker.update', err));
@@ -94,3 +128,4 @@ if (navigator.storage?.persist) {
 
 route();
 flushOutbox();
+checkUpdate();

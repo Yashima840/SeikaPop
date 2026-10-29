@@ -7,6 +7,7 @@ import { flushOutbox, onOutboxChange, outboxStatus } from '../sender.js';
 import { recordError } from '../crash.js';
 import { openSavedPicker } from './stock.js';
 import { askPasscode } from './passcode.js';
+import { VERSION } from '../version.js';
 import { WRONG_PASSCODE } from '../collect.js';
 
 function card(pop, { onOpen, actions, sub = '' }) {
@@ -133,6 +134,8 @@ export async function showHome(root, app) {
         ],
       })))
       : h('p', { class: 'empty' }, 'まだありません。「＋ 1枚作る」で作ったポップがここに並びます。'),
+    // 直した版がスマホに届いたかを、ここで見分けられるように
+    h('p', { class: 'hint center', text: `青果ポップ ${VERSION}` }),
   );
   return dispose;
 }

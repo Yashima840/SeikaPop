@@ -32,7 +32,11 @@
   写真主役の台紙「爆発」の産地・商品名・数量と単位の3行も同じ画面で編集し、`js/label-design.js` に保存する（検査は `labelDesignProblems`）。
   検査は `js/catch-check.js`（税込の併記を小さくしすぎない等）。描き方は `js/price-design.js` の印の範囲だけ。外部AIに頼む手順は `tools/price-kit/PROMPT.md`。
   範囲を手で直したら `node tools/price-kit/build.mjs` で試作キットを作り直す（`npm test` が食い違いを止める）。
-- ファイルを足したら `sw.js` の `SHELL` に足し、`VERSION` を上げる。
+- ファイルを足したら `sw.js` の `SHELL` に足す。
+- アプリの画面・動きを直したら `sw.js` と `js/version.js` の `VERSION` を上げる（同じ値。`npm test` が食い違いを止める）。
+  スマホはこの版を見て「新しい版があります」を出し、はじめの画面の一番下にも版が出る。
+- 直し終えたら `bash tools/publish.sh "説明"` で公開まで済ませる（試験→コミット→push→ GitHub Pages が新しい版を出すまで待つ）。
+  「公開済み」と出てから、スマホで試せると伝える。
 - PC 用の画面を足したら `tools/index.html`（作業場＝`start.bat` で開く唯一の入口）に足し、画面には「← 作業場」の戻り口を付ける（アプリ本体はスマホと共通なので付けない。作業場から別のタブで開く）。
 
 ## 確認

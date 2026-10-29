@@ -7,8 +7,7 @@ import { clearErrorLog, readErrorLog } from '../crash.js';
 import { collectorOf, parseSetupCode } from '../collect.js';
 import { saveCollector } from './passcode.js';
 import { downloadFile, h, toast } from '../ui.js';
-
-export const APP_VERSION = '0.1.0';
+import { VERSION } from '../version.js';
 
 async function storageInfo() {
   const out = [];
@@ -126,6 +125,6 @@ export async function showSettings(root, app) {
         h('button', { onclick: () => { clearErrorLog(); showLog(); } }, '消す'),
       ),
     ),
-    h('p', { class: 'hint center', text: `青果ポップ ${APP_VERSION}` }),
+    h('p', { class: 'hint center', text: `青果ポップ ${VERSION}` }),
   );
 }

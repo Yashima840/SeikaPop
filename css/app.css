@@ -64,6 +64,8 @@ button.notice {
 }
 button.notice.error { background: #fdecea; border-color: var(--red); color: var(--red); }
 button.notice[hidden] { display: none; }
+/* 新しい版が公開されたときのお知らせ（どの画面でも上に出る） */
+button.notice.update { width: auto; margin: 8px 12px 0; background: #fff3c4; border-color: #f0b400; color: var(--text); font-weight: 700; }
 
 h2 { font-size: 17px; margin: 24px 0 8px; }
 h2 small { color: var(--muted); font-weight: normal; font-size: 13px; }
