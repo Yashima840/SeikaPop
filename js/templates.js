@@ -241,10 +241,11 @@ const TEXT_GRADIENTS = {
 };
 
 /** 「写真主役」の金額を台紙の絵の上に描き、置いた範囲を返す。nameTop は商品名の上端（動かしていなければ、台紙はその上の右に置く）。 */
-function drawBadgePrice(ctx, d, nameTop) {
+function drawBadgePrice(ctx, d) {
   const { W, H, u, pop, priceBadge: b } = d;
   const bw = Math.min(500, 560 * b.aspect) * u, bh = bw / b.aspect;   // 縦長の台紙は高さで抑える
-  const place = placeBadge(W, H, bw, bh, pop.badgePos, { x: W - 40 * u - bw, y: Math.max(150 * u, nameTop - bh) });
+  // 指で動かしていなければ右下の隅（右と下の余白は同じ）
+  const place = placeBadge(W, H, bw, bh, pop.badgePos, { x: W - 40 * u - bw, y: H - 40 * u - bh });
   if (d.hit) d.hit.badge = place;   // 編集画面で指で動かせるように
   const { x, y: top } = place;
   withShadow(ctx, 24 * u, 'rgba(0,0,0,0.4)', () => ctx.drawImage(b.img, x, top, bw, bh));
@@ -262,10 +263,11 @@ function drawBadgePrice(ctx, d, nameTop) {
 }
 
 /** 「写真主役」の金額を黄色い丸に描き、置いた範囲を返す（台紙を選んでいないとき）。 */
-function drawCirclePrice(ctx, d, nameTop) {
+function drawCirclePrice(ctx, d) {
   const { W, H, u, pop } = d;
   const r = 168 * u;
-  const place = placeBadge(W, H, r * 2, r * 2, pop.badgePos, { x: W - 60 * u - r * 2, y: Math.max(170 * u, nameTop - r * 2 - 10 * u) });
+  // 指で動かしていなければ右下の隅（右と下の余白は同じ）
+  const place = placeBadge(W, H, r * 2, r * 2, pop.badgePos, { x: W - 60 * u - r * 2, y: H - 60 * u - r * 2 });
   if (d.hit) d.hit.badge = place;   // 編集画面で指で動かせるように
   const cx = place.x + r, cy = place.y + r;
   ctx.save();
@@ -310,7 +312,7 @@ function drawNameOverPrice(ctx, lines, x, y, lh, size, rect, u) {
 }
 
 // ------------------------------------------------------------------
-// 1. 写真主役（フレッシュ）: 写真を全面に敷き、下に文字・右に価格の丸
+// 1. 写真主役（フレッシュ）: 写真を全面に敷き、下に文字・右下の隅に価格の丸（台紙）
 // ------------------------------------------------------------------
 const fresh = {
   id: 'fresh',
@@ -387,7 +389,7 @@ const fresh = {
     if (nl.lines.length) y -= nl.lines.length * lh;
     // 金額を先に描き、商品名を手前に描く（金額を指で商品名の上へ動かしても名前が隠れないように）
     let price = null;
-    if (d.price) price = d.priceBadge ? drawBadgePrice(ctx, d, y) : drawCirclePrice(ctx, d, y);
+    if (d.price) price = d.priceBadge ? drawBadgePrice(ctx, d) : drawCirclePrice(ctx, d);
     if (nl.lines.length) {
       ctx.font = font(nf, nl.size);
       ctx.fillStyle = '#fff';
