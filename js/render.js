@@ -1,7 +1,7 @@
 // ポップを Canvas へ描く・画像ファイルにする。
 
 import {
-  adFileName, badgeFonts, exportFileName, NAME_FONTS, nameFontOf, priceBadgeOf, priceTexts, SIZES, upgradeDesign,
+  adFileName, badgeFonts, exportFileName, NAME_FONTS, nameFontOf, priceBadgeOf, priceTexts, SIZES, STAMP_SLOTS, upgradeDesign,
 } from './model.js';
 import { drawStamp, FONTS, font, measurer, roundRectPath, TEMPLATES } from './templates.js';
 import { canvasToBlob } from './image.js';
@@ -82,7 +82,7 @@ export async function ensureFonts(pop, settings, onFail) {
   const badge = loadBadge(priceBadgeOf(pop));   // 書体と並べて待つ
   if (!document.fonts?.load) { await badge; return; }
   const decor = Object.values(LABEL_DESIGN).flatMap(t => [t?.prefix, t?.suffix]).filter(Boolean);   // 〈〉など3行の前後の飾り
-  const text = [pop.name, pop.unit, pop.origin, pop.stampText, ...decor,
+  const text = [pop.name, pop.unit, pop.origin, pop.stampText, pop.stampText2, ...decor,
     '0123456789,.円税込抜各()（）〈〉月火水木金土日/📷写真を追加—'].join('');
   try {
     const load = f => document.fonts.load(`${f.weight} 40px "${f.family}"`, text);
@@ -98,7 +98,7 @@ export async function ensureFonts(pop, settings, onFail) {
 
 /**
  * pop を canvas へ描く。canvas の大きさは出力サイズ（1080幅）に合わせる。
- * 返すのは指で動かせる物の置き場所（badge: { x, y, w, h }＝金額の台紙、stamp: { cx, cy, w, h, rot }＝文字スタンプ。無いものは入らない）。
+ * 返すのは指で動かせる物の置き場所（badge: { x, y, w, h }＝金額の台紙、stamps: [{ cx, cy, w, h, rot } か null]＝文字スタンプ2つ。台紙が無ければ badge は入らない）。
  */
 export function renderPop(canvas, pop, photo, settings, { preview = false } = {}) {
   pop = upgradeDesign(pop);   // 古いデザインの選び方（「金額主役」）も今の形で描く
@@ -118,9 +118,8 @@ export function renderPop(canvas, pop, photo, settings, { preview = false } = {}
     nameFont: nameFontOf(pop),   // 商品名の書体（選んでいなければ null＝デザインのまま）
     priceBadge: badgeFor(pop),   // 金額の台紙の絵（「写真主役」だけが使う。無ければ黄色い丸。「爆発」は絵を使わない）
   });
-  // 文字スタンプ（ひとこと）はどのデザインでも一番手前
-  const stamp = drawStamp(ctx, { W: s.w, H: s.h, u: s.w / 1080, pop });
-  if (stamp) hit.stamp = stamp;
+  // 文字スタンプ（ひとこと）はどのデザインでも一番手前（2つめを1つめより手前に）
+  hit.stamps = STAMP_SLOTS.map((_, i) => drawStamp(ctx, { W: s.w, H: s.h, u: s.w / 1080, pop }, i));
   ctx.restore();
   return hit;
 }

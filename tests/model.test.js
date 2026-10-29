@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   createPop, exportFileName, exportProblems, formatDate, formatPrice, isBlankPop, localStamp,
-  catchDesignFor, isBurstLayout, moveToRegular, needsCheck, nextPriceBadge, parsePriceInput, upgradeDesign, popFromRegular, popFromShared, placeStamp, PRICE_BADGES, priceBadgeOf, regularFromPop, STAMP, stampOf, normalizeStamp, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
+  catchDesignFor, isBurstLayout, moveToRegular, needsCheck, nextPriceBadge, parsePriceInput, upgradeDesign, popFromRegular, popFromShared, placeStamp, PRICE_BADGES, priceBadgeOf, regularFromPop, STAMP, STAMP_SLOTS, stampOf, normalizeStamp, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
 } from '../js/model.js';
 
 const T0 = new Date('2026-10-20T06:30:00Z');
@@ -215,4 +215,16 @@ test('文字スタンプはレギュラー・保管へ引き継ぐ（届いた�
   assert.deepEqual(popFromShared({ stampText: 'a', stamp: { x: 0.3, y: 0.7, scale: 9, rot: 0 } }).stamp, { x: 0.3, y: 0.7, scale: STAMP.maxScale, rot: 0 });
   assert.equal(popFromShared({ stamp: 'x' }).stamp, null);
   assert.equal(isBlankPop({ ...createPop(T0), stampText: '今夜は' }), false, 'ひとことだけ入れたポップも片付けない');
+});
+
+test('ひとことは2つ。2つめは置き方・縦書きを1つめとは別に持ち、決めていなければ1つめの少し下', () => {
+  const pop = { ...createPop(T0), stampText: '今夜はカレー', stampText2: '！', stamp: { x: 0.3, y: 0.3, scale: 1, rot: 0 } };
+  assert.equal(STAMP_SLOTS.length, 2);
+  assert.ok(stampOf(pop, 1).y > stampOf(createPop(T0), 0).y, '重ならない位置から');
+  assert.equal(stampOf(pop, 1).x, STAMP.x, '1つめを動かしても2つめは動かない');
+  const tilted = { ...pop, stamp2: { x: 0.62, y: 0.3, scale: 1.4, rot: 15 }, stampVertical2: true };
+  const today = popFromRegular(regularFromPop(tilted, T0), T1);
+  assert.deepEqual([today.stampText2, today.stamp2, today.stampVertical2], ['！', tilted.stamp2, true], 'レギュラーへ引き継ぐ');
+  assert.equal(popFromShared({ stamp2: { x: 0.5, y: 0.5, scale: 1, rot: 400 } }).stamp2.rot, 40);
+  assert.equal(isBlankPop({ ...createPop(T0), stampText2: '！' }), false);
 });

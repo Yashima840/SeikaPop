@@ -3,7 +3,7 @@
 // 大きさは幅1080px を基準にした u（W/1080）で書き、縦の長さ（H）に合わせて写真の枠を伸ばす。
 
 import { coverSource, fitFontSize, layoutLines, placeBadge, rectsOverlap, seededRandom, verticalGlyphs } from './layout.js';
-import { catchDesignFor, isBurstLayout, splitDecimal, stampOf, taxNote } from './model.js';
+import { catchDesignFor, isBurstLayout, splitDecimal, STAMP_SLOTS, stampOf, taxNote } from './model.js';
 import { VINTAGE } from './image.js';
 import { CATCH_DESIGN } from './catch-design.js';
 import { drawPrice } from './price-design.js';
@@ -661,16 +661,17 @@ function drawBurstLayout(ctx, d) {
 // ------------------------------------------------------------------
 // 文字スタンプ（ひとこと）: どのデザインでも一番手前に、好きな位置・大きさ・向きで描く
 //    赤い太字に白い太い縁取り（写真の上でも読めるように）。大きさは幅1080pxで 96px × scale
-//    stampVertical なら縦書き（1字ずつ上から。伸ばす棒・括弧などは横に倒す）
+//    縦書きの印（stampVertical・stampVertical2）があれば縦書き（1字ずつ上から。伸ばす棒・括弧などは横に倒す）
 // ------------------------------------------------------------------
 const STAMP_STYLE = { font: FONTS.impact, size: 96, fill: '#e53935', edge: '#ffffff', edgeW: 0.22 };
 
-/** 文字スタンプを描き、掴める範囲 { cx, cy, w, h, rot } を返す（文字が無ければ null）。 */
-export function drawStamp(ctx, d) {
-  const text = String(d.pop.stampText ?? '').trim();
+/** i 番目（0・1）の文字スタンプを描き、掴める範囲 { cx, cy, w, h, rot } を返す（文字が無ければ null）。 */
+export function drawStamp(ctx, d, i = 0) {
+  const slot = STAMP_SLOTS[i];
+  const text = String(d.pop[slot.text] ?? '').trim();
   if (!text) return null;
   const { W, H, u } = d;
-  const st = stampOf(d.pop);
+  const st = stampOf(d.pop, i);
   const size = STAMP_STYLE.size * u * st.scale, edge = size * STAMP_STYLE.edgeW;
   const cx = st.x * W, cy = st.y * H;
   ctx.save();
@@ -691,7 +692,7 @@ export function drawStamp(ctx, d) {
     each((s, x, y) => ctx.fillText(s, x, y));
   };
   let w, h;
-  if (d.pop.stampVertical) {
+  if (d.pop[slot.vertical]) {
     const glyphs = verticalGlyphs(text), step = size * 1.02;
     w = size;
     h = glyphs.length * step;

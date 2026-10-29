@@ -22,7 +22,7 @@ export const DEFAULT_ADJUST = Object.freeze({ brightness: 0, contrast: 0, satura
 const CONTENT_FIELDS = [
   'name', 'catch', 'price', 'priceTax', 'taxRate', 'unit', 'origin', 'badge',
   'template', 'size', 'photoId', 'crop', 'adjust', 'thumb', 'each', 'nameFont', 'photoFade', 'photoSepia', 'photoVintage',
-  'priceBadge', 'badgePos', 'stampText', 'stamp', 'stampVertical',
+  'priceBadge', 'badgePos', 'stampText', 'stamp', 'stampVertical', 'stampText2', 'stamp2', 'stampVertical2',
 ];
 
 export function newId() {
@@ -49,6 +49,9 @@ export function createPop(now = new Date()) {
     stampText: '',        // ひとこと（文字スタンプ。「今夜はカレー！」など）。'' なら描かない
     stamp: null,          // 文字スタンプの置き方 { x, y, scale, rot }（stampOf）。null は決まった位置・大きさ
     stampVertical: false, // 文字スタンプを縦書きにする
+    stampText2: '',       // 2つめのひとこと（「！」だけを傾けて添える、など）。置き方・縦書きも1つめとは別に持つ
+    stamp2: null,
+    stampVertical2: false,
     badge: '',           // 見出し。画像には入れない（フレームで入れる）。古いデータとの互換のため残す
     template: 'fresh',
     size: 'square',
@@ -96,7 +99,7 @@ export function popFromShared(content, { photoId = null } = {}, now = new Date()
     const v = content[k], d = base[k];
     if (k === 'price') out.price = typeof v === 'number' && Number.isFinite(v) ? v : null;
     else if (k === 'taxRate') out.taxRate = isTaxRate(v) ? v : null;
-    else if (k === 'stamp') out.stamp = normalizeStamp(v);
+    else if (k === 'stamp' || k === 'stamp2') out[k] = normalizeStamp(v);
     else if (k === 'badgePos') out.badgePos = v && typeof v === 'object' && Number.isFinite(v.x) && Number.isFinite(v.y) ? { x: v.x, y: v.y } : null;
     else if (d && typeof d === 'object') out[k] = v && typeof v === 'object' ? { ...d, ...v } : { ...d };
     else if (typeof v === typeof d) out[k] = v;
@@ -144,6 +147,11 @@ export function withSample(pop) {
 // ---- 文字スタンプ（ひとこと）: 見本の上で好きな位置へ動かし、大きさと向きを変える ----
 // x・y は文字の真ん中の位置（画像の幅・高さに対する割合 0〜1）、scale は大きさの倍率、rot は傾き（度。右回りがプラス）。
 export const STAMP = { x: 0.5, y: 0.2, scale: 1, rot: 0, minScale: 0.3, maxScale: 3 };
+// ひとことは2つまで。それぞれの欄の名前と、置き方を決めていないときの位置（2つめは1つめの少し下）
+export const STAMP_SLOTS = [
+  { text: 'stampText', place: 'stamp', vertical: 'stampVertical', x: STAMP.x, y: STAMP.y },
+  { text: 'stampText2', place: 'stamp2', vertical: 'stampVertical2', x: STAMP.x, y: 0.34 },
+];
 
 const clampNum = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 /** 角度を -180〜180 にそろえる（回し続けても値が膨らまないように）。 */
@@ -155,9 +163,10 @@ export function normalizeStamp(v) {
   return placeStamp(v, {});
 }
 
-/** そのポップの文字スタンプの置き方（決めていなければ決まった位置・大きさ）。 */
-export function stampOf(pop) {
-  return normalizeStamp(pop?.stamp) || { x: STAMP.x, y: STAMP.y, scale: STAMP.scale, rot: STAMP.rot };
+/** そのポップの i 番目（0・1）の文字スタンプの置き方（決めていなければ決まった位置・大きさ）。 */
+export function stampOf(pop, i = 0) {
+  const slot = STAMP_SLOTS[i];
+  return normalizeStamp(pop?.[slot.place]) || { x: slot.x, y: slot.y, scale: STAMP.scale, rot: STAMP.rot };
 }
 
 /** 置き方の一部を変えた結果。位置は画像の中、大きさは決まった範囲に収め、角度は -180〜180 にそろえる。 */
@@ -173,7 +182,7 @@ export function placeStamp(stamp, change) {
 /** 作っただけで何も入れていないポップか（戻ったときに片付けてよいもの）。 */
 export function isBlankPop(pop) {
   return !pop.isRegular && !pop.fromRegularId && !pop.photoId
-    && !String(pop.name).trim() && !String(pop.catch).trim() && !String(pop.stampText ?? '').trim()
+    && !String(pop.name).trim() && !String(pop.catch).trim() && !STAMP_SLOTS.some(s => String(pop[s.text] ?? '').trim())
     && pop.price == null && !String(pop.origin).trim();
 }
 
