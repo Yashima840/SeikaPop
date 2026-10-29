@@ -209,6 +209,7 @@ test('文字スタンプはレギュラー・保管へ引き継ぐ（届いた�
   const pop = { ...createPop(T0), name: 'じゃが芋', stampText: '今夜はカレー！', stamp: { x: 0.3, y: 0.7, scale: 1.5, rot: -12 } };
   const today = popFromRegular(regularFromPop(pop, T0), T1);
   assert.equal(today.stampText, '今夜はカレー！');
+  assert.equal(popFromRegular(regularFromPop({ ...pop, stampVertical: true }, T0), T1).stampVertical, true, '縦書きも引き継ぐ');
   assert.deepEqual(today.stamp, pop.stamp);
   assert.notEqual(today.stamp, pop.stamp, '同じ物を指さない（片方を動かしても他方は動かない）');
   assert.deepEqual(popFromShared({ stampText: 'a', stamp: { x: 0.3, y: 0.7, scale: 9, rot: 0 } }).stamp, { x: 0.3, y: 0.7, scale: STAMP.maxScale, rot: 0 });

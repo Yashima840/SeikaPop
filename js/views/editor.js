@@ -415,6 +415,9 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
       h('div', { class: 'stamp-adjust' },
         h('label', {}, '大きさ', stampScaleInput),
         h('label', {}, '向き', stampRotInput),
+        h('label', { class: 'each-box' },
+          h('input', { type: 'checkbox', checked: !!pop.stampVertical, onchange: ev => { pop.stampVertical = ev.target.checked; changed(); } }),
+          '縦書き'),
         h('button', { type: 'button', class: 'mini', onclick: () => { pop.stamp = null; syncStampInputs(); changed(); } }, '位置・大きさ・向きを戻す'),
       ),
       h('span', { class: 'field-note', text: 'パソコンは スタンプの上で ホイール＝大きさ、Shift＋ホイール＝向き' }));

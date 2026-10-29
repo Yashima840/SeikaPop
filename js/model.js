@@ -22,7 +22,7 @@ export const DEFAULT_ADJUST = Object.freeze({ brightness: 0, contrast: 0, satura
 const CONTENT_FIELDS = [
   'name', 'catch', 'price', 'priceTax', 'taxRate', 'unit', 'origin', 'badge',
   'template', 'size', 'photoId', 'crop', 'adjust', 'thumb', 'each', 'nameFont', 'photoFade', 'photoSepia', 'photoVintage',
-  'priceBadge', 'badgePos', 'stampText', 'stamp',
+  'priceBadge', 'badgePos', 'stampText', 'stamp', 'stampVertical',
 ];
 
 export function newId() {
@@ -48,6 +48,7 @@ export function createPop(now = new Date()) {
     origin: '',
     stampText: '',        // ひとこと（文字スタンプ。「今夜はカレー！」など）。'' なら描かない
     stamp: null,          // 文字スタンプの置き方 { x, y, scale, rot }（stampOf）。null は決まった位置・大きさ
+    stampVertical: false, // 文字スタンプを縦書きにする
     badge: '',           // 見出し。画像には入れない（フレームで入れる）。古いデータとの互換のため残す
     template: 'fresh',
     size: 'square',

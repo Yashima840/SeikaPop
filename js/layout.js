@@ -61,6 +61,14 @@ export function inRotatedRect(px, py, { cx, cy, w, h, rot }) {
   return Math.abs(x) <= w / 2 && Math.abs(y) <= h / 2;
 }
 
+// 縦書きで横に倒して書く字（伸ばす棒・波線・三点・括弧など。立てたままだと向きがおかしい）
+const VERTICAL_TURN = 'ー―‐－-〜～~…‥（）()「」『』【】［］[]｛｝{}〈〉《》＝=';
+
+/** 縦書きの1字ずつ（turn＝90度倒して書く字）。上から順に並べる。 */
+export function verticalGlyphs(text) {
+  return Array.from(String(text ?? '')).filter(ch => ch.trim()).map(ch => ({ ch, turn: VERTICAL_TURN.includes(ch) }));
+}
+
 /** 2本の指 a・b の間の長さと向き（度）。ピンチで大きさと向きを変えるのに使う。 */
 export function fingerSpan(a, b) {
   return { dist: Math.hypot(b.x - a.x, b.y - a.y), angle: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI };

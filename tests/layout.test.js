@@ -1,7 +1,7 @@
 // 写真の切り出し・指での移動・文字の折り返し
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coverSource, dragCrop, fingerSpan, inRotatedRect, layoutLines, moveBadge, placeBadge, rectsOverlap, seededRandom, splitsAreNice, wrapText, zoomCrop } from '../js/layout.js';
+import { coverSource, dragCrop, fingerSpan, inRotatedRect, layoutLines, verticalGlyphs, moveBadge, placeBadge, rectsOverlap, seededRandom, splitsAreNice, wrapText, zoomCrop } from '../js/layout.js';
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} != ${b}`);
 const mono = (t, s = 1) => Array.from(t).length * s;   // 1文字＝大きさぶんの幅
@@ -114,4 +114,12 @@ test('文字スタンプを掴む: 傾けた四角の中か・2本の指の間�
   const s = fingerSpan({ x: 0, y: 0 }, { x: 0, y: 10 });
   near(s.dist, 10);
   near(s.angle, 90);
+});
+
+test('縦書きの文字スタンプ: 1字ずつ上から。伸ばす棒・括弧は横に倒し、空白は詰める', () => {
+  assert.deepEqual(verticalGlyphs('今夜はカレー！').map(g => g.ch).join(''), '今夜はカレー！');
+  assert.deepEqual(verticalGlyphs('カレー').map(g => g.turn), [false, false, true]);
+  assert.deepEqual(verticalGlyphs('「旬」').map(g => g.turn), [true, false, true]);
+  assert.deepEqual(verticalGlyphs('今夜 は').map(g => g.ch), ['今', '夜', 'は']);
+  assert.deepEqual(verticalGlyphs('🍛です').map(g => g.ch), ['🍛', 'で', 'す'], '絵文字も1字');
 });

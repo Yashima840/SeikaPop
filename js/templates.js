@@ -2,7 +2,7 @@
 // 各テンプレートは photoBox(W, H)＝写真を敷く枠 と draw(ctx, d)＝描画 を持つ。
 // 大きさは幅1080px を基準にした u（W/1080）で書き、縦の長さ（H）に合わせて写真の枠を伸ばす。
 
-import { coverSource, fitFontSize, layoutLines, placeBadge, rectsOverlap, seededRandom } from './layout.js';
+import { coverSource, fitFontSize, layoutLines, placeBadge, rectsOverlap, seededRandom, verticalGlyphs } from './layout.js';
 import { catchDesignFor, isBurstLayout, splitDecimal, stampOf, taxNote } from './model.js';
 import { VINTAGE } from './image.js';
 import { CATCH_DESIGN } from './catch-design.js';
@@ -661,6 +661,7 @@ function drawBurstLayout(ctx, d) {
 // ------------------------------------------------------------------
 // 文字スタンプ（ひとこと）: どのデザインでも一番手前に、好きな位置・大きさ・向きで描く
 //    赤い太字に白い太い縁取り（写真の上でも読めるように）。大きさは幅1080pxで 96px × scale
+//    stampVertical なら縦書き（1字ずつ上から。伸ばす棒・括弧などは横に倒す）
 // ------------------------------------------------------------------
 const STAMP_STYLE = { font: FONTS.impact, size: 96, fill: '#e53935', edge: '#ffffff', edgeW: 0.22 };
 
@@ -678,18 +679,39 @@ export function drawStamp(ctx, d) {
   ctx.font = font(STAMP_STYLE.font, size);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const w = ctx.measureText(text).width;
   ctx.lineJoin = 'round';
-  withShadow(ctx, size * 0.18, 'rgba(0,0,0,0.35)', () => {
-    ctx.lineWidth = edge;
-    ctx.strokeStyle = STAMP_STYLE.edge;
-    ctx.strokeText(text, 0, 0);
-  });
-  ctx.fillStyle = STAMP_STYLE.fill;
-  ctx.fillText(text, 0, 0);
+  // 縁取りを全部の字に先に描いてから中を塗る（縦書きで隣の字の縁が中に掛からないように）
+  const paint = each => {
+    withShadow(ctx, size * 0.18, 'rgba(0,0,0,0.35)', () => {
+      ctx.lineWidth = edge;
+      ctx.strokeStyle = STAMP_STYLE.edge;
+      each((s, x, y) => ctx.strokeText(s, x, y));
+    });
+    ctx.fillStyle = STAMP_STYLE.fill;
+    each((s, x, y) => ctx.fillText(s, x, y));
+  };
+  let w, h;
+  if (d.pop.stampVertical) {
+    const glyphs = verticalGlyphs(text), step = size * 1.02;
+    w = size;
+    h = glyphs.length * step;
+    paint(put => glyphs.forEach((g, i) => {
+      const y = -h / 2 + step * (i + 0.5);
+      if (!g.turn) { put(g.ch, 0, y); return; }
+      ctx.save();
+      ctx.translate(0, y);
+      ctx.rotate(Math.PI / 2);
+      put(g.ch, 0, 0);
+      ctx.restore();
+    }));
+  } else {
+    w = ctx.measureText(text).width;
+    h = size * 1.2;
+    paint(put => put(text, 0, 0));
+  }
   ctx.restore();
   // 掴める範囲は縁取りの分も含める（小さくしても指で掴めるよう、少し広めに）
-  return { cx, cy, w: w + edge + 24 * u, h: size * 1.2 + edge + 24 * u, rot: st.rot };
+  return { cx, cy, w: w + edge + 24 * u, h: h + edge + 24 * u, rot: st.rot };
 }
 
 export const TEMPLATES = { fresh, marche, simple };
