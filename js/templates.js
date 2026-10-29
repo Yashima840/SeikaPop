@@ -1,5 +1,5 @@
 // ポップのデザイン（テンプレート）。
-// 各テンプレートは photoBox(W, H, pop, measure)＝写真を敷く枠（pop・measure は「写真主役」の台紙「爆発」だけが使う） と draw(ctx, d)＝描画 を持つ。
+// 各テンプレートは photoBox(W, H)＝写真を敷く枠 と draw(ctx, d)＝描画 を持つ。
 // 大きさは幅1080px を基準にした u（W/1080）で書き、縦の長さ（H）に合わせて写真の枠を伸ばす。
 
 import { coverSource, fitFontSize, layoutLines, placeBadge, rectsOverlap, seededRandom } from './layout.js';
@@ -7,7 +7,7 @@ import { catchDesignFor, isBurstLayout, splitDecimal, taxNote } from './model.js
 import { VINTAGE } from './image.js';
 import { CATCH_DESIGN } from './catch-design.js';
 import { drawPrice } from './price-design.js';
-import { canvasMeasure, drawLabels, labelDesignFor, labelsBelow } from './labels.js';
+import { drawLabels, labelDesignFor } from './labels.js';
 
 const FALLBACK = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif';
 export const FONTS = {
@@ -315,11 +315,11 @@ function drawNameOverPrice(ctx, lines, x, y, lh, size, rect, u) {
 const fresh = {
   id: 'fresh',
   label: '写真主役',
-  photoBox: (W, H, pop, measure) => (isBurstLayout(pop) ? burstPhotoBox(W, H, pop, measure) : { x: 0, y: 0, w: W, h: H }),
+  photoBox: (W, H) => ({ x: 0, y: 0, w: W, h: H }),   // 台紙「爆発」も同じ（全面に敷く）
   draw(ctx, d) {
     if (isBurstLayout(d.pop)) { drawBurstLayout(ctx, d); return; }
     const { W, H, u, pop } = d;
-    const box = this.photoBox(W, H, pop);
+    const box = this.photoBox(W, H);
     // 全面に敷く写真なので、外周フェードは暗い色へ（下の文字が読めるように）
     if (!drawPhoto(ctx, d.photo, box, pop.crop, 0, fxOf(pop, [20, 16, 10]))) drawNoPhoto(ctx, box, ['#5fa052', '#24613a'], d);
 
@@ -638,41 +638,20 @@ const simple = {
 };
 
 // ------------------------------------------------------------------
-// 「写真主役」の台紙「爆発」（もとのデザイン「金額主役」）: ポップ全体の置き方ごと変える
-//    写真の右下に金額キャッチ（黒いギザギザ＋価格＋税込）、写真の下に商品名
-//    余白は上・左・右・下（商品名の下）とも同じ幅。写真の高さは商品名が何行になるかで決まる
+// 「写真主役」の台紙「爆発」（もとのデザイン「金額主役」）: ほかの台紙と同じく写真を全面に敷き、
+//    右下の角に金額キャッチ（黒いギザギザ＋価格＋税込。「爆発2」は色違い）を掛けて描く
 //    税抜で入れたときは、価格の下に税込の金額を必ず添える（中身は price-design.js）
 //    産地・商品名・数量と単位の3行は labels.js（見た目と置き場所は label-design.js）
-//    金額キャッチは写真の角に掛けて描く形なので、ほかの台紙と違って指では動かさない
+//    金額キャッチはポップの角に掛けて描く形なので、ほかの台紙と違って指では動かさない
 // ------------------------------------------------------------------
-const BURST_MARGIN = 40;   // 周りの余白（1080幅のとき）
-
-/** 写真を敷く枠。measure＝文字の幅の測り方（labels.js の canvasMeasure）。商品名と単位が写真の下に要る高さを測って写真を縮める */
-function burstPhotoBox(W, H, pop, measure) {
-  const u = W / 1080, m = BURST_MARGIN * u;
-  const below = labelsBelow(pop, measure, labelDesignFor(pop)) * u;
-  return { x: m, y: m, w: W - 2 * m, h: H - 2 * m - below - (below ? m : 0) };
-}
-
 function drawBurstLayout(ctx, d) {
   const { W, H, u, pop } = d;
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = '#1a1a1a';
-  ctx.lineWidth = 6 * u;
-  ctx.strokeRect(14 * u, 14 * u, W - 28 * u, H - 28 * u);
   ctx.textBaseline = 'alphabetic';
-
-  const box = burstPhotoBox(W, H, pop, canvasMeasure(ctx));
-  if (!drawPhoto(ctx, d.photo, box, pop.crop, PHOTO_RADIUS * u, fxOf(pop, [255, 255, 255]))) drawNoPhoto(ctx, box, ['#ffcf6b', '#f08a24'], d, PHOTO_RADIUS * u);
-  // 金額キャッチは写真の右下に乗せる。写真の丸めた角からはみ出さないよう、同じ形で切る（中身は price-design.js）
-  if (d.price) {
-    ctx.save();
-    roundRectPath(ctx, box.x, box.y, box.w, box.h, PHOTO_RADIUS * u);
-    ctx.clip();
-    drawPrice(ctx, box, d.price, u, catchDesignFor(pop, CATCH_DESIGN));   // 「爆発2」などは色だけ差し替える
-    ctx.restore();
-  }
+  const box = fresh.photoBox(W, H);
+  // 全面に敷く写真なので、外周フェードは「写真主役」と同じ暗い色へ
+  if (!drawPhoto(ctx, d.photo, box, pop.crop, 0, fxOf(pop, [20, 16, 10]))) drawNoPhoto(ctx, box, ['#ffcf6b', '#f08a24'], d);
+  // 金額キャッチ（はみ出す分は drawPrice が写真の枠で切る）。「爆発2」などは色だけ差し替える
+  if (d.price) drawPrice(ctx, box, d.price, u, catchDesignFor(pop, CATCH_DESIGN));
   // 産地・商品名・数量と単位（置き場所と見た目は label-design.js）。金額より手前に描く（重なっても名前が隠れないように）
   drawLabels(ctx, box, pop, u, labelDesignFor(pop));
 }

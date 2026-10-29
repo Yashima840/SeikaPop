@@ -7,7 +7,7 @@ import { FONTS, font, measurer, roundRectPath, TEMPLATES } from './templates.js'
 import { canvasToBlob } from './image.js';
 import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.js';
 import { PRICE_FONTS } from './price-design.js';
-import { canvasMeasure, labelFontList } from './labels.js';
+import { labelFontList } from './labels.js';
 import { LABEL_DESIGN } from './label-design.js';
 import { FOOTER_TEXT, logoRect, periodOf, periodParts, titleWidth } from './frames.js';
 
@@ -19,13 +19,11 @@ export function templateOf(pop) {
   return TEMPLATES[pop.template] || TEMPLATES.fresh;
 }
 
-let measureCtx = null;
-/** 写真を敷く枠（編集画面のドラッグにも使う）。台紙「爆発」は商品名の行数で写真の高さが変わるので、文字を測って渡す。 */
+/** 写真を敷く枠（編集画面のドラッグにも使う）。 */
 export function photoBoxOf(pop) {
   pop = upgradeDesign(pop);
   const s = sizeOf(pop);
-  measureCtx ??= document.createElement('canvas').getContext('2d');
-  return templateOf(pop).photoBox(s.w, s.h, pop, canvasMeasure(measureCtx));
+  return templateOf(pop).photoBox(s.w, s.h);
 }
 
 let fontWarned = false;

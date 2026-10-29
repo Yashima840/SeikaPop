@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { LABEL_DESIGN } from '../js/label-design.js';
-import { LABEL_FONTS, labelBounds, labelDesignFor, labelDesignProblems, labelFontList, labelFrame, labelText, labelsBelow, layoutLabels } from '../js/labels.js';
+import { LABEL_FONTS, labelBounds, labelDesignFor, labelDesignProblems, labelFontList, labelFrame, labelText, layoutLabels } from '../js/labels.js';
 import { createPop, NAME_FONTS, nameFontOf } from '../js/model.js';
 
 const measure = (s, size) => Array.from(s).length * size;   // 1文字＝大きさ1つ分
@@ -108,21 +108,8 @@ test('商品名の書体を選ぶと、3行のデザインの商品名だけ差�
   for (const f of NAME_FONTS.filter(x => x.id)) assert.match(f.weight, /^[1-9]00$/);
 });
 
-test('写真の下に要る高さ: 商品名を写真の下に置くなら、2行は1行より大きい・何も無ければ 0', () => {
-  const measure = (s, size) => Array.from(s).length * size;
-  const d = design();
-  Object.assign(d.name, { fromTop: false, y: 108 });
-  const pop = { ...createPop(), name: 'トマト', unit: '1袋', origin: '' };
-  const one = labelsBelow(pop, measure, d), two = labelsBelow({ ...pop, name: 'シャインマスカット大粒種なし' }, measure, d);
-  assert.ok(one > 0 && two > one, `${one} / ${two}`);
-  assert.equal(labelsBelow({ ...pop, name: '', unit: '' }, measure, d), 0);
-});
-
-test('商品名を写真の上に乗せる（上端から測る）なら、写真の下には何も要らない（余白は四辺とも同じ）', () => {
-  const measure = (s, size) => Array.from(s).length * size;
-  const pop = { ...createPop(), name: 'シャインマスカット大粒種なし', unit: '1房', origin: '山梨県産' };
+test('商品名は写真の上端から測る（写真の大きさが変わっても上に留まる）', () => {
   assert.ok(LABEL_DESIGN.name.fromTop);
-  assert.equal(labelsBelow(pop, measure), 0);
   // 上端から測る行は写真の左上が原点、ほかの行は左下
   const box = { x: 40, y: 40, w: 1000, h: 1000 };
   assert.deepEqual(labelFrame(box, 1, 'name'), { x: 40, y: 40, k: 1 });

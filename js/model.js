@@ -265,8 +265,8 @@ export function nameFontOf(pop) {
 // lift はまとまり全体を税込の文字の高さの何倍上げるか（下の飾りに税込がかかるとき）。
 // numScale は数字と「円」だけを何倍に大きくするか（単位・税込はそのまま）。numShift は数字と「円」だけを右へずらす量（「円」の幅の何倍か）。
 // rotate は文字の傾き（度。左回りがマイナス）。outline は数字と「円」の細い縁取りの色（地に溶け込むとき）。
-// layout: 'burst' の「爆発」は絵を使わず、ポップ全体の置き方ごと変える（白い枠・写真の右下に黒いギザギザの金額キャッチ・
-// 写真の下に商品名。金額キャッチは price-design.js、商品名などの3行は labels.js。もとの「金額主役」デザイン）。
+// layout: 'burst' の「爆発」は絵を使わず、全面の写真の右下の角に黒いギザギザの金額キャッチを掛け、産地・商品名・数量と単位を写真に乗せる
+// （金額キャッチは price-design.js、3行は labels.js。もとの「金額主役」デザイン）。
 // catchColors は「爆発」の金額キャッチの色の差し替え（burst＝ギザギザの塗り、num・yen＝数字と「円」の塗り）。形・縁取りは catch-design.js のまま。
 export const BURST_BADGE = 'burst';
 export const PRICE_BADGES = [
