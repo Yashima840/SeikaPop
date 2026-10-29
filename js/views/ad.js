@@ -6,7 +6,7 @@ import * as store from '../store.js';
 import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
   AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, dayInput, normalizePeriod, PERIOD_DAYS, periodEnd, periodText, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrame, customFrameProblems,
-  dropMissing, fitSlots, FOOTER_TEXT, frameFor, FRAME_ORDER, FRAMES, normalizeRows, saveCustomFrame, shotFromAd, toggleShot, usedRows,
+  defaultLogo, dropMissing, fitSlots, FOOTER_TEXT, frameFor, FRAME_ORDER, FRAMES, LOGO, logoRect, normalizeLogo, normalizeRows, placeLogo, saveCustomFrame, shotFromAd, toggleShot, usedRows,
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
 import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../render.js';
@@ -61,11 +61,11 @@ async function popImage(pop, settings) {
   return cv;
 }
 
-function loadOverlay(src) {
+function loadImage(src, what) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`フレームの飾り画像（${src}）を読み込めませんでした`));
+    img.onerror = () => reject(new Error(`${what}（${src}）を読み込めませんでした`));
     img.src = src;
   });
 }
@@ -81,6 +81,7 @@ export async function showAd(root, app) {
   let ad = { ...createAd(), ...await store.getAdDraft() };
   ad.customRows = normalizeRows(ad.customRows);
   ad.period = normalizePeriod(ad.period);
+  ad.logo = normalizeLogo(ad.logo);
   if (!CUSTOM_COLORS.some(c => c.id === ad.headColor)) ad.headColor = '';
   delete ad.showDate;   // 前の「今日の日付を入れる」（日付はもう入れない）
   // 選んでいた保存済みのカスタムが直されていたら、その形に合わせる（消されていたら形だけ残す）
@@ -97,6 +98,7 @@ export async function showAd(root, app) {
   const images = new Map();       // popId → 画像
   const failed = new Map();       // popId → 画像を作れなかった理由（次に描くときに作り直す）
   const overlays = new Map();     // frameId → { img } か { error }
+  const logo = {};                // 店のロゴ: { img } か { error }（入れるときに一度だけ読む）
   async function loadChosen() {
     const want = new Set(ad.slots.filter(Boolean));
     // 枠から外したポップの画像は手放す（溜めると、スマホでは次の画像を作る空きが無くなる）
@@ -115,10 +117,18 @@ export async function showAd(root, app) {
         recordError('ad popImage', err);
       }
     }
+    if (ad.logo.on && !logo.img) {
+      try {
+        logo.img = await loadImage(LOGO.src, '店のロゴ');
+        delete logo.error;
+      } catch (err) {
+        logo.error = `${err.message}（電波を確かめて開き直すか、ロゴを外してください）`;
+      }
+    }
     const f = frameOf();
     if (f.overlay && !overlays.has(ad.frameId)) {
       try {
-        overlays.set(ad.frameId, { img: await loadOverlay(f.overlay) });
+        overlays.set(ad.frameId, { img: await loadImage(f.overlay, 'フレームの飾り画像') });
       } catch (err) {
         overlays.set(ad.frameId, { error: err.message });
       }
@@ -134,6 +144,7 @@ export async function showAd(root, app) {
       if (failed.has(id)) out.push(`「${popTitle(popById.get(id))}」の画像を作れませんでした: ${failed.get(id)}`);
     }
     if (overlayState().error) out.push(overlayState().error);
+    if (ad.logo.on && logo.error) out.push(logo.error);
     return out;
   };
 
@@ -152,7 +163,7 @@ export async function showAd(root, app) {
     ]);
     try {
       renderAd(canvas, frameOf(), ad, ad.slots.map(id => images.get(id) || null), settings,
-        { overlay: overlayState().img || null, preview: true });
+        { overlay: overlayState().img || null, logo: logo.img || null, preview: true });
     } catch (err) {
       recordError('ad preview', err);
       toast(`見本を描けませんでした: ${err.message}（アプリを閉じて開き直してください）`, { error: true });
@@ -231,6 +242,56 @@ export async function showAd(root, app) {
       style: `background:${c.bg};color:#fff;border-color:${c.bg}`,
       onclick: () => { ad.headColor = c.id; changed(); },
     }, ad.headColor === c.id ? `✓ ${c.label}` : c.label)));
+
+  // ---- 店のロゴ（見出しの帯の左に入れる。見本の上で指で動かせる）----
+  const logoChanged = () => { statusEl.textContent = '保存中…'; draw(); save(); updateExportState(); };
+  const logoBack = h('button', {
+    type: 'button', class: 'chip', hidden: !ad.logo.on,
+    onclick: () => { ad.logo = defaultLogo(); logoChanged(); },
+  }, 'ロゴを左上に戻す');
+  const logoCheck = h('input', {
+    type: 'checkbox', checked: ad.logo.on,
+    onchange: ev => { ad.logo.on = ev.target.checked; logoBack.hidden = !ad.logo.on; logoChanged(); },
+  });
+  // 見本のロゴに触れたときだけ動かす（ほかの所に触れたら、いつも通り画面を送れるように）
+  const canvasPoint = (cx, cy) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: (cx - r.left) * canvas.width / r.width, y: (cy - r.top) * canvas.height / r.height };
+  };
+  const onLogo = (cx, cy) => {
+    const at = logo.img && logoRect(ad, frameOf());
+    if (!at) return false;
+    const p = canvasPoint(cx, cy);
+    return p.x >= at.x && p.x <= at.x + at.w && p.y >= at.y && p.y <= at.y + at.h;
+  };
+  let dragging = null;   // { dx, dy }＝触れた所とロゴの真ん中のずれ
+  canvas.addEventListener('touchstart', ev => {
+    if (ev.touches.length === 1 && onLogo(ev.touches[0].clientX, ev.touches[0].clientY)) ev.preventDefault();   // 画面が動かないように
+  }, { passive: false });
+  canvas.addEventListener('pointerdown', ev => {
+    if (!onLogo(ev.clientX, ev.clientY)) return;
+    const at = logoRect(ad, frameOf()), p = canvasPoint(ev.clientX, ev.clientY);
+    dragging = { dx: at.x + at.w / 2 - p.x, dy: at.y + at.h / 2 - p.y };
+    canvas.setPointerCapture?.(ev.pointerId);
+    ev.preventDefault();
+  });
+  canvas.addEventListener('pointermove', ev => {
+    if (!dragging) {
+      canvas.style.cursor = onLogo(ev.clientX, ev.clientY) ? 'grab' : '';
+      return;
+    }
+    const p = canvasPoint(ev.clientX, ev.clientY);
+    ad.logo = { on: true, ...placeLogo(frameOf(), p.x + dragging.dx, p.y + dragging.dy) };
+    statusEl.textContent = '保存中…';
+    draw();
+  });
+  const dragEnd = () => {
+    if (!dragging) return;
+    dragging = null;
+    save();
+  };
+  canvas.addEventListener('pointerup', dragEnd);
+  canvas.addEventListener('pointercancel', dragEnd);
 
   /** フレームを替える。custom＝カスタムのとき { id, name, rows }（保存済みのもの）。 */
   const pickFrame = (id, custom = null) => {
@@ -393,6 +454,8 @@ export async function showAd(root, app) {
         h('div', { class: 'field' }, h('span', { class: 'label', text: '見出しの色' }), headColorChips()),
         h('label', { class: 'check' }, periodCheck, '期間のバッジを入れる（例: 10/17(土)～10/19(月) 3日間限り）'),
         periodBox,
+        h('label', { class: 'check' }, logoCheck, '店のロゴを入れる（見本のロゴを指で動かせます）'),
+        logoBack,
         h('p', { class: 'hint' }, `下の帯には「${FOOTER_TEXT}」が入ります。`),
       ),
     );
@@ -431,7 +494,8 @@ export async function showAd(root, app) {
     try {
       await save.flush();
       await loadChosen();
-      made = await adToFile(frame, ad, ad.slots.map(id => images.get(id)), settings, overlayState().img || null);
+      made = await adToFile(frame, ad, ad.slots.map(id => images.get(id)), settings,
+        { overlay: overlayState().img || null, logo: logo.img || null });
     } catch (err) {
       toast(`広告を作れませんでした: ${err.message}`, { error: true });
       return;

@@ -189,6 +189,49 @@ export function periodOf(ad) {
   return ad?.period?.on ? periodText(ad.period.from, Number(ad.period.days)) : '';
 }
 
+// ---- 店のロゴ（ad.logo = { on, x, y }。x・y はロゴの真ん中の位置（px）。null なら見出しの帯の左）----
+
+export const LOGO = { src: './icons/logo.png', size: 170, pad: 16 };
+
+/** ロゴの初めの値（入れる・見出しの帯の左）。 */
+export function defaultLogo() {
+  return { on: true, x: null, y: null };
+}
+
+/** 保存してあるロゴの指定を読める形にそろえる（無い作りかけは「入れる」）。 */
+export function normalizeLogo(l) {
+  const num = v => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null);
+  if (!l || typeof l !== 'object') return defaultLogo();
+  const x = num(l.x), y = num(l.y);
+  return { on: l.on !== false, x: x === null || y === null ? null : x, y: x === null || y === null ? null : y };
+}
+
+/** ロゴの真ん中を (x, y) に置いたときの位置。画像の外へはみ出さないように収める。 */
+export function placeLogo(frame, x, y) {
+  const r = LOGO.size / 2;
+  const clamp = (v, max) => Math.round(Math.min(Math.max(v, r), max - r));
+  return { x: clamp(x, frame.w), y: clamp(y, frame.h) };
+}
+
+/** ロゴを描く四角（左上と大きさ）。入れないなら null。 */
+export function logoRect(ad, frame) {
+  if (!ad?.logo?.on || !frame) return null;
+  const s = LOGO.size;
+  const head = frame.header?.h || 0;
+  const l = ad.logo.x === null || ad.logo.x === undefined
+    ? placeLogo(frame, LOGO.pad + s / 2, head ? head / 2 : LOGO.pad + s / 2)
+    : placeLogo(frame, ad.logo.x, ad.logo.y);
+  return { x: l.x - s / 2, y: l.y - s / 2, w: s, h: s };
+}
+
+/** 見出しの文字に使える幅。ロゴが見出しの帯にかかるなら、その分を左右とも空けて真ん中にそろえたまま避ける。 */
+export function titleWidth(frame, logo) {
+  const W = frame.w, base = W - 96;
+  if (!logo || !frame.header?.h || logo.y >= frame.header.h) return base;
+  const reach = logo.x + logo.w / 2 < W / 2 ? logo.x + logo.w : W - logo.x;   // ロゴが寄っている側の端からの深さ
+  return Math.max(W * 0.4, Math.min(base, W - 2 * (reach + 16)));
+}
+
 // ---- 名前を付けて保存したカスタムフレーム（{ id, name, rows, color, updatedAt } の一覧）----
 
 /** 保存データを読める形にそろえる（壊れたものは捨てずに直せる所だけ直し、行が無いものは外す）。 */
@@ -258,7 +301,7 @@ export function createAd(now = new Date()) {
   return {
     // カスタムのときは、使っている保存済みのもの（customId・customName）と形（customRows）を持つ
     frameId: FRAME_ORDER[0], customId: null, customName: '', customRows: normalizeRows([]), customColor: CUSTOM_COLOR_DEFAULT,
-    title: AD_TITLES[0], headColor: '', period: defaultPeriod(now), slots: [],
+    title: AD_TITLES[0], headColor: '', period: defaultPeriod(now), logo: defaultLogo(), slots: [],
     updatedAt: now.toISOString(),
   };
 }
@@ -303,13 +346,14 @@ export function adProblems(ad, frame) {
   return out;
 }
 
-/** 同じ組み合わせを2回残さないための印。見出しの色・期間のバッジの文字が違えば別の画像になる。 */
+/** 同じ組み合わせを2回残さないための印。見出しの色・ロゴの有無と位置・期間のバッジの文字が違えば別の画像になる。 */
 export function adShotKey(ad) {
   const period = periodOf(ad) ? `@${periodOf(ad)}` : '';
   const frame = ad.frameId === CUSTOM_ID
     ? `${CUSTOM_ID}:${usedRows(ad.customRows).join('-')}:${customColorOf(ad.customColor).id}` : ad.frameId;
   const color = ad.headColor ? `#${ad.headColor}` : '';
-  return `ad:${frame}${color}|${ad.slots.join(',')}|${ad.title}${period}`;
+  const logo = ad.logo?.on ? `+logo${ad.logo.x ?? ''},${ad.logo.y ?? ''}` : '';
+  return `ad:${frame}${color}${logo}|${ad.slots.join(',')}|${ad.title}${period}`;
 }
 
 export function shotFromAd(ad, frame, { thumb }, now = new Date()) {

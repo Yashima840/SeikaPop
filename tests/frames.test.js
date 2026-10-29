@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  defaultLogo, LOGO, logoRect, normalizeLogo, placeLogo, titleWidth,
   adProblems, adShotKey, cleanCustomFrames, createAd, CUSTOM_COLORS, CUSTOM_ID, customFrame, customFrameProblems, dayInput, defaultPeriod,
   dropMissing, fitSlots, frameFor, frameProblems, FRAME_ORDER, FRAMES, mergeCustomFrames, normalizePeriod, normalizeRows, PERIOD_BAND,
   periodEnd, periodOf, periodParts, periodText, saveCustomFrame, toggleShot,
@@ -223,4 +224,39 @@ test('見出しの色: どのフレームでも替えられる。空・知らな
   assert.equal(frameFor({ ...base, headColor: 'no-such' }).header.bg, FRAMES.pair.header.bg);
   const custom = { ...base, frameId: CUSTOM_ID, customRows: [2, 0, 0, 0, 0, 0], customColor: 'green' };
   assert.equal(frameFor({ ...custom, headColor: 'red' }).header.bg, CUSTOM_COLORS[2].bg, 'カスタムの色より優先');
+});
+
+test('店のロゴ: 初めは入れる・見出しの帯の左。動かしても画像の外へははみ出さない', () => {
+  const ad = { ...createAd(), frameId: 'pair' };
+  const f = frameFor(ad);
+  assert.deepEqual(ad.logo, defaultLogo());
+  const r = logoRect(ad, f);
+  assert.equal(r.x, LOGO.pad);
+  assert.equal(r.y + r.h / 2, f.header.h / 2, '帯の高さの真ん中');
+  assert.ok(r.y >= 0 && r.y + r.h <= f.header.h, '帯に収まる');
+  assert.equal(logoRect({ ...ad, logo: { on: false, x: null, y: null } }, f), null);
+  // 動かした先
+  assert.deepEqual(placeLogo(f, 500, 600), { x: 500, y: 600 });
+  assert.deepEqual(placeLogo(f, -50, 99999), { x: LOGO.size / 2, y: f.h - LOGO.size / 2 }, '端で止まる');
+  const moved = logoRect({ ...ad, logo: { on: true, x: 900, y: 300 } }, f);
+  assert.deepEqual([moved.x, moved.y], [900 - LOGO.size / 2, 300 - LOGO.size / 2]);
+  // 前の作りかけ（ロゴの指定が無い・壊れている）
+  assert.deepEqual(normalizeLogo(undefined), defaultLogo());
+  assert.deepEqual(normalizeLogo({ on: false, x: 'a', y: 3 }), { on: false, x: null, y: null });
+  assert.deepEqual(normalizeLogo({ on: true, x: 10.4, y: 20.6 }), { on: true, x: 10, y: 21 });
+  // 位置が違えば別の広告として残す
+  assert.notEqual(adShotKey(ad), adShotKey({ ...ad, logo: { on: true, x: 900, y: 300 } }));
+  assert.notEqual(adShotKey(ad), adShotKey({ ...ad, logo: { on: false, x: null, y: null } }));
+});
+
+test('店のロゴ: 見出しの帯にかかるときは、見出しの文字を左右とも空けて避ける', () => {
+  const ad = { ...createAd(), frameId: 'pair' };
+  const f = frameFor(ad);
+  const full = titleWidth(f, null);
+  const left = titleWidth(f, logoRect(ad, f));
+  assert.ok(left < full);
+  assert.equal(left, f.w - 2 * (LOGO.pad + LOGO.size + 16));
+  const right = logoRect({ ...ad, logo: { on: true, x: f.w - LOGO.pad - LOGO.size / 2, y: 100 } }, f);
+  assert.equal(titleWidth(f, right), left, '右へ寄せても同じだけ空ける');
+  assert.equal(titleWidth(f, logoRect({ ...ad, logo: { on: true, x: 500, y: 700 } }, f)), full, '帯の外なら避けない');
 });

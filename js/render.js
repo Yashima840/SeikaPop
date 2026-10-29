@@ -9,7 +9,7 @@ import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.
 import { PRICE_FONTS } from './price-design.js';
 import { canvasMeasure, labelFontList } from './labels.js';
 import { LABEL_DESIGN } from './label-design.js';
-import { FOOTER_TEXT, periodOf, periodParts } from './frames.js';
+import { FOOTER_TEXT, logoRect, periodOf, periodParts, titleWidth } from './frames.js';
 
 export function sizeOf(pop) {
   return SIZES[pop.size] || SIZES.square;
@@ -148,9 +148,10 @@ export async function ensureAdFonts(ad, settings, onFail) {
 
 /**
  * 広告を canvas へ描く。images は枠の順の画像（未選択は null）。overlay はフレームの飾り画像（あれば）。
+ * logo は店のロゴの画像（ad.logo.on のときだけ描く。一番上に重ねる）。
  * 画像は切らずに枠へ丸ごと収める（ポップの価格・税込の表示を欠かさないため）。
  */
-export function renderAd(canvas, frame, ad, images, settings, { overlay = null, preview = false } = {}) {
+export function renderAd(canvas, frame, ad, images, settings, { overlay = null, logo = null, preview = false } = {}) {
   const { w: W, h: H } = frame;
   if (canvas.width !== W) canvas.width = W;
   if (canvas.height !== H) canvas.height = H;
@@ -162,12 +163,13 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
   ctx.textBaseline = 'middle';
 
   const head = frame.header;
+  const logoAt = logo && logoRect(ad, frame);
   if (head?.h) {
     if (head.bg) { ctx.fillStyle = head.bg; ctx.fillRect(0, 0, W, head.h); }
     const title = String(ad.title || '').trim();
     if (title) {
       // 長い見出しは2行まで折り返して大きさを保つ（入り切らなければ … で止める）
-      const l = layoutLines(title, W - 96, measurer(ctx, FONTS.impact), { maxSize: head.h * 0.5, minSize: head.h * 0.2, maxLines: 2 });
+      const l = layoutLines(title, titleWidth(frame, logoAt), measurer(ctx, FONTS.impact), { maxSize: head.h * 0.5, minSize: head.h * 0.2, maxLines: 2 });
       ctx.font = font(FONTS.impact, l.size);
       ctx.fillStyle = head.color || '#ffffff';
       const lh = l.size * 1.15;
@@ -220,6 +222,7 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
     ctx.textAlign = 'right';
     ctx.fillText(FOOTER_TEXT, W - 32, y0 + foot.h / 2);
   }
+  if (logoAt) ctx.drawImage(logo, logoAt.x, logoAt.y, logoAt.w, logoAt.h);
   ctx.restore();
 }
 
@@ -252,10 +255,10 @@ function drawPeriod(ctx, band, W, parts) {
   ctx.restore();
 }
 
-export async function adToFile(frame, ad, images, settings, overlay) {
+export async function adToFile(frame, ad, images, settings, { overlay = null, logo = null } = {}) {
   await ensureAdFonts(ad, settings);
   const cv = document.createElement('canvas');
-  renderAd(cv, frame, ad, images, settings, { overlay });
+  renderAd(cv, frame, ad, images, settings, { overlay, logo });
   const blob = await canvasToBlob(cv, 'image/jpeg', 0.92);
   return { file: new File([blob], adFileName(), { type: 'image/jpeg' }), thumb: thumbnailOf(cv, 360) };
 }
