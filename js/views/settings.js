@@ -1,13 +1,12 @@
-// 設定: 事務所へ送る・税込の端数・バックアップ・保存の状態・エラーの記録。設定用リンクを開いたときの画面（#/setup?…）も
+// 設定: バックアップ・保存の状態・エラーの記録。設定用リンクを開いたときの画面（#/setup?…）も
+// 合言葉と名前は使うときに聞く（passcode.js）、税込の端数はポップの価格の欄で選ぶ
 
 import * as store from '../store.js';
 import { backupFileName } from '../backup.js';
-import { TAX_ROUNDINGS } from '../model.js';
 import { clearErrorLog, readErrorLog } from '../crash.js';
-import { collectorOf, parsePasscodeInput, parseSetupCode } from '../collect.js';
-import { flushOutbox, onOutboxChange, outboxStatus, pingCollector } from '../sender.js';
+import { collectorOf, parseSetupCode } from '../collect.js';
 import { saveCollector } from './passcode.js';
-import { confirmBox, debounce, downloadFile, h, toast } from '../ui.js';
+import { downloadFile, h, toast } from '../ui.js';
 
 export const APP_VERSION = '0.1.0';
 
@@ -31,102 +30,6 @@ async function storageInfo() {
 
 function isStandalone() {
   return window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
-}
-
-/** 「みんなで使える場所（事務所へ送る）」の欄。戻り値の dispose で表示の更新を止める。 */
-async function collectorSection(settings, rerender) {
-  const c = collectorOf(settings);
-  const statusList = h('ul', { class: 'info' });
-  const showStatus = async () => {
-    try {
-      const st = await outboxStatus();
-      // replaceChildren は null を「null」という文字にしてしまうので除く
-      statusList.replaceChildren(...[
-        h('li', { text: c.ready ? '設定済み（共有・保存したポップを送ります）' : 'まだ設定されていません（下に合言葉を入れてください）' }),
-        st.count ? h('li', { text: `まだ送れていないもの: ${st.count} 件（アプリを開いたときや電波が戻ったときに送り直します）` }) : null,
-        st.lastError ? h('li', { class: 'field-error', text: `送れなかった理由: ${st.lastError}` }) : null,
-      ].filter(Boolean));
-    } catch (err) {
-      statusList.replaceChildren(h('li', { class: 'field-error', text: `送る控えを読めませんでした: ${err.message}` }));
-    }
-  };
-  await showStatus();
-  const dispose = onOutboxChange(() => { showStatus(); });
-
-  const senderInput = h('input', {
-    value: c.sender, placeholder: '例: 田中',
-    onchange: async () => {
-      try {
-        settings.collector = { ...settings.collector, sender: senderInput.value.trim() };
-        await store.putSettings(settings);
-        toast('名前を保存しました', { ms: 1200 });
-      } catch (err) {
-        toast(`名前を保存できませんでした: ${err.message}`, { error: true });
-      }
-    },
-  });
-  // iPhone が先頭を大文字にしたり、言葉を直したりしないように止める
-  const codeInput = h('input', {
-    type: 'text', placeholder: '例: tomato-negi-kaki-482', autocomplete: 'off', autocapitalize: 'off',
-    autocorrect: 'off', spellcheck: 'false',
-  });
-  const codeError = h('span', { class: 'field-error', text: '' });
-  const readCode = async () => {
-    const r = parsePasscodeInput(codeInput.value);
-    // 読めないときも打った文字は消さない
-    codeError.textContent = r.ok ? '' : r.message;
-    if (!r.ok) return;
-    const sender = senderInput.value.trim();
-    if (!sender) { codeError.textContent = '名前も入れてください（誰が作ったか分かるように）'; return; }
-    codeError.textContent = '確かめています…';
-    try {
-      const ok = await saveCollector(r.url, r.passcode, sender, settings);
-      codeError.textContent = ok ? '' : '合言葉が違います（もう一度確かめてください）';
-      if (ok) rerender();
-    } catch (err) {
-      codeError.textContent = '';
-      toast(`設定を保存できませんでした: ${err.message}`, { error: true });
-    }
-  };
-  const test = async () => {
-    toast('確かめています…');
-    const r = await pingCollector(c.url, c.passcode);
-    toast(r.ok ? '事務所に届くことを確かめました' : r.message, { error: !r.ok });
-  };
-  const sendNow = async () => {
-    const r = await flushOutbox();
-    if (r.error) toast(`送れませんでした: ${r.error}`, { error: true });
-    else if (r.failed) toast(`${r.sent} 件送りました。送れなかったものがあります（理由は下に出ています）`, { error: true });
-    else toast(r.sent ? `${r.sent} 件送りました` : '送るものはありません');
-  };
-  const remove = async () => {
-    if (!await confirmBox('この端末から事務所へ送るのをやめます。まだ送れていないものは端末に残ります。', 'やめる')) return;
-    try {
-      settings.collector = { sender: c.sender };
-      await store.putSettings(settings);
-      rerender();
-    } catch (err) {
-      toast(`設定を保存できませんでした: ${err.message}`, { error: true });
-    }
-  };
-
-  const el = h('section', { class: 'form' },
-    h('h3', {}, 'みんなで使える場所（事務所へ送る）'),
-    h('p', { class: 'hint' }, '合言葉を入れると、共有・保存したポップが事務所の Google ドライブへ自動で送られます。写真ストックも使えるようになります。'),
-    h('label', { class: 'field' }, h('span', { class: 'label', text: 'あなたの名前（誰が作ったか分かるように）' }), senderInput),
-    statusList,
-    c.ready
-      ? h('div', { class: 'row' },
-        h('button', { onclick: sendNow }, '今すぐ送る'),
-        h('button', { onclick: test }, '送り先を確かめる'),
-        h('button', { class: 'danger', onclick: remove }, '送るのをやめる'))
-      : null,
-    h('label', { class: 'field' },
-      h('span', { class: 'label', text: c.ready ? '合言葉を変える' : '合言葉（事務所で聞いてください。1回入れれば覚えます）' }),
-      codeInput, codeError),
-    h('button', { class: c.ready ? '' : 'primary', onclick: readCode }, '合言葉で設定する'),
-  );
-  return { el, dispose };
 }
 
 /** 設定用リンク（#/setup?u=…&k=…）を開いたときの画面。 */
@@ -160,24 +63,6 @@ export async function showSetup(root, app, href) {
 
 export async function showSettings(root, app) {
   app.setTitle('設定', { back: true });
-  const settings = await store.getSettings();
-
-  const saveSettings = debounce(async () => {
-    try {
-      await store.putSettings(settings);
-      toast('設定を保存しました', { ms: 1200 });
-    } catch (err) {
-      toast(`設定を保存できませんでした: ${err.message}`, { error: true });
-    }
-  }, 600);
-
-  const roundingChips = h('div', { class: 'chips' });
-  const showRounding = () => roundingChips.replaceChildren(...Object.entries(TAX_ROUNDINGS).map(([id, label]) =>
-    h('button', {
-      type: 'button', class: (settings.taxRounding || 'decimal') === id ? 'chip on' : 'chip',
-      onclick: () => { settings.taxRounding = id; showRounding(); saveSettings(); },
-    }, label)));
-  showRounding();
 
   const exportAll = async () => {
     try {
@@ -213,15 +98,7 @@ export async function showSettings(root, app) {
   };
   showLog();
 
-  const collector = await collectorSection(settings, () => app.refresh());
-
   root.replaceChildren(
-    collector.el,
-    h('section', { class: 'form' },
-      h('h3', {}, '税'),
-      h('p', { class: 'hint' }, '価格を「税抜」にしたポップは、ポップごとに入れた税率で計算した税込の金額を併記します（税率はポップの価格の欄で入れます）。'),
-      h('div', { class: 'field' }, h('span', { class: 'label', text: '税込の端数' }), roundingChips),
-    ),
     h('section', { class: 'form' },
       h('h3', {}, 'バックアップ'),
       h('p', { class: 'hint' }, '今は作ったポップをこのスマホの中に保存しています。機種変更のときや念のため、ときどき書き出してください。'),
@@ -251,8 +128,4 @@ export async function showSettings(root, app) {
     ),
     h('p', { class: 'hint center', text: `青果ポップ ${APP_VERSION}` }),
   );
-
-  const leave = () => { collector.dispose(); return saveSettings.flush(); };
-  leave.flush = saveSettings.flush;
-  return leave;
 }

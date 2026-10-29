@@ -69,13 +69,16 @@ export async function showHome(root, app) {
     app.refresh();
   };
 
-  // 事務所へ送れていないものがあるときだけ出す。合言葉を断られたときはタップでその場で入れ直す（ほかは設定画面の詳しい理由へ）
+  // 事務所へ送れていないものがあるときだけ出す（理由も出す）。タップで今すぐ送り直す。合言葉を断られたときはその場で入れ直してから
   let wrongPasscode = false;
   const outboxNote = h('button', {
     class: 'notice', hidden: true,
     onclick: async () => {
-      if (!wrongPasscode) { app.go('#/settings'); return; }
-      if (await askPasscode({ wrong: true })) flushOutbox();
+      if (wrongPasscode && !await askPasscode({ wrong: true })) return;
+      const r = await flushOutbox();
+      if (r.error) toast(`送れませんでした: ${r.error}`, { error: true });
+      else if (!r.failed) toast(r.sent ? `${r.sent} 件送りました` : '送るものはありません');
+      // 送れなかったものは、この知らせに理由が出る
     },
   });
   const showOutbox = async () => {
@@ -84,7 +87,7 @@ export async function showHome(root, app) {
       wrongPasscode = st.lastError === WRONG_PASSCODE;
       outboxNote.hidden = !st.count;
       outboxNote.textContent = st.lastError
-        ? `⚠ 事務所へ送れていないものが ${st.count} 件あります（${st.lastError}）${wrongPasscode ? ' → ここを押して入れ直す' : ''}`
+        ? `⚠ 事務所へ送れていないものが ${st.count} 件あります（${st.lastError}）${wrongPasscode ? ' → 押して合言葉を入れ直す' : ' → 押して送り直す'}`
         : `事務所へ送っています（残り ${st.count} 件）`;
       outboxNote.classList.toggle('error', !!st.lastError);
     } catch (err) {

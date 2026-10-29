@@ -2,8 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createPop, DEFAULT_TAX_RATE, formatTaxIncluded, parseTaxRateInput, popFromRegular, priceTexts,
-  popFromShared, popTaxRate, regularFromPop, splitDecimal, taxNote, taxRateOf,
+  createPop, DEFAULT_TAX_RATE, formatTaxIncluded, nextTaxRounding, parseTaxRateInput, popFromRegular, priceTexts,
+  popFromShared, popTaxRate, popTaxRounding, regularFromPop, splitDecimal, taxNote, taxRateOf,
 } from '../js/model.js';
 
 test('税込の金額は銭の整数で計算する（109×1.08 が 117.72000000000001 にならない）', () => {
@@ -77,4 +77,35 @@ test('税込の小数は小さく描くために分ける（小数が無けれ�
   assert.deepEqual(splitDecimal('税込 1,333,332.36円'), [
     { text: '税込 1,333,332', small: false }, { text: '.36', small: true }, { text: '円', small: false }]);
   assert.deepEqual(splitDecimal('税込 108円'), [{ text: '税込 108円', small: false }]);
+});
+
+test('税込の端数はポップごと。新しいポップは小数第2位まで、欄の無い古いポップは前の版の設定の値', () => {
+  const pop = { ...createPop(), price: 109, priceTax: 'excl', taxRate: 8 };
+  assert.equal(pop.taxRounding, 'decimal');
+  assert.equal(priceTexts(pop, { taxRounding: 'floor' }).incl, '117.72', '新しいポップは設定に引きずられない');
+  assert.equal(priceTexts({ ...pop, taxRounding: 'round' }, {}).incl, '118');
+  const { taxRounding: _drop, ...old } = pop;
+  assert.equal(popTaxRounding(old, { taxRounding: 'floor' }), 'floor');
+  assert.equal(popTaxRounding(old, {}), 'decimal');
+  assert.equal(popTaxRounding({ ...pop, taxRounding: 'x' }, { taxRounding: 'y' }), 'decimal', '読めない値は小数第2位まで');
+});
+
+test('税込の金額を押すたびに 小数第2位まで → 切り捨て → 四捨五入 → 頭へ戻る', () => {
+  const pop = { ...createPop(), price: 109, priceTax: 'excl', taxRate: 8 };   // 117.72 → 117 → 118
+  assert.equal(nextTaxRounding(pop, {}), 'floor');
+  assert.equal(nextTaxRounding({ ...pop, taxRounding: 'floor' }, {}), 'round');
+  assert.equal(nextTaxRounding({ ...pop, taxRounding: 'round' }, {}), 'decimal');
+});
+
+test('切り捨てと四捨五入が同じ金額なら、四捨五入を飛ばして頭へ戻る', () => {
+  const pop = { ...createPop(), price: 106, priceTax: 'excl', taxRate: 8 };   // 114.48 → 114 と 114
+  assert.equal(nextTaxRounding(pop, {}), 'floor');
+  assert.equal(nextTaxRounding({ ...pop, taxRounding: 'floor' }, {}), 'decimal');
+  // 価格を変えて同額になったときに四捨五入のままでも、次は頭へ
+  assert.equal(nextTaxRounding({ ...pop, taxRounding: 'round' }, {}), 'decimal');
+});
+
+test('税込の端数は、レギュラー・保管したポップから作っても引き継ぐ', () => {
+  const pop = { ...createPop(), price: 109, priceTax: 'excl', taxRate: 8, taxRounding: 'round' };
+  assert.equal(popFromRegular(regularFromPop(pop)).taxRounding, 'round');
 });

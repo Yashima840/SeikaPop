@@ -3,7 +3,7 @@
 import * as store from '../store.js';
 import {
   DEFAULT_ADJUST, DEFAULT_CROP, exportProblems, formatPrice, isBlankPop, isTaxExcluded, NAME_FONTS, parsePriceInput, parseTaxRateInput,
-  isBurstLayout, needsCheck, nextPriceBadge, PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, placeStamp, popTaxRate, STAMP, STAMP_SLOTS, stampOf, updateRegularFrom, withSample,
+  isBurstLayout, needsCheck, nextPriceBadge, PRICE_BADGES, priceTexts, regularFromPop, SAMPLE_PHOTO_URL, SHARE_TARGETS, shotFromPop, SIZES, placeStamp, popTaxRate, popTaxRounding, nextTaxRounding, STAMP, TAX_ROUNDINGS, STAMP_SLOTS, stampOf, updateRegularFrom, withSample,
 } from '../model.js';
 import { dragCrop, fingerSpan, inRotatedRect, moveBadge, zoomCrop, ZOOM_MAX } from '../layout.js';
 import { adjustedCopy, autoAdjustFor, blobToImage, shrinkPhoto } from '../image.js';
@@ -31,7 +31,7 @@ function field(label, input, extra) {
 const STEPS = {
   photo: { label: '写真', title: '写真を入れる', hint: '撮った写真は自動で明るく整えます。位置は上の見本を指で動かす・2本指で拡大。' },
   name: { label: '名前', title: '商品名と産地', hint: '産地は食品ならメーカー名。入れなくても作れます。' },
-  price: { label: '価格', title: '価格と単位', hint: '税抜で入れると、設定の税率で計算した税込も入ります。' },
+  price: { label: '価格', title: '価格と単位', hint: '税抜で入れると、税率で計算した税込も入ります（税込の金額を押すと端数の扱いが替わります）。' },
   design: { label: 'デザイン', title: 'デザインを選ぶ', hint: 'まだ入れていない所は見本（じゃが芋・長崎県・98円）で描いています。写真・名前・価格はこの後で入れます。' },
   check: { label: '確認', title: '今日の価格・産地を確かめる', hint: '前回の内容が入っています。' },   // 頭に呼び出し元を付けて出す
   out: { label: '出す', title: '仕上がりを確かめて出す', hint: '' },
@@ -347,11 +347,17 @@ export async function showEditor(root, app, popId, { wizard = false } = {}) {
   };
 
   const priceError = h('span', { class: 'field-error', text: '' });
-  const priceNote = h('span', { class: 'field-note', text: '' });
-  // 税抜で入れたときは、ポップに入る税込の金額をその場で見せる（税率の入れ違いに気付けるように）
+  // 税抜で入れたときは、ポップに入る税込の金額をその場で見せる（税率の入れ違いに気付けるように）。
+  // 押すたびに端数の扱いを 小数第2位まで → 切り捨て → 四捨五入 と回す（切り捨てと同じ金額になる四捨五入は飛ばす）
+  const priceNote = h('button', {
+    type: 'button', class: 'mini tax-note', hidden: true,
+    onclick: () => { pop.taxRounding = nextTaxRounding(pop, settings); showPriceNote(); changed(); },
+  });
   const showPriceNote = () => {
     const t = priceTexts(pop, settings);
-    priceNote.textContent = t?.incl ? `税込 ${t.incl}円（税率 ${popTaxRate(pop, settings)}%）` : '';
+    priceNote.hidden = !t?.incl;
+    priceNote.textContent = t?.incl
+      ? `🔄 税込 ${t.incl}円（${TAX_ROUNDINGS[popTaxRounding(pop, settings)]}・税率 ${popTaxRate(pop, settings)}%）` : '';
   };
   // 税率はポップごと（税抜のときだけ使う）。読めない値は保存しない・打った字は消さない
   const taxError = h('span', { class: 'field-error', text: '' });

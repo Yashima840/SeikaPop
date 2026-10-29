@@ -20,7 +20,7 @@ export const DEFAULT_ADJUST = Object.freeze({ brightness: 0, contrast: 0, satura
 // レギュラーから呼び出したときに引き継ぐ項目（＝ポップの中身）。
 // id・日時・レギュラーかどうか・確認済みかどうかは引き継がない。
 const CONTENT_FIELDS = [
-  'name', 'catch', 'price', 'priceTax', 'taxRate', 'unit', 'origin', 'badge',
+  'name', 'catch', 'price', 'priceTax', 'taxRate', 'taxRounding', 'unit', 'origin', 'badge',
   'template', 'size', 'photoId', 'crop', 'adjust', 'thumb', 'each', 'nameFont', 'photoFade', 'photoSepia', 'photoVintage',
   'priceBadge', 'badgePos', 'stampText', 'stamp', 'stampVertical', 'stampText2', 'stamp2', 'stampVertical2',
 ];
@@ -40,6 +40,7 @@ export function createPop(now = new Date()) {
     price: null,          // 円。未入力は null。税抜か税込かは priceTax
     priceTax: 'excl',     // 'excl'＝税抜で入れた（税込を計算して併記）／'incl'＝税込で入れた
     taxRate: null,        // 税抜のときの税率（%）。ポップごとに価格の欄で入れる。null は設定の税率（前の版で設定画面に入れた値。無ければ 8）
+    taxRounding: 'decimal', // 併記する税込の端数（TAX_ROUNDINGS の id）。価格の欄の税込の金額を押して回す。無い古いポップは前の版の設定画面の値
     each: false,          // 価格の頭に「各」を付ける（同じ値段の品をまとめて出すとき）
     nameFont: '',         // 商品名の書体（NAME_FONTS の id。'' はデザインのまま）
     priceBadge: '',       // 「写真主役」の金額の台紙（PRICE_BADGES の id。'' は黄色い丸）
@@ -208,10 +209,11 @@ export function formatPrice(value) {
 // ---- 税 ----
 // 青果は食料品なので軽減税率 8% を初期値にする（ポップごとに価格の欄で変えられる）。
 export const DEFAULT_TAX_RATE = 8;
+// 並びは押して回す順
 export const TAX_ROUNDINGS = {
-  decimal: '小数第2位まで（例: 117.72円）',
-  floor: '切り捨て（例: 117円）',
-  round: '四捨五入（例: 118円）',
+  decimal: '小数第2位まで',
+  floor: '切り捨て',
+  round: '四捨五入',
 };
 
 /** 価格が税抜か。この欄が無い古いポップは税込で入れていた（0.1.0 まではそれしか無かった）。 */
@@ -238,6 +240,23 @@ export function popTaxRate(pop, settings) {
   return isTaxRate(pop?.taxRate) ? pop.taxRate : taxRateOf(settings);
 }
 
+/** そのポップの税込の端数。ポップに入れた扱いが読めればそれ、無ければ設定の値（前の版で設定画面に入れた値。無ければ小数第2位まで）。 */
+export function popTaxRounding(pop, settings) {
+  if (TAX_ROUNDINGS[pop?.taxRounding]) return pop.taxRounding;
+  return TAX_ROUNDINGS[settings?.taxRounding] ? settings.taxRounding : 'decimal';
+}
+
+/**
+ * 税込の金額を押したときの次の端数（小数第2位まで → 切り捨て → 四捨五入 → 頭へ戻る）。
+ * 切り捨てと四捨五入が同じ金額になる価格では、押しても変わらない四捨五入を飛ばす。
+ */
+export function nextTaxRounding(pop, settings) {
+  const rate = popTaxRate(pop, settings);
+  const order = Object.keys(TAX_ROUNDINGS)
+    .filter(id => id !== 'round' || formatTaxIncluded(pop.price, rate, 'floor') !== formatTaxIncluded(pop.price, rate, 'round'));
+  return order[(order.indexOf(popTaxRounding(pop, settings)) + 1) % order.length];
+}
+
 /**
  * 税抜価格から税込の表示文字（「117.72」など）を作る。
  * 小数の誤差を出さないよう、銭（1/100円）の整数で計算する（109×1.08 を浮動小数で計算すると 117.72000000000001 になる）。
@@ -260,7 +279,7 @@ export function priceTexts(pop, settings) {
   if (pop.price == null) return null;
   const main = formatPrice(pop.price), each = !!pop.each;
   if (!isTaxExcluded(pop)) return { main, incl: '', each };
-  return { main, incl: formatTaxIncluded(pop.price, popTaxRate(pop, settings), settings?.taxRounding), each };
+  return { main, incl: formatTaxIncluded(pop.price, popTaxRate(pop, settings), popTaxRounding(pop, settings)), each };
 }
 
 /** 数字に添える税の文字（「税込」または「税込 117.72円」）。 */
