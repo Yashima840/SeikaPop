@@ -5,7 +5,7 @@
 import * as store from '../store.js';
 import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
-  AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, dayInput, normalizePeriod, PERIOD_COLORS, PERIOD_DAYS_MAX, periodEnd, periodText, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrame, customFrameProblems,
+  AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, dayInput, normalizePeriod, PERIOD_COLORS, PERIOD_DAYS_MAX, periodEnd, periodText, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrameProblems,
   defaultLogo, dropMissing, fitSlots, FOOTER_TEXT, frameFor, FRAME_ORDER, FRAMES, LOGO, logoRect, logoSizeOf, normalizeLogo, normalizeRows, placeLogo, resizeLogo, saveCustomFrame, shotFromAd, toggleShot, usedRows,
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
@@ -21,6 +21,18 @@ const FONT_WAIT_MS = 8000;   // 書体を待つのはここまで（電波が弱
 function chips(items, onPick, current) {
   return h('div', { class: 'chips' }, items.map(([value, label]) =>
     h('button', { type: 'button', class: value === current ? 'chip on' : 'chip', onclick: () => onPick(value) }, label)));
+}
+
+/** フレームの形の小さな絵（見出しの帯・期間の帯・写真の枠に番号・下の帯）。座標はフレームの px を割合にして置く。 */
+function frameMini(f) {
+  const pct = (v, of) => `${(v / of) * 100}%`;
+  const box = (x, y, w, hh, style = '') =>
+    `left:${pct(x, f.w)};top:${pct(y, f.h)};width:${pct(w, f.w)};height:${pct(hh, f.h)};${style}`;
+  return h('span', { class: 'frame-mini', style: `aspect-ratio:${f.w}/${f.h};background:${f.bg}` },
+    h('span', { style: box(0, 0, f.w, f.header.h, `background:${f.header.bg}`) }),
+    f.band ? h('span', { style: box(0, f.band.y, f.w, f.band.h, `background:${f.band.bg}`) }) : null,
+    ...f.slots.map((s, i) => h('span', { class: 'frame-slot', style: box(s.x, s.y, s.w, s.h), text: String(i + 1) })),
+    h('span', { style: box(f.w * 0.15, f.h - f.footer.h * 0.7, f.w * 0.7, f.footer.h * 0.4, `background:${f.footer.color};opacity:.5;border-radius:2px`) }));
 }
 
 /** ポップの1枚（badge＝右上の枠の番号、selected＝枠に入れている、blocked＝まだ出せない（確認待ち））。 */
@@ -447,22 +459,29 @@ export async function showAd(root, app) {
         builder.id ? h('button', { disabled: !count, onclick: () => saveBuilder(true) }, '新しく保存') : null,
         h('button', { onclick: () => { builder = null; rebuild(); } }, 'やめる')));
   }
-  /** フレームの候補: 決まったもの → 保存したカスタム → 新しく作る。 */
+  /** フレームの候補: 決まったもの → 保存したカスタム → 新しく作る。文字を読まずに選べるよう、形の絵を並べる。 */
   function frameChips() {
     const current = ad.frameId !== CUSTOM_ID ? ad.frameId : ad.customId ? `saved:${ad.customId}` : 'unsaved';
+    // 絵は今の見出しの色・期間のバッジの有無で描く（出来上がりと同じ見た目で選べるように）
     const items = [
-      ...FRAME_ORDER.map(id => [id, `${FRAMES[id].label}（${FRAMES[id].note}）`]),
-      ...saved.map(f => [`saved:${f.id}`, `★ ${customFrame(f.rows, f.name).label}`]),
+      ...FRAME_ORDER.map(id => [id, frameFor({ ...ad, frameId: id }), FRAMES[id].label]),
+      ...saved.map(f => [`saved:${f.id}`, frameFor({ ...ad, frameId: CUSTOM_ID, customRows: f.rows, customName: f.name, customColor: f.color }), `★ ${f.name}`]),
       // 前の版で作った名前の無いカスタムを使っている作りかけ（保存を促す）
-      ...(current === 'unsaved' ? [['unsaved', `${frameOf().label}（未保存）`]] : []),
-      ['new', '＋ カスタムを作る'],
+      ...(current === 'unsaved' ? [['unsaved', frameOf(), '未保存']] : []),
     ];
-    return chips(items, v => {
+    const onPick = v => {
       if (v === 'new') openBuilder();
       else if (v === 'unsaved') openBuilder({ id: null, name: `カスタム${saved.length + 1}`, rows: ad.customRows, color: ad.customColor });
       else if (v.startsWith('saved:')) pickFrame(CUSTOM_ID, saved.find(f => `saved:${f.id}` === v));
       else pickFrame(v);
-    }, current);
+    };
+    return h('div', { class: 'frame-grid' },
+      ...items.filter(([, f]) => f).map(([v, f, caption]) => h('button', {
+        type: 'button', class: v === current ? 'frame-pick on' : 'frame-pick',
+        'aria-pressed': v === current ? 'true' : 'false', 'aria-label': f.label, onclick: () => onPick(v),
+      }, h('span', { class: 'frame-box' }, frameMini(f)), h('span', { class: 'frame-cap', text: caption }))),
+      h('button', { type: 'button', class: 'frame-pick', onclick: () => onPick('new') },
+        h('span', { class: 'frame-box frame-new', text: '＋' }), h('span', { class: 'frame-cap', text: 'カスタムを作る' })));
   }
   const savedNowFor = () => saved.find(f => f.id === ad.customId);
   const pickPop = id => {
