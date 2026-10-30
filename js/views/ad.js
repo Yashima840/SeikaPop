@@ -6,7 +6,7 @@ import * as store from '../store.js';
 import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
   AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, dayInput, normalizePeriod, PERIOD_COLORS, PERIOD_DAYS_MAX, periodEnd, periodText, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrameProblems,
-  defaultLogo, dropMissing, fitSlots, FOOTER_TEXT, frameFor, FRAME_ORDER, FRAMES, LOGO, logoRect, logoSizeOf, normalizeLogo, normalizeRows, placeLogo, resizeLogo, saveCustomFrame, shotFromAd, titleCenter, toggleShot, usedRows,
+  defaultLogo, dropMissing, fitSlots, FOOTER_TEXT, frameFor, HOURS_MAX, FRAME_ORDER, FRAMES, LOGO, logoRect, logoSizeOf, normalizeLogo, normalizeRows, placeLogo, resizeLogo, saveCustomFrame, shotFromAd, titleCenter, toggleShot, usedRows,
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
 import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../render.js';
@@ -220,6 +220,11 @@ export async function showAd(root, app) {
   const titleInput = h('input', {
     value: ad.title, placeholder: '例: 本日のおすすめ', enterkeyhint: 'done',
     oninput: () => { ad.title = titleInput.value; statusEl.textContent = '保存中…'; draw(); save(); },
+  });
+  // 営業時間（下の帯の左。空なら入れない。作りかけと一緒に残るので、次の広告にもそのまま入る）
+  const hoursInput = h('input', {
+    value: ad.hours || '', maxlength: HOURS_MAX, placeholder: '例: 営業時間 9:00〜19:00', enterkeyhint: 'done',
+    oninput: () => { ad.hours = hoursInput.value; statusEl.textContent = '保存中…'; draw(); save(); },
   });
   // ---- 期間のバッジ（入れたいときだけ）。始まりの日と日数を選ぶと、終わりの日を出してバッジの文字を作る ----
   // 欄は一度だけ作る（日付を選んでいる途中で作り直すと、選びかけが消えるため）
@@ -580,7 +585,8 @@ export async function showAd(root, app) {
         periodBox,
         h('label', { class: 'check' }, logoCheck, '店のロゴを入れる（見本のロゴを指で動かせます。2本指で広げると大きく、パソコンは Ctrl＋ホイール）'),
         logoBack,
-        h('p', { class: 'hint' }, `下の帯には「${FOOTER_TEXT}」が入ります。`),
+        h('label', { class: 'field' }, h('span', { class: 'label', text: '営業時間（下の帯の左に入ります。空なら入れません）' }), hoursInput),
+        h('p', { class: 'hint' }, `下の帯の右には「${FOOTER_TEXT}」が入ります。`),
       ],
     };
     const titleOf = key => (key === 'pops' ? `${AD_STEPS.pops.title}（${filled}/${n}）` : AD_STEPS[key].title);

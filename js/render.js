@@ -9,7 +9,7 @@ import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.
 import { PRICE_FONTS } from './price-design.js';
 import { labelFontList } from './labels.js';
 import { LABEL_DESIGN } from './label-design.js';
-import { FOOTER_TEXT, logoRect, periodOf, periodParts, titleCenter, titleWidth } from './frames.js';
+import { FOOTER_TEXT, hoursOf, logoRect, periodOf, periodParts, titleCenter, titleWidth } from './frames.js';
 
 export function sizeOf(pop) {
   return SIZES[pop.size] || SIZES.square;
@@ -138,7 +138,7 @@ export async function renderToFile(pop, photo, settings) {
 /** 広告の文字に要る字形を読み込む。読めなくても端末の字で描けるので止めない。 */
 export async function ensureAdFonts(ad, settings, onFail) {
   if (!document.fonts?.load) return;
-  const text = [ad.title, periodOf(ad), FOOTER_TEXT, '0123456789/()～月火水木金土日限り'].join('');
+  const text = [ad.title, periodOf(ad), FOOTER_TEXT, hoursOf(ad), '0123456789/()～月火水木金土日限り'].join('');
   try {
     await Promise.all([FONTS.impact, FONTS.round].map(f => document.fonts.load(`${f.weight} 40px "${f.family}"`, text)));
   } catch (err) {
@@ -230,6 +230,14 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
     ctx.font = font(FONTS.round, size);
     ctx.textAlign = 'right';
     ctx.fillText(FOOTER_TEXT, W - 32, y0 + foot.h / 2);
+    // 営業時間は左に、決まり文句より大きく太く（決まり文句に重ならない幅に縮める）
+    const hours = hoursOf(ad);
+    if (hours) {
+      const room = W - 32 - ctx.measureText(FOOTER_TEXT).width - 32 - 32;
+      ctx.font = font(FONTS.impact, fitFontSize(hours, room, measurer(ctx, FONTS.impact), foot.h * 0.6, 14));
+      ctx.textAlign = 'left';
+      ctx.fillText(hours, 32, y0 + foot.h / 2);
+    }
   }
   if (logoAt) ctx.drawImage(logo, logoAt.x, logoAt.y, logoAt.w, logoAt.h);
   ctx.restore();

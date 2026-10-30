@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  defaultLogo, LOGO, logoRect, logoSizeOf, normalizeLogo, placeLogo, resizeLogo, titleCenter, titleWidth,
+  defaultLogo, LOGO, logoRect, logoSizeOf, normalizeLogo, placeLogo, resizeLogo, titleCenter, titleWidth, hoursOf, HOURS_MAX,
   adProblems, adShotKey, cleanCustomFrames, createAd, CUSTOM_COLORS, CUSTOM_ID, customFrame, customFrameProblems, dayInput, defaultPeriod,
   dropMissing, fitSlots, frameFor, frameProblems, FRAME_ORDER, FRAMES, mergeCustomFrames, normalizePeriod, normalizeRows, PERIOD_BAND, PERIOD_COLORS,
   periodEnd, periodOf, periodParts, periodText, saveCustomFrame, toggleShot,
@@ -311,4 +311,13 @@ test('見出しの左右の位置が違えば別の画像（真ん中なら前�
   const ad = { ...createAd(), slots: ['a'] };
   assert.equal(adShotKey(ad), adShotKey({ ...ad, titleShift: undefined }));
   assert.notEqual(adShotKey(ad), adShotKey({ ...ad, titleShift: 120 }));
+});
+
+test('営業時間は空白を除き、長すぎる分は切る（無い前の作りかけは入れない）。違えば別の画像', () => {
+  assert.equal(hoursOf({ hours: '  営業時間 9:00〜19:00 ' }), '営業時間 9:00〜19:00');
+  assert.equal(hoursOf({}), '');
+  assert.equal(hoursOf({ hours: 'あ'.repeat(HOURS_MAX + 5) }).length, HOURS_MAX);
+  const ad = { ...createAd(), slots: ['a'] };
+  assert.equal(adShotKey(ad), adShotKey({ ...ad, hours: '   ' }), '空なら前の版と同じ印');
+  assert.notEqual(adShotKey(ad), adShotKey({ ...ad, hours: '9:00〜19:00' }));
 });

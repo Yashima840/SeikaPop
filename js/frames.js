@@ -15,6 +15,10 @@ import { newId } from './model.js';
 const LAYOUT = { w: 1080, gap: 5, headerH: 200, footerH: 48 };
 // 下の帯に入れる決まり文句（日付・店名は入れない）
 export const FOOTER_TEXT = 'なくなり次第終了いたします。画像はイメージです';
+// 店の営業時間（ad.hours）。入れたときだけ、下の帯の左に入れる（決まり文句は右）
+export const HOURS_MAX = 30;
+/** 下の帯に入れる営業時間（前後の空白を除き、長すぎる分は切る。無ければ ''）。 */
+export const hoursOf = ad => Array.from(String(ad?.hours ?? '').trim()).slice(0, HOURS_MAX).join('');
 // 期間のバッジ（「10/17(土)～10/19(月) 3日間限り」）。入れたいときだけ、見出しの帯のすぐ下に帯で差し込む
 export const PERIOD_BAND = { h: 110, bg: '#ffe14d', color: '#c62828' };
 
@@ -343,7 +347,7 @@ export function createAd(now = new Date()) {
   return {
     // カスタムのときは、使っている保存済みのもの（customId・customName）と形（customRows）を持つ
     frameId: FRAME_ORDER[0], customId: null, customName: '', customRows: normalizeRows([]), customColor: CUSTOM_COLOR_DEFAULT,
-    title: AD_TITLES[0], titleShift: 0, headColor: '', period: defaultPeriod(now), logo: defaultLogo(), slots: [],
+    title: AD_TITLES[0], titleShift: 0, hours: '', headColor: '', period: defaultPeriod(now), logo: defaultLogo(), slots: [],
     updatedAt: now.toISOString(),
   };
 }
@@ -388,7 +392,7 @@ export function adProblems(ad, frame) {
   return out;
 }
 
-/** 同じ組み合わせを2回残さないための印。見出しの色と左右の位置・ロゴの有無と位置と大きさ・期間のバッジの文字が違えば別の画像になる。 */
+/** 同じ組み合わせを2回残さないための印。見出しの色と左右の位置・営業時間・ロゴの有無と位置と大きさ・期間のバッジの文字が違えば別の画像になる。 */
 export function adShotKey(ad) {
   const period = periodOf(ad) ? `@${periodOf(ad)}~${periodColorOf(ad.period.color).id}` : '';
   const frame = ad.frameId === CUSTOM_ID
@@ -396,7 +400,8 @@ export function adShotKey(ad) {
   const color = ad.headColor ? `#${ad.headColor}` : '';
   const logo = ad.logo?.on ? `+logo${ad.logo.x ?? ''},${ad.logo.y ?? ''}${ad.logo.size ? `@${ad.logo.size}` : ''}` : '';
   const shift = Math.round(Number(ad.titleShift) || 0) ? `<>${Math.round(Number(ad.titleShift))}` : '';
-  return `ad:${frame}${color}${logo}|${ad.slots.join(',')}|${ad.title}${shift}${period}`;
+  const hours = hoursOf(ad) ? `|${hoursOf(ad)}` : '';
+  return `ad:${frame}${color}${logo}|${ad.slots.join(',')}|${ad.title}${shift}${period}${hours}`;
 }
 
 export function shotFromAd(ad, frame, { thumb }, now = new Date()) {
