@@ -9,7 +9,7 @@ import { containRect, fitFontSize, googleFontsUrl, layoutLines } from './layout.
 import { PRICE_FONTS } from './price-design.js';
 import { labelFontList } from './labels.js';
 import { LABEL_DESIGN } from './label-design.js';
-import { FOOTER_TEXT, logoRect, periodOf, periodParts, titleWidth } from './frames.js';
+import { FOOTER_TEXT, logoRect, periodOf, periodParts, titleCenter, titleWidth } from './frames.js';
 
 export function sizeOf(pop) {
   return SIZES[pop.size] || SIZES.square;
@@ -150,6 +150,7 @@ export async function ensureAdFonts(ad, settings, onFail) {
  * 広告を canvas へ描く。images は枠の順の画像（未選択は null）。overlay はフレームの飾り画像（あれば）。
  * logo は店のロゴの画像（ad.logo.on のときだけ描く。一番上に重ねる）。
  * 画像は切らずに枠へ丸ごと収める（ポップの価格・税込の表示を欠かさないため）。
+ * 描いた見出しの文字の左右の範囲を返す（{ title: { x, w } }。見出しが無ければ title は null。見本の上で指で動かすため）。
  */
 export function renderAd(canvas, frame, ad, images, settings, { overlay = null, logo = null, preview = false } = {}) {
   const { w: W, h: H } = frame;
@@ -168,6 +169,7 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
 
   const head = frame.header;
   const logoAt = logo && logoRect(ad, frame);
+  const placed = { title: null };
   if (head?.h) {
     if (head.bg) { ctx.fillStyle = head.bg; ctx.fillRect(0, 0, W, head.h); }
     const title = String(ad.title || '').trim();
@@ -177,7 +179,10 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
       ctx.font = font(FONTS.impact, l.size);
       ctx.fillStyle = head.color || '#ffffff';
       const lh = l.size * 1.15;
-      l.lines.forEach((line, i) => ctx.fillText(line, W / 2, head.h / 2 + (i - (l.lines.length - 1) / 2) * lh));
+      const textW = Math.max(...l.lines.map(line => ctx.measureText(line).width));
+      const cx = titleCenter(frame, ad.titleShift, textW);
+      l.lines.forEach((line, i) => ctx.fillText(line, cx, head.h / 2 + (i - (l.lines.length - 1) / 2) * lh));
+      placed.title = { x: cx - textW / 2, w: textW };
     }
   }
 
@@ -228,6 +233,7 @@ export function renderAd(canvas, frame, ad, images, settings, { overlay = null, 
   }
   if (logoAt) ctx.drawImage(logo, logoAt.x, logoAt.y, logoAt.w, logoAt.h);
   ctx.restore();
+  return placed;
 }
 
 // 広告の四隅の丸み（px）

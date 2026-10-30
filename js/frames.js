@@ -255,6 +255,17 @@ export function logoRect(ad, frame) {
   return { x: l.x - s / 2, y: l.y - s / 2, w: s, h: s };
 }
 
+// ---- 見出しの文字の左右の位置（ad.titleShift＝真ん中からのずれ（px）。0 が真ん中。見本の上で左右に指で動かす）----
+const TITLE_EDGE = 24;   // 左右に寄せても、文字と画像の端の間にはこれだけ空ける
+
+/** 幅 textW の見出しの真ん中の x。ずらしても画像の外へはみ出さないように収める（入り切らない長さなら真ん中）。 */
+export function titleCenter(frame, shift, textW) {
+  const W = frame.w, mid = W / 2;
+  const s = typeof shift === 'number' && Number.isFinite(shift) ? shift : 0;
+  const room = Math.max(0, mid - textW / 2 - TITLE_EDGE);
+  return Math.round(mid + Math.min(Math.max(s, -room), room));
+}
+
 /** 見出しの文字に使える幅。ロゴが見出しの帯にかかるなら、その分を左右とも空けて真ん中にそろえたまま避ける。 */
 export function titleWidth(frame, logo) {
   const W = frame.w, base = W - 96;
@@ -332,7 +343,7 @@ export function createAd(now = new Date()) {
   return {
     // カスタムのときは、使っている保存済みのもの（customId・customName）と形（customRows）を持つ
     frameId: FRAME_ORDER[0], customId: null, customName: '', customRows: normalizeRows([]), customColor: CUSTOM_COLOR_DEFAULT,
-    title: AD_TITLES[0], headColor: '', period: defaultPeriod(now), logo: defaultLogo(), slots: [],
+    title: AD_TITLES[0], titleShift: 0, headColor: '', period: defaultPeriod(now), logo: defaultLogo(), slots: [],
     updatedAt: now.toISOString(),
   };
 }
@@ -377,14 +388,15 @@ export function adProblems(ad, frame) {
   return out;
 }
 
-/** 同じ組み合わせを2回残さないための印。見出しの色・ロゴの有無と位置と大きさ・期間のバッジの文字が違えば別の画像になる。 */
+/** 同じ組み合わせを2回残さないための印。見出しの色と左右の位置・ロゴの有無と位置と大きさ・期間のバッジの文字が違えば別の画像になる。 */
 export function adShotKey(ad) {
   const period = periodOf(ad) ? `@${periodOf(ad)}~${periodColorOf(ad.period.color).id}` : '';
   const frame = ad.frameId === CUSTOM_ID
     ? `${CUSTOM_ID}:${usedRows(ad.customRows).join('-')}:${customColorOf(ad.customColor).id}` : ad.frameId;
   const color = ad.headColor ? `#${ad.headColor}` : '';
   const logo = ad.logo?.on ? `+logo${ad.logo.x ?? ''},${ad.logo.y ?? ''}${ad.logo.size ? `@${ad.logo.size}` : ''}` : '';
-  return `ad:${frame}${color}${logo}|${ad.slots.join(',')}|${ad.title}${period}`;
+  const shift = Math.round(Number(ad.titleShift) || 0) ? `<>${Math.round(Number(ad.titleShift))}` : '';
+  return `ad:${frame}${color}${logo}|${ad.slots.join(',')}|${ad.title}${shift}${period}`;
 }
 
 export function shotFromAd(ad, frame, { thumb }, now = new Date()) {

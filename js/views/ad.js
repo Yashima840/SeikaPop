@@ -6,7 +6,7 @@ import * as store from '../store.js';
 import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
   AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, dayInput, normalizePeriod, PERIOD_COLORS, PERIOD_DAYS_MAX, periodEnd, periodText, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrameProblems,
-  defaultLogo, dropMissing, fitSlots, FOOTER_TEXT, frameFor, FRAME_ORDER, FRAMES, LOGO, logoRect, logoSizeOf, normalizeLogo, normalizeRows, placeLogo, resizeLogo, saveCustomFrame, shotFromAd, toggleShot, usedRows,
+  defaultLogo, dropMissing, fitSlots, FOOTER_TEXT, frameFor, FRAME_ORDER, FRAMES, LOGO, logoRect, logoSizeOf, normalizeLogo, normalizeRows, placeLogo, resizeLogo, saveCustomFrame, shotFromAd, titleCenter, toggleShot, usedRows,
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
 import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../render.js';
@@ -172,6 +172,7 @@ export async function showAd(root, app) {
 
   // ---- プレビュー ----
   const canvas = h('canvas', { class: 'preview-canvas' });
+  let titleAt = null;   // 見本に描いた見出しの文字の左右の範囲 { x, w }（指で左右に動かすため）
   const statusEl = h('span', { class: 'status', text: '' });
   const draw = frameThrottle(async () => {
     try {
@@ -184,8 +185,8 @@ export async function showAd(root, app) {
       new Promise(resolve => setTimeout(resolve, FONT_WAIT_MS)),
     ]);
     try {
-      renderAd(canvas, frameOf(), ad, ad.slots.map(id => images.get(id) || null), settings,
-        { overlay: overlayState().img || null, logo: logo.img || null, preview: true });
+      titleAt = renderAd(canvas, frameOf(), ad, ad.slots.map(id => images.get(id) || null), settings,
+        { overlay: overlayState().img || null, logo: logo.img || null, preview: true }).title;
     } catch (err) {
       recordError('ad preview', err);
       toast(`見本を描けませんでした: ${err.message}（アプリを閉じて開き直してください）`, { error: true });
@@ -320,7 +321,7 @@ export async function showAd(root, app) {
       ev.preventDefault();
       return;
     }
-    if (fingers.size || !onLogo(ev.clientX, ev.clientY)) return;
+    if (fingers.size || titleDrag || !onLogo(ev.clientX, ev.clientY)) return;
     const at = logoRect(ad, frameOf()), p = canvasPoint(ev.clientX, ev.clientY);
     dragging = { dx: at.x + at.w / 2 - p.x, dy: at.y + at.h / 2 - p.y };
     fingers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
@@ -329,7 +330,9 @@ export async function showAd(root, app) {
   });
   canvas.addEventListener('pointermove', ev => {
     if (!fingers.has(ev.pointerId)) {
-      if (!fingers.size) canvas.style.cursor = onLogo(ev.clientX, ev.clientY) ? 'grab' : '';
+      if (!fingers.size && !titleDrag) {
+        canvas.style.cursor = onLogo(ev.clientX, ev.clientY) ? 'grab' : onTitle(ev.clientX, ev.clientY) ? 'ew-resize' : '';
+      }
       return;
     }
     fingers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
@@ -356,6 +359,42 @@ export async function showAd(root, app) {
   };
   canvas.addEventListener('pointerup', dragEnd);
   canvas.addEventListener('pointercancel', dragEnd);
+  // ---- 見出しの文字の左右の位置: 見出しの帯の上で左右に動かす。動かさずに離したら（タップ・クリック）真ん中に戻す ----
+  let titleDrag = null;   // { id＝指, x＝触れた所（画面の座標）, shift＝触れたときのずれ, moved }
+  const TAP_SLOP = 8;     // これより指が動いたら「動かした」（タップと見分ける。画面の px）
+  const onTitle = (cx, cy) => {
+    const f = frameOf();
+    if (!titleAt || !f?.header?.h) return false;
+    const p = canvasPoint(cx, cy);
+    return p.x >= 0 && p.x <= f.w && p.y >= 0 && p.y <= f.header.h;
+  };
+  canvas.addEventListener('pointerdown', ev => {
+    // ロゴに触れたとき・ロゴのピンチ中はロゴの方（上の pointerdown が先に受ける）
+    if (fingers.size || titleDrag || !onTitle(ev.clientX, ev.clientY)) return;
+    titleDrag = { id: ev.pointerId, x: ev.clientX, shift: Number(ad.titleShift) || 0, moved: false };
+    canvas.setPointerCapture?.(ev.pointerId);
+    ev.preventDefault();
+  });
+  canvas.addEventListener('pointermove', ev => {
+    if (titleDrag?.id !== ev.pointerId) return;
+    const dx = ev.clientX - titleDrag.x;
+    if (!titleDrag.moved && Math.abs(dx) < TAP_SLOP) return;
+    titleDrag.moved = true;
+    const f = frameOf(), r = canvas.getBoundingClientRect();
+    // 文字の端が画像の外へ出ない所で止める（止めた所から戻せば、すぐに動き出すように）
+    ad.titleShift = titleCenter(f, titleDrag.shift + dx * canvas.width / r.width, titleAt?.w ?? 0) - f.w / 2;
+    statusEl.textContent = '保存中…';
+    draw();
+  });
+  const titleEnd = ev => {
+    if (titleDrag?.id !== ev.pointerId) return;
+    if (!titleDrag.moved && ev.type === 'pointerup') ad.titleShift = 0;
+    titleDrag = null;
+    logoChanged();
+  };
+  canvas.addEventListener('pointerup', titleEnd);
+  canvas.addEventListener('pointercancel', titleEnd);
+
   // パソコン: ロゴの上で Ctrl＋ホイール（ノートのタッチパッドでは2本指のピンチも同じ合図になる）
   canvas.addEventListener('wheel', ev => {
     if (!ev.ctrlKey || !onLogo(ev.clientX, ev.clientY)) return;
@@ -534,7 +573,7 @@ export async function showAd(root, app) {
           'まだポップがありません。はじめの画面の「＋ 1枚作る」で作ると、ここに並びます。'),
       ],
       text: () => [
-        h('label', { class: 'field' }, h('span', { class: 'label', text: '見出し' }), titleInput,
+        h('label', { class: 'field' }, h('span', { class: 'label', text: '見出し（見本の見出しを指で左右に動かせます。タップで真ん中に戻ります）' }), titleInput,
           chips(AD_TITLES.map(t => [t, t]), v => { ad.title = v; titleInput.value = v; changed(); }, ad.title)),
         h('div', { class: 'field' }, h('span', { class: 'label', text: '見出しの色' }), headColorChips()),
         h('label', { class: 'check' }, periodCheck, '期間のバッジを入れる（例: 10/17(土)～10/19(月) 3日間限り）'),

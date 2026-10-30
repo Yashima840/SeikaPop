@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  defaultLogo, LOGO, logoRect, logoSizeOf, normalizeLogo, placeLogo, resizeLogo, titleWidth,
+  defaultLogo, LOGO, logoRect, logoSizeOf, normalizeLogo, placeLogo, resizeLogo, titleCenter, titleWidth,
   adProblems, adShotKey, cleanCustomFrames, createAd, CUSTOM_COLORS, CUSTOM_ID, customFrame, customFrameProblems, dayInput, defaultPeriod,
   dropMissing, fitSlots, frameFor, frameProblems, FRAME_ORDER, FRAMES, mergeCustomFrames, normalizePeriod, normalizeRows, PERIOD_BAND, PERIOD_COLORS,
   periodEnd, periodOf, periodParts, periodText, saveCustomFrame, toggleShot,
@@ -293,4 +293,22 @@ test('期間のバッジの色: 選んだ色で帯と文字を描く。色が違
   assert.equal(frameFor(red).band.h, PERIOD_BAND.h);
   assert.notEqual(adShotKey(ad), adShotKey(red));
   assert.equal(frameFor({ ...ad, period: { ...ad.period, on: false } }).band, undefined, '入れないときは帯が無い');
+});
+
+test('見出しの文字は左右にずらせるが、画像の外へははみ出さない（0 や壊れた値は真ん中）', () => {
+  const f = FRAMES.single, mid = f.w / 2;
+  assert.equal(titleCenter(f, 0, 400), mid);
+  assert.equal(titleCenter(f, undefined, 400), mid, '前の版の作りかけ（ずれ無し）は真ん中');
+  assert.equal(titleCenter(f, Number.NaN, 400), mid);
+  assert.equal(titleCenter(f, -100, 400), mid - 100);
+  const right = titleCenter(f, 5000, 400);
+  assert.ok(right + 200 <= f.w - 20 && right > mid, '右へ寄せきっても文字の右端は画像の中');
+  assert.equal(titleCenter(f, -5000, 400), f.w - right, '左も同じだけ寄せられる');
+  assert.equal(titleCenter(f, 300, f.w), mid, '帯いっぱいの長い見出しは動かさない');
+});
+
+test('見出しの左右の位置が違えば別の画像（真ん中なら前の版と同じ印）', () => {
+  const ad = { ...createAd(), slots: ['a'] };
+  assert.equal(adShotKey(ad), adShotKey({ ...ad, titleShift: undefined }));
+  assert.notEqual(adShotKey(ad), adShotKey({ ...ad, titleShift: 120 }));
 });
