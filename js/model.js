@@ -413,6 +413,20 @@ export function exportProblems(pop) {
   return out;
 }
 
+/**
+ * 確認の画面に並べる、今入っている価格・産地の文（価格の文字は priceTexts / taxNote だけで作る）。
+ * 空の欄も「入っていません」と出す（出さないと、確かめる人が気付けない）。
+ */
+export function popCheckLines(pop, settings) {
+  const t = priceTexts(pop, settings);
+  const unit = String(pop.unit ?? '').trim();
+  const origin = String(pop.origin ?? '').trim();
+  return [
+    t ? `価格: ${t.each ? '各 ' : ''}${t.main}円（${taxNote(t)}）${unit ? ` ／ ${unit}` : ''}` : '価格: 入っていません',
+    `産地: ${origin || '入っていません'}`,
+  ];
+}
+
 export function popTitle(pop) {
   return String(pop.name).trim() || '（商品名なし）';
 }

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import {
-  createPop, exportFileName, exportProblems, formatDate, formatPrice, isBlankPop, localStamp,
+  createPop, exportFileName, exportProblems, formatDate, formatPrice, isBlankPop, localStamp, popCheckLines,
   catchDesignFor, isBurstLayout, moveToRegular, needsCheck, nextPriceBadge, parsePriceInput, upgradeDesign, popFromRegular, popFromShared, placeStamp, PRICE_BADGES, priceBadgeOf, regularFromPop, STAMP, STAMP_SLOTS, stampOf, normalizeStamp, SAMPLE_POP, SHARE_TARGETS, SIZES, updateRegularFrom, withSample,
 } from '../js/model.js';
 
@@ -227,4 +227,15 @@ test('ひとことは2つ。2つめは置き方・縦書きを1つめとは別�
   assert.deepEqual([today.stampText2, today.stamp2, today.stampVertical2], ['！', tilted.stamp2, true], 'レギュラーへ引き継ぐ');
   assert.equal(popFromShared({ stamp2: { x: 0.5, y: 0.5, scale: 1, rot: 400 } }).stamp2.rot, 40);
   assert.equal(isBlankPop({ ...createPop(T0), stampText2: '！' }), false);
+});
+
+// 保管したポップをフレームへ入れる前の確認に出す文。空の欄を黙って飛ばすと、確かめる人が気付けないまま確認済みになる
+test('popCheckLines: 価格・産地を税の別と一緒に出し、空の欄は空と出す', () => {
+  const settings = { taxRate: 8 };
+  assert.deepEqual(popCheckLines({ price: 1980, priceTax: 'incl', unit: '1袋', origin: '熊本県' }, settings),
+    ['価格: 1,980円（税込） ／ 1袋', '産地: 熊本県']);
+  const excl = popCheckLines({ price: 100, priceTax: 'excl', each: true, origin: '' }, settings);
+  assert.match(excl[0], /^価格: 各 100円（税込 108(\.00)?円）$/);
+  assert.equal(excl[1], '産地: 入っていません');
+  assert.deepEqual(popCheckLines({ price: null }, settings), ['価格: 入っていません', '産地: 入っていません']);
 });

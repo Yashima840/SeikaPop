@@ -1,20 +1,21 @@
-// フレームにまとめる画面（広告）:①フレームを選ぶ ②はじめの画面と同じポップ（レギュラー・履歴）からタップした順に枠へ入れる ③共有・保存。
+// フレームにまとめる画面（広告）:①フレームを選ぶ ②はじめの画面と同じポップ（レギュラー・履歴）か、保管したポップ（事務所のドライブ）からタップした順に枠へ入れる ③共有・保存。
 // 枠に入る画像は、選んだポップの今の中身からその場で作る（はじめの画面で直したものがそのまま入る）。
 // 作りかけ（フレーム・選んだポップ・見出し）は自動で保存し、次に開いたときに続きから。
 
 import * as store from '../store.js';
-import { exportProblems, formatShotTime, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
+import { exportProblems, formatShotTime, popCheckLines, popLists, popShotKey, popTitle, slotsToPopIds } from '../model.js';
 import {
   AD_TITLES, adProblems, createAd, CUSTOM_COLOR_DEFAULT, dayInput, normalizePeriod, PERIOD_COLORS, PERIOD_DAYS_MAX, periodEnd, periodText, CUSTOM_COLORS, customColorOf, CUSTOM_ID, CUSTOM_MAX_PER_ROW, CUSTOM_NAME_MAX, customFrameProblems,
   defaultLogo, dropMissing, fitSlots, FOOTER_TEXT, frameFor, HOURS_MAX, FRAME_ORDER, FRAMES, LOGO, logoRect, logoSizeOf, normalizeLogo, normalizeRows, placeLogo, resizeLogo, saveCustomFrame, shotFromAd, titleCenter, toggleShot, usedRows,
 } from '../frames.js';
 import { adjustedCopy, blobToImage } from '../image.js';
-import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop } from '../render.js';
+import { adToFile, ensureAdFonts, ensureFonts, renderAd, renderPop, thumbnailOf } from '../render.js';
 import { confirmBox, debounce, DEVICE_SAVE_NOTE, deviceSaveMessage, downloadFile, frameThrottle, h, saveToDevice, toast } from '../ui.js';
 import { queueAd } from '../sender.js';
 import { collectorOf, saveTargets } from '../collect.js';
 import { recordError } from '../crash.js';
 import { ensureCollector } from './passcode.js';
+import { openSavedPicker, savePopFromShared } from './stock.js';
 
 const FONT_WAIT_MS = 8000;   // 書体を待つのはここまで（電波が弱くて届かなくても、端末の字で枠に入れる）
 
@@ -74,6 +75,26 @@ async function popImage(pop, settings) {
   return cv;
 }
 
+/**
+ * 保管したポップを枠へ入れる前に、前回の価格・産地のままでよいかを聞く。'ok'＝このまま入れる／'fix'＝直してから入れる／'cancel'＝入れない。
+ * 確認は「このまま入れる」を押したときだけ済んだことにする（戻る操作で閉じたら入れない）。
+ */
+function askPopCheck(pop, previewUrl, settings) {
+  return new Promise(resolve => {
+    const finish = answer => { dlg.close(); dlg.remove(); resolve(answer); };
+    const dlg = h('dialog', { class: 'pop-check', oncancel: ev => { ev.preventDefault(); finish('cancel'); } },
+      previewUrl ? h('img', { src: previewUrl, alt: '' }) : null,
+      h('b', { text: popTitle(pop) }),
+      ...popCheckLines(pop, settings).map(text => h('p', { class: 'pop-check-line', text })),
+      h('p', { class: 'hint', text: '前回の価格・産地のままです。今日の内容と合っていますか？' }),
+      h('button', { type: 'button', class: 'primary', onclick: () => finish('ok') }, 'この価格・産地で入れる'),
+      h('button', { type: 'button', onclick: () => finish('fix') }, '直してから入れる'),
+      h('button', { type: 'button', onclick: () => finish('cancel') }, 'やめる'));
+    document.body.append(dlg);
+    dlg.showModal();
+  });
+}
+
 // かんたん作成の段（画像を選ぶ段と、文字などの設定の段に分ける）
 const AD_STEPS = {
   frame: { label: '形', title: 'フレームの形を選ぶ' },
@@ -95,7 +116,7 @@ function loadImage(src, what) {
 export async function showAd(root, app) {
   app.setTitle('フレームにまとめる', { back: true });
   const settings = await store.getSettings();
-  const groups = popLists(await store.listPops());
+  let groups = popLists(await store.listPops());
   const listed = [...groups.regulars, ...groups.recent];
   const popById = new Map(listed.map(p => [p.id, p]));
 
@@ -538,6 +559,44 @@ export async function showAd(root, app) {
     changed();
   };
 
+  // 保管したポップ（事務所のドライブ）から入れる。確かめてから今日のポップとして端末に残し、枠へ入れる。
+  // 枠が残っている間は一覧を閉じない（何枚も続けて入れられるように）。失敗は一覧の画面に出る
+  const addSaved = () => {
+    if (!ad.slots.includes(null)) { toast('枠がいっぱいです（外したい画像をもう一度タップしてください）'); return; }
+    openSavedPicker({
+      onPick: async ({ content, photo }) => {
+        let pop = await savePopFromShared(content, photo);
+        let previewUrl = '';
+        try {
+          const cv = await popImage(pop, settings);
+          pop = { ...pop, thumb: thumbnailOf(cv) };
+          previewUrl = thumbnailOf(cv, 540);
+          cv.width = cv.height = 0;
+        } catch (err) {
+          recordError('ad saved pop preview', err);   // 見本が無くても、価格・産地の文で確かめられる
+        }
+        const answer = await askPopCheck(pop, previewUrl, settings);
+        if (answer === 'cancel') {
+          store.deletePop(pop.id).catch(err => recordError('ad saved pop cancel', err));   // 残っても履歴に並ぶだけ
+          return { stay: `「${popTitle(pop)}」は入れませんでした` };
+        }
+        pop = await store.putPop({ ...pop, confirmed: answer === 'ok' });
+        popById.set(pop.id, pop);
+        groups = popLists(await store.listPops());
+        ad.slots = toggleShot(ad.slots, pop.id).slots;
+        if (answer === 'fix') {
+          // 枠に入れたまま編集へ（確認の印が付くまでは「出す」の欄が止める。作りかけは画面を離れるときに保存される）
+          save();
+          app.go(`#/make/${pop.id}`);
+          return undefined;
+        }
+        changed();
+        const left = ad.slots.filter(s => !s).length;
+        return left ? { stay: `「${popTitle(pop)}」を入れました（あと ${left} 枚）` } : undefined;
+      },
+    });
+  };
+
   const groupGrid = (label, list) => (list.length ? [
     h('h4', { class: 'group', text: label }),
     h('div', { class: 'grid' }, list.map(pop => {
@@ -571,11 +630,12 @@ export async function showAd(root, app) {
       ],
       pops: () => [
         h('p', { class: 'hint' }, 'タップした順に 1, 2, … の枠へ入ります。もう一度タップで外します。はじめの画面と同じポップが並び、今の中身（価格・写真）で入ります。'),
-        listed.length ? [
+        h('button', { type: 'button', class: 'big', onclick: addSaved }, '📂 保管したポップから入れる'),
+        groups.regulars.length || groups.recent.length ? [
           ...groupGrid('★ レギュラー', groups.regulars),
           ...groupGrid('履歴', groups.recent),
         ] : h('p', { class: 'empty' },
-          'まだポップがありません。はじめの画面の「＋ 1枚作る」で作ると、ここに並びます。'),
+          'この端末にはまだポップがありません。上のボタンで保管したポップから入れるか、はじめの画面の「＋ 1枚作る」で作ると、ここに並びます。'),
       ],
       text: () => [
         h('label', { class: 'field' }, h('span', { class: 'label', text: '見出し（見本の見出しを指で左右に動かせます。タップで真ん中に戻ります）' }), titleInput,

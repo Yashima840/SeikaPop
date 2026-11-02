@@ -245,3 +245,7 @@ details.adjust summary { cursor: pointer; color: var(--green-dark); font-size: 1
 dialog { border: 0; border-radius: 14px; padding: 18px; width: min(90vw, 420px); }
 dialog::backdrop { background: rgba(0,0,0,0.4); }
 dialog .msg { margin: 0 0 14px; }
+.pop-check[open] { display: flex; flex-direction: column; gap: 8px; max-height: 90vh; overflow-y: auto; }
+.pop-check img { display: block; width: 100%; max-height: 45vh; object-fit: contain; }
+.pop-check-line { margin: 0; font-size: 17px; }
+.pop-check .hint { margin: 4px 0; }

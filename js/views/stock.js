@@ -5,6 +5,7 @@
 //   一度開いた写真・ポップは端末に控えて2回目から問い合わせない（driveFiles）／指が触れたら読み始める。
 
 import * as store from '../store.js';
+import { popFromShared } from '../model.js';
 import { driveCacheKey, filterStock } from '../collect.js';
 import {
   fetchSavedList, fetchSavedPop, fetchSavedThumbs, fetchStockImage, fetchStockList, fetchStockThumbs,
@@ -83,9 +84,18 @@ export function openStockPicker({ onPick }) {
   return openDrivePicker(STOCK, onPick);
 }
 
-/** 保管したポップを開く。選んだら onPick({ content, photo }, item) を待ってから閉じる（失敗の扱いはストックと同じ）。 */
+/**
+ * 保管したポップを開く。選んだら onPick({ content, photo }, item) を待ってから閉じる（失敗の扱いはストックと同じ）。
+ * onPick が { stay: '知らせる文' } を返したら閉じない（フレームへ続けて何枚も入れるとき）。
+ */
 export function openSavedPicker({ onPick }) {
   return openDrivePicker(SAVED, onPick);
+}
+
+/** 保管したポップから今日のポップを作って端末に残す。写真を先に入れてから、それを指すポップを保存する。 */
+export async function savePopFromShared(content, photo) {
+  const photoId = photo ? await store.putPhoto(photo) : null;
+  return store.putPop(popFromShared(content, { photoId }));
 }
 
 /** 開くものを読む。端末に控えてあればそれを使い、無ければ問い合わせて控える。 */
@@ -238,8 +248,8 @@ async function openDrivePicker(src, onPick) {
     setStatus(`「${item.name}」を読み込み中…（${src.loading}）`);
     try {
       cancelPrepare();
-      await onPick(await prepare(item), item);
-      close();
+      const r = await onPick(await prepare(item), item);
+      if (r?.stay) setStatus(r.stay); else close();
     } catch (err) {
       setStatus(`読み込めませんでした: ${err.message}`, true);
     } finally {

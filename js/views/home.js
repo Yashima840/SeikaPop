@@ -1,11 +1,11 @@
 // はじめの画面: 1枚作る／フレームにまとめる（広告）／保管したポップから作る、の入口と、レギュラー・履歴の2つの欄
 
 import * as store from '../store.js';
-import { newPop, formatShotTime, isBlankPop, moveToRegular, popFromRegular, popFromShared, popLists, popTitle } from '../model.js';
+import { newPop, formatShotTime, isBlankPop, moveToRegular, popFromRegular, popLists, popTitle } from '../model.js';
 import { confirmBox, h, toast } from '../ui.js';
 import { flushOutbox, onOutboxChange, outboxStatus } from '../sender.js';
 import { recordError } from '../crash.js';
-import { openSavedPicker } from './stock.js';
+import { openSavedPicker, savePopFromShared } from './stock.js';
 import { askPasscode } from './passcode.js';
 import { VERSION } from '../version.js';
 import { WRONG_PASSCODE } from '../collect.js';
@@ -45,12 +45,10 @@ export async function showHome(root, app) {
     app.go(`#/make/${pop.id}`);   // 価格・産地を確かめて出すだけの短い流れ
   };
   // みんなで使える場所に保管したポップ（他の端末で作ったものも）から、同じ中身で今日のポップを作る。
-  // 写真を先に端末へ入れてから、それを指すポップを保存する。失敗は一覧の画面に出す（投げると閉じずに残る）
+  // 失敗は一覧の画面に出す（投げると閉じずに残る）
   const useSaved = () => openSavedPicker({
     onPick: async ({ content, photo }) => {
-      const photoId = photo ? await store.putPhoto(photo) : null;
-      const pop = popFromShared(content, { photoId });
-      await store.putPop(pop);
+      const pop = await savePopFromShared(content, photo);
       app.go(`#/make/${pop.id}`);   // レギュラーと同じく、価格・産地を確かめて出すだけの短い流れ
     },
   });
